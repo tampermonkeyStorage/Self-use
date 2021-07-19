@@ -233,9 +233,9 @@
                         origin_url: decodeURIComponent(location.href),
                         origin_title: document.title
                     });
-                    //shareData.share_pwd || (shareData.share_pwd = (/(?:访问码|提取码|密码)[^\w]*([\w]{4})/.exec(innerText) || [])[1]);
+                    shareData.share_pwd || (shareData.share_pwd = (/(?:访问码|提取码|密码)[^\w]*([\w]{4})/.exec(innerText) || [])[1]);
                     shareData.share_pwd && obj.setSharePwdLocal(shareData);
-                    obj.showTipSuccess(shareSource + "：" + shareLink + (shareData.share_pwd ? "  提取码：" + shareData.share_pwd : ""));
+                    //obj.showTipSuccess(shareSource + "：" + shareLink + (shareData.share_pwd ? "  提取码：" + shareData.share_pwd : ""));
                 }
             });
         });
