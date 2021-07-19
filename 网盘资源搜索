@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         网盘资源搜索 提取码查询等多功能综合加强版
-// @namespace    
+// @namespace    https://github.com/tampermonkeyStorage/Self-use/blob/main/%E7%BD%91%E7%9B%98%E8%B5%84%E6%BA%90%E6%90%9C%E7%B4%A2
 // @version      4.0
 // @description  功能概述：【[1]：[百度.蓝奏.天翼.阿里.慢慢增加]等网盘页面增加资源搜索平台的快捷方式】【[2]：在各个搜索平台页一路辅助跳转到目标网盘并直达文件页面】【[3]：访问过的分享链接和密码自动记忆】
 // @author       【有意见或建议联系 gaoleicao@qq.com】
