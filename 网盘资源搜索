@@ -1015,16 +1015,17 @@ qq群：342139001
                     obj.setSharePwdLocal(response);
                 }
                 else {
+                    var shareData = obj.getSharePwdLocal(shareId);
                     obj.queryShareRandsk("baidu", shareId, function(response) {
                         if (response instanceof Object) {
                             obj.showTipSuccess("解锁成功，强制跳转");
                             baidu.reloadPage(response.Randsk);
-                            obj.setSharePwdLocal({
+                            shareData = Object.assign(shareData || {}, {
                                 share_id: shareId
                             });
+                            obj.setSharePwdLocal(shareData);
                         }
                         else {
-                            var shareData = obj.getSharePwdLocal(shareId);
                             if (shareData instanceof Object) {
                                 baidu.submitPwd(shareData.share_pwd);
                                 obj.showTipSuccess("本地回填密码成功");
