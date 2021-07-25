@@ -86,13 +86,6 @@
 // @grant        GM_notification
 // @grant        GM_setClipboard
 // ==/UserScript==
-/***************************************************************************
-使用须知：
-1：本脚本完全免费，允许您传播给他人使用，您也别收费啦。
-2：本脚本具有查询提取码功能，在您访问链接的时候，也会上传提取码到云端供他人查询使用。如果是私人链接请暂时关闭脚本。
-4：本就是一个分享精神的体现，请大家爱护。
-qq群：342139001
-***************************************************************************/
 
 (function() {
     'use strict';
@@ -420,11 +413,6 @@ qq群：342139001
                 type: 2,
             },
             {
-                name: "盘么么",
-                link: "http://www.panmeme.com/query?key=%sv%",
-                type: 3,
-            },
-            {
                 name: "Pan58",
                 link: "http://www.pan58.com/s?wd=%sv%",
                 type: 3,
@@ -462,6 +450,11 @@ qq群：342139001
             {
                 name: "乐乐搜索",
                 link: "http://www.lele360.com/search?word=%sv%",
+                type: 3,
+            },
+            {
+                name: "盘么么",
+                link: "http://www.panmeme.com/query?key=%sv%",
                 type: 3,
             },
             {
@@ -1344,9 +1337,10 @@ qq群：342139001
             if ($(".title-mysearch").length == 0) {
                 var diskArr = ty189.diskList();
                 diskArr.forEach(function(value, index) {
-                    $(".file-info").prepend('<a data-v-04783a2e="" href=' + value.link + ' target="_blank" class="btn btn-download title-mysearch" style="margin: 0px;">' + value.name + '</a>');
+                    $(".file-info").prepend('<a data-v-7d1d0e5d="" href=' + value.link + ' target="_blank" class="btn btn-download title-mysearch" style="margin: 0px;">' + value.name + '</a>');
                 });
             }
+            $(".tips-save-box").css("display", "none"); //消灭那朵乌云
         });
     };
 
@@ -1974,19 +1968,7 @@ qq群：342139001
     };
 
     funcNode.getShare = function(urlmd5) {
-        var data = {urlmd5: urlmd5, sign: 123};
-        if (/panmeme/.test(obj.url.href)) {
-            var token = funcNode.getCookie("guanzhu_flag_1");
-            if (! token) {
-                window.alert("脚本提示：此网站需要扫码登录，请扫码后重试 或 访问其他网站");
-                return;
-            }
-            data = {
-                urlmd5: urlmd5,
-                token: token
-            };
-        }
-        $.get("http://share.panmeme.com/share/get", data, function(result) {
+        $.get("http://share.panmeme.com/share/get", {urlmd5: urlmd5}, function(result) {
             //console.log(".panmeme", urlmd5, result);
             if (result.code == 1) {
                 if (result.data.status == 1) {
