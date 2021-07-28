@@ -3,6 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      0.1.2
 // @description  功能概述：【[1]：[百度.蓝奏.天翼.阿里.]等网盘页面增加资源搜索快捷方式】【[2]：自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地数据库搜索，已支持百度盘 ...】
+// @antifeature  tracking 对公开传播的分享链接保存至云端以防丢失，实际无其他用处只做备份，有异议请不要安装
 // @author       管家婆
 // @match        *://*/*
 // @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
@@ -585,6 +586,11 @@
             ],
             "aliyundrive": [
                 {
+                    name: "阿里小站",
+                    link: "https://pan.yuankongjian.com/",
+                    type: 1,
+                },
+                {
                     name: "AliYunPanSo",
                     link: "http://aliyunpanso.cn:88/",
                     type: 1,
@@ -876,8 +882,32 @@
         $(".input-area .g-button-right").click();
     };
 
+    baidu.registerStoreSharePwd = function() {
+        unsafeWindow.require("base:widget/libs/jquerypacket.js")(document).ajaxComplete(function(event, xhr, options) {
+            var requestUrl = options.url;
+            if (requestUrl.indexOf("/share/verify") >= 0) {
+                var response = xhr.responseJSON;
+                if (!(response instanceof Object && response.errno == 0)) {
+                    return;
+                }
+                var sharePwd = (/pwd=([a-z\d]+)/i.exec(options.data) || [])[1];
+                if (obj.share_pwd == sharePwd) {
+                    return;
+                }
+
+                var shareId = obj.getShareId(location.href);
+                var shareData = obj.getSharePwdLocal(shareId);
+                shareData = Object.assign(shareData || {}, {
+                    share_pwd: sharePwd
+                });
+                obj.setSharePwdLocal(shareData);
+            }
+        });
+    };
+
     baidu.autoPaddingPwd = function() {
         if (document.title.indexOf("输入提取码") > 0) {
+            baidu.registerStoreSharePwd();
             var shareId = obj.getShareId();
             obj.querySharePwd("baidu", shareId, function(response) {
                 if (response instanceof Object) {
