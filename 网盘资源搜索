@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.1.5
+// @version      0.1.6
 // @description  功能概述：【[1]：[百度.蓝奏.天翼.阿里.]等网盘页面增加资源搜索快捷方式】【[2]：自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地数据库搜索，已支持[百度|蓝奏|天翼]盘 ...】
 // @author       管家婆
 // @match        *://pan.baidu.com/*
@@ -858,17 +858,6 @@
         document.cookie = e + "=" + encodeURIComponent(o) + (null == t ? "" : ";expires=" + s.toGMTString()) + r + a;
     };
 
-    obj.reloadPage = function() {
-        //alert("title："+ document.title);
-        if (/(页面不存在|404 Not Found)/.test(document.title)) {
-            var url = location.href;
-            if (!sessionStorage.getItem(url)) {
-                sessionStorage.setItem(url, "reload");
-                location.reload();
-            }
-        }
-    };
-
     obj.randString = function(length) {
         var possible = "abcdefghijklmnopqrstuvwxyz0123456789";
         var text = "";
@@ -894,7 +883,16 @@
     baidu.reloadPage = function(randsk) {
         if (randsk) {
             obj.setCookie("BDCLND", randsk, null, "/", "pan.baidu.com");
-            obj.reloadPage();
+            location.reload();
+        }
+        else {
+            if (/(页面不存在|404 Not Found)/.test(document.title)) {
+                var url = location.href;
+                if (!sessionStorage.getItem(url)) {
+                    sessionStorage.setItem(url, "reload");
+                    location.reload();
+                }
+            }
         }
     };
 
@@ -1230,7 +1228,7 @@
             else if (url.indexOf(".baidu.com/wap/init") > 0) {
             }
             else if (url.indexOf(".baidu.com/s/") > 0) {
-                obj.reloadPage();
+                baidu.reloadPage();
                 baidu.updateShareStorage();
                 return true;
             }
@@ -1502,13 +1500,17 @@
 
     xunlei.registerStoreSharePwd = function () {
         $(document.body).one("DOMNodeInserted", ".share-file-list", function () {
-            var shareId = obj.getShareId(shareLink);
+            var shareId = obj.getShareId();
             var sharePwd = localStorage["share_passcode_" + shareId];
             if (!sharePwd || sharePwd == obj.share_pwd) {
                 return;
             }
 
-            var shareLink = location.href;
+            if (sessionStorage.getItem(shareId)) {
+                return;
+            }
+            sessionStorage.setItem(shareId, "repeat");
+
             var shareData = obj.getSharePwdLocal(shareId);
             if (shareData instanceof Object && shareData.share_name) {
                 return;
@@ -1592,8 +1594,12 @@
                     obj.share_pwd = sharePwd;
                 }
                 if (responseURL.indexOf("/file/list") > 0) {
-                    var shareLink = location.href;
-                    var shareId = obj.getShareId(shareLink);
+                    if (sessionStorage.getItem(shareId)) {
+                        return;
+                    }
+                    sessionStorage.setItem(shareId, "repeat");
+
+                    var shareId = obj.getShareId();
                     var shareData = obj.getSharePwdLocal(shareId);
                     if (shareData instanceof Object && shareData.share_name) {
                         return;
@@ -1602,7 +1608,7 @@
                         share_source: "aliyundrive",
                         share_id: shareId,
                         share_pwd: obj.share_pwd,
-                        share_url:shareLink,
+                        share_url:location.href,
                         share_name:JSON.parse(that.response).items[0].name
                     });
                     obj.setSharePwdLocal(shareData);
@@ -2207,6 +2213,7 @@
             var allShare = checkShare.matchShareAll(innerText, shareRegExp[shareSource]);
             allShare.forEach(function (item) {
                 var shareLink = item[1], shareId = item[2], sharePwd = item[4] || "";
+                sharePwd || shareSource == "aliyundrive" && (sharePwd = (/((?:提取码|密码)?[^\w]*([\w]{4}))[^\w]*(https?:\/\/www\.aliyundrive\.com\/s\/([a-z\d]{11}))/gim.exec(innerText) || [])[2]);
                 if (shareLink) {
                     var shareData = obj.getSharePwdLocal(shareId);
                     shareData = Object.assign(shareData || {}, {
@@ -2217,7 +2224,6 @@
                         origin_url: decodeURIComponent(location.href),
                         origin_title: document.title
                     });
-                    //shareData.share_pwd || (shareData.share_pwd = (/(?:访问码|提取码|密码)[^\w]*([\w]{4})/.exec(innerText) || [])[1]);
                     shareData.share_pwd && obj.setSharePwdLocal(shareData);
                     //obj.showTipSuccess(shareSource + "：" + shareLink + (shareData.share_pwd ? "  提取码：" + shareData.share_pwd : ""));
                 }
