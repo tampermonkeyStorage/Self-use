@@ -1,8 +1,9 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.1.6
+// @version      0.1.7
 // @description  功能概述：【[1]：[百度.蓝奏.天翼.阿里.]等网盘页面增加资源搜索快捷方式】【[2]：自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地数据库搜索，已支持[百度|蓝奏|天翼]盘 ...】
+// @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
 // @match        *://pan.baidu.com/*
 // @match        *://yun.baidu.com/*
@@ -788,9 +789,9 @@
             ".cache-wrapper .card .body{padding:10px;border-bottom:1px solid #ddd}",
             ".cache-wrapper .card .body p{line-height:40px}",
             ".cache-wrapper .card .body p .cache-count{color:green}",
-            ".cache-wrapper .card .body p .clear-cache{width:100px;height:auto;color:red}",
-            ".cache-wrapper .card .body p .cache-key{width:400px;height:auto}",
-            ".cache-wrapper .card .body p .cache-find{width:100px;height:auto;color:green}",
+            ".cache-wrapper .card .body p .clear-cache{width:20%;height:auto;color:red}",
+            ".cache-wrapper .card .body p .cache-key{width:75%;height:auto}",
+            ".cache-wrapper .card .body p .cache-find{width:20%;height:auto;color:green}",
 
             ".cache-wrapper .find-links{width:100%;max-height:400px;overflow-y:auto;box-sizing:border-box;padding:1px 10px 1px 10px}",
             ".cache-wrapper .find-links:hover::-webkit-scrollbar{width:5px}",
@@ -837,14 +838,12 @@
             var index = 0;
             Object.keys(shareList).forEach(function(shareId) {
                 var oneShare = shareList[shareId];
-                for (var key in oneShare) {
-                    if (oneShare[key].indexOf(sValue) >= 0) {
-                        var source = {baidu: "百度", lanzous: "蓝奏", ty189: "天翼", xunlei: "迅雷", aliyundrive: "阿里"}[oneShare.share_source];
-                        var html = '<div><em>['.concat(++index) + ']</em><span>'.concat('<em>[ ' + source + ' ]</em>').concat(oneShare.share_name || oneShare.origin_title.split("-")[0]) + '</span></div>';
-                        html += '<div class="item">链接：<a class="cache-link" href="'.concat(oneShare.share_url, '" target="_blank">').concat(oneShare.share_url, '</a><span class="pwd">').concat(oneShare.share_pwd ? "提取码：" + oneShare.share_pwd : "", "</span></div>");
-                        $(".cache-wrapper .find-links").append(html);
-                        break;
-                    }
+                var strShare = oneShare.share_url + (oneShare.share_pwd || "") + (oneShare.share_name || oneShare.origin_title || "")
+                if (strShare.indexOf(sValue) >= 0) {
+                    var source = {baidu: "百度", lanzous: "蓝奏", ty189: "天翼", xunlei: "迅雷", aliyundrive: "阿里"}[oneShare.share_source];
+                    var html = '<div><em>['.concat(++index) + ']</em><span>'.concat('<em>[ ' + source + ' ]</em>').concat(oneShare.share_name || (oneShare.origin_title || "").split("-")[0] || "") + '</span></div>';
+                    html += '<div class="item">链接：<a class="cache-link" href="'.concat(oneShare.share_url, '" target="_blank">').concat(oneShare.share_url, '</a><span class="pwd">').concat(oneShare.share_pwd ? "提取码：" + oneShare.share_pwd : "", "</span></div>");
+                    $(".cache-wrapper .find-links").append(html);
                 }
             });
         });
