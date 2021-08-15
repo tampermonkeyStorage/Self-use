@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.1.8
-// @description  功能概述：【[1]：[百度.蓝奏.天翼.阿里.]等网盘页面增加资源搜索快捷方式】【[2]：自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地数据库搜索，已支持[百度|蓝奏|天翼]盘 ...】
+// @version      0.2.0
+// @description  功能概述：【[1]：[百度.蓝奏.天翼.阿里.]等网盘页面增加资源搜索快捷方式】【[2]：[资源站点]自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地数据库搜索，已支持[百度|蓝奏|天翼]盘 ...】
 // @author       管家婆
 // @match        *://pan.baidu.com/*
 // @match        *://yun.baidu.com/*
@@ -80,6 +80,11 @@
                     type: 2,
                 },
                 {
+                    name: "来搜一下",
+                    link: "https://www.laisoyixia.com/s/search?q=%sv%",
+                    type: 2,
+                },
+                {
                     name: "哎呦喂啊",
                     link: "http://www.aiyoweia.com/search/%sv%",
                     type: 2,
@@ -92,11 +97,6 @@
                 {
                     name: "SoV5",
                     link: "https://www.sov5.cn/search?q=%sv%",
-                    type: 2,
-                },
-                {
-                    name: "去转盘",
-                    link: "https://www.quzhuanpan.com/source/search.action?q=%sv%",
                     type: 2,
                 },
                 {
@@ -242,11 +242,6 @@
                     type: 6,
                 },
                 {
-                    name: "盘天下",
-                    link: "https://www.pantianxia.com/zh/%sv%",
-                    type: 6,
-                },
-                {
                     name: "6miu",
                     link: "http://baiduyun.6miu.com/word.html?kw=%sv%",
                     type: 6,
@@ -254,6 +249,11 @@
                 {
                     name: "Java分享网",
                     link: "http://yun.java1234.com/search?q=%sv%",
+                    type: 6,
+                },
+                {
+                    name: "盘天下",
+                    link: "https://www.pantianxia.com/zh/%sv%",
                     type: 6,
                 },
                 // 《7》点击直达百度盘
@@ -609,10 +609,11 @@
         }[source];
     };
 
-    obj.isInArray = function(arr, value) {
-        var index = $.inArray(value, arr);
-        if (index >= 0) {
-            return true;
+    obj.isInArray = function(arr) {
+        for (var i = 0; i < arr.length; i++) {
+            if (location.href.indexOf(arr[i]) >= 0) {
+                return true;
+            }
         }
         return false;
     };
@@ -908,12 +909,14 @@
                     return;
                 }
 
-                var shareId = obj.getShareId(location.href);
+                var shareId = obj.getShareId();
                 var shareData = obj.getSharePwdLocal(shareId);
                 shareData = Object.assign(shareData || {}, {
+                    share_id: shareId,
                     share_pwd: sharePwd,
                     share_randsk: shareRandsk
                 });
+                shareData.origin_url || (shareData.origin_url = document.referrer.indexOf(location.host) < 0 ? document.referrer : "");
                 obj.setSharePwdLocal(shareData);
             }
         });
@@ -1050,6 +1053,7 @@
                     share_randsk: unsafeWindow.currentSekey || decodeURIComponent((/BDCLND=([^;]*)/.exec(document.cookie) || [])[1] || ""),
                     share_url:"https://pan.baidu.com/s/1" + shareId
                 });
+                shareData.origin_url || (shareData.origin_url = document.referrer.indexOf(location.host) < 0 ? document.referrer : "");
                 obj.setSharePwdLocal(shareData);
                 obj.storeSharePwd(shareData);
             }
@@ -1213,9 +1217,8 @@
     };
 
     baidu.run = function() {
-        var hosts = ["pan.baidu.com", "yun.baidu.com"]
-        , host = location.host;
-        if (obj.isInArray(hosts, host)) {
+        var hosts = ["pan.baidu.com", "yun.baidu.com"];
+        if (obj.isInArray(hosts)) {
             var url = location.href;
             if (url.indexOf(".baidu.com/share/init") > 0) {
                 baidu.autoPaddingPwd();
@@ -1267,6 +1270,7 @@
                         share_url:location.href,
                         share_name: document.title
                     });
+                    shareData.origin_url || (shareData.origin_url = document.referrer.indexOf(location.host) < 0 ? document.referrer : "");
                     obj.setSharePwdLocal(shareData);
                     obj.share_pwd == sharePwd || obj.storeSharePwd(shareData);
                 }
@@ -1381,6 +1385,7 @@
                         share_url:location.href,
                         share_name: document.title.split("|")[0].replace("免费高速下载", "").trim()
                     });
+                    shareData.origin_url || (shareData.origin_url = document.referrer.indexOf(location.host) < 0 ? document.referrer : "");
                     obj.setSharePwdLocal(shareData);
                     obj.share_pwd == sharePwd || obj.storeSharePwd(shareData);
                 }
@@ -1462,9 +1467,8 @@
     };
 
     ty189.run = function() {
-        var hosts = ["cloud.189.cn", "h5.cloud.189.cn"]
-        , host = location.host;
-        if (obj.isInArray(hosts, host)) {
+        var hosts = ["cloud.189.cn", "h5.cloud.189.cn"];
+        if (obj.isInArray(hosts)) {
             var url = window.location.href;
             if (url.indexOf("/web/share") > 0 || url.indexOf("/share.html") > 0) {
                 ty189.autoPaddingPwd();
@@ -1516,6 +1520,7 @@
                 share_url:"https://pan.xunlei.com/s/" + shareId,
                 share_name: $(".share-file-list").find("a:first").text()
             });
+            shareData.origin_url || (shareData.origin_url = document.referrer.indexOf(location.host) < 0 ? document.referrer : "");
             obj.setSharePwdLocal(shareData);
             sharePwd == obj.share_pwd || obj.storeSharePwd(shareData);
         })
@@ -1605,6 +1610,7 @@
                         share_url:location.href,
                         share_name:JSON.parse(that.response).items[0].name
                     });
+                    shareData.origin_url || (shareData.origin_url = document.referrer.indexOf(location.host) < 0 ? document.referrer : "");
                     obj.setSharePwdLocal(shareData);
                     sharePwd == obj.share_pwd || obj.storeSharePwd(shareData);
                 }
@@ -1682,14 +1688,13 @@
     var target = {};
 
     target.run = function() {
-        var hosts = ["www.51sopan.cn", "www.slimego.cn", "yun.hei521.cn"]
-        , host = location.host;
-        if (obj.isInArray(hosts, host)) {
+        var hosts = ["www.51sopan.cn", "www.slimego.cn", "yun.hei521.cn"];
+        if (obj.isInArray(hosts)) {
             var staticClass = {
                 "www.51sopan.cn": ".entry-title",
                 "www.slimego.cn": ".link",
-                "yun.hei521.cn": ".post-title",
-            } [host];
+                "yun.hei521.cn": ".post-box",
+            } [location.host];
 
             var originalClass = $(staticClass + " a:not([target])");
             if (originalClass.length) {
@@ -1782,10 +1787,9 @@
             /*"www.luomapan.com",
             "www.iizhi.cn",
             "www.jnzy.pro",*/
-        ]
-        , host = location.host;
+        ];
 
-        if (obj.isInArray(hosts, host)) {
+        if (obj.isInArray(hosts)) {
             var url = window.location.href;
             if (url.indexOf("#/main/search") > 0) {
                 if (!localStorage.getItem("token")) {
@@ -1825,11 +1829,13 @@
     };
 
     b64Node.addDirectURL = function() {
-        var staticClass = ".media-heading a";
+        var host = location.host;
+        var staticClass = /xiaozhukuaipan/.test(host) ? ".media-heading a" : ".source-title";
         try {
             $(staticClass).each(function(index) {
                 var $this = $(this);
                 var shorturl = $this.attr("data-shorturl");
+                /laisoyixia/.test(host) && (shorturl = b64Node.decodeUnicode(shorturl));
                 /^1/.test(shorturl) && $this.append('<div style="margin:10px;"></div><button><a href="https://pan.baidu.com/s/' + shorturl + '" target="_blank"><span style="color:#d418a3;">点我直接打开</span></a></button>');
             })
         } catch(err) {
@@ -1840,6 +1846,10 @@
     b64Node.jumpLink = function() {
         var staticClass = {
             "www.xiaozhukuaipan.com": {
+                id: "#downloadHandler",
+                href: "data-downloadurl",
+            },
+            "www.laisoyixia.com": {
                 id: "#downloadHandler",
                 href: "data-downloadurl",
             },
@@ -1886,28 +1896,27 @@
                 obj.showTipError("跳转链接解码失败");
             }
         }
-        else {
-            obj.showTipError("无法获取链接");
-        }
     };
 
     b64Node.run = function() {
-        var hosts = ["www.xiaozhukuaipan.com", "www.aiyoweia.com", "www.zhaoyunpan.cn", "pan.sov5.cn", "www.quzhuanpan.com", ]
-        , host = location.host;
+        var hosts = [
+            "www.xiaozhukuaipan.com",
+            "www.laisoyixia.com",
+            "www.aiyoweia.com",
+            "www.zhaoyunpan.cn",
+            "pan.sov5.cn",
+        ];
 
-        if (obj.isInArray(hosts, host)) {
-            if (/(xiaozhukuaipan)/.test(host)) {
-                var url = window.location.href;
-                if (/search/.test(url)) {
-                    b64Node.addDirectURL();
-                }
-                else if (/(download|info)/.test(url)) {
-                    b64Node.jumpLink();
-                }
+        if (obj.isInArray(hosts)) {
+            var url = location.href;
+            if (/(xiaozhukuaipan|laisoyixia)/.test(url) && /search/.test(url)) {
+                b64Node.addDirectURL();
                 return true;
             }
-            b64Node.jumpLink();
-            return true;
+            else if (!/search/.test(url)) {
+                b64Node.jumpLink();
+                return true;
+            }
         }
         return false;
     };
@@ -1971,19 +1980,18 @@
 
     funcNode.run = function() {
         var hosts = [
-            "www.panmeme.com",
-            "www.pan58.com",
-            "www.vpansou.com",
-            "www.vpanso.com",
-            "www.dmpans.com",
-            "www.lele360.com",
-            "www.kengso.com",
-            "www.repanso.com",
-            "www.xgsoso.com",
+            "www.pan58.com/f/",
+            "www.vpanso.com/vfile/",
+            "www.vpansou.com/sfile/",
+            "www.kengso.com/file/",
+            "www.repanso.com/f/",
+            "www.xgsoso.com/share/",
+            "www.lele360.com/vd/",
+            "www.dmpans.com/file/",
+            "www.panmeme.com/wenjian/",
         ]
-        , host = location.host;
 
-        if (obj.isInArray(hosts, host)) {
+        if (obj.isInArray(hosts)) {
             funcNode.jumpLink();
             return true;
         }
@@ -2014,10 +2022,9 @@
             "www.rufengso.cc",
             "aizhaomu.com",
             "uzi8.cn"
-        ]
-        , host = location.host;
+        ];
 
-        if (obj.isInArray(hosts, host)) {
+        if (obj.isInArray(hosts)) {
             dialog_fileId.jumpLink();
             return true;
         }
@@ -2056,7 +2063,11 @@
     };
 
     winUrl.run = function() {
-        var hosts = ["www.panghaozi.com", "www.sowp.cn", "www.51sopan.cn"]
+        var hosts = [
+            "www.panghaozi.com/pan/search/resource/",
+            "www.sowp.cn/detail/",
+            "www.51sopan.cn/file/file-"
+        ]
         , host = location.host;
 
         if (obj.isInArray(hosts, host)) {
@@ -2108,10 +2119,6 @@
             /*
             ↑以上破解扫码后跳转↑↓以下不用扫码直接跳转↓
             */
-            "www.pantianxia.com": {
-                linkId: ".ui-button.ui-button-primary",
-                passId: "",
-            },
             "www.ttyunsou.cn": {
                 linkId: ".bdylink",
                 passId: "",
@@ -2127,6 +2134,10 @@
             "yun.java1234.com": {
                 linkId: "#bar a",
                 passId: "#bar font:eq(1)",
+            },
+            "www.pantianxia.com": {
+                linkId: ".ui-button.ui-button-primary",
+                passId: "",
             },
         } [location.host];
 
@@ -2160,20 +2171,19 @@
 
     node.run = function() {
         var hosts = [
-            "www.xiaobaipan.com",
-            "www.qiaomi.cn",
-            "www.lqkweb.com",
-            "www.panso.org",
-            "www.h2ero.com",
+            "www.xiaobaipan.com/file-",
+            "www.qiaomi.cn/b/",
+            "www.lqkweb.com/file/id=",
+            "www.panso.org/file/",
+            "www.h2ero.com/baiduwangpan/",
+            "www.ttyunsou.cn/article-pid-",
+            "www.dyroy.com/show/",
+            "baiduyun.6miu.com/show-",
+            "yun.java1234.com/article/",
             "www.pantianxia.com",
-            "www.ttyunsou.cn",
-            "www.dyroy.com",
-            "baiduyun.6miu.com",
-            "yun.java1234.com"
-        ]
-        , host = location.host;
+        ];
 
-        if (obj.isInArray(hosts, host)) {
+        if (obj.isInArray(hosts)) {
             node.jumpLink();
             return true;
         }
