@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         天翼云盘-下载不求人
 // @namespace    http://tampermonkey.net/
-// @version      0.4.2
+// @version      0.5
 // @description  让下载成为一件愉快的事情
 // @author       You
 // @match        https://cloud.189.cn/web/*
@@ -12,7 +12,7 @@
 // @run-at       document-start
 // @grant        none
 // ==/UserScript==
- 
+
 (function() {
     'use strict';
     var $ = $ || window.$;
@@ -21,10 +21,11 @@
             folderId: -11,
             shareInfo: {},
             fileListAO: {},
-            sessionKey: ""
+            sessionKey: "",
+            shareId: ""
         }
     };
- 
+
     obj.showTipSuccess = function (text, time) {
         obj.showNotify({
             type: "success",
@@ -32,7 +33,7 @@
             time: time || 3000
         });
     };
- 
+
     obj.showTipError = function (text, time) {
         obj.showNotify({
             type: "error",
@@ -40,7 +41,7 @@
             time: time || 3000
         });
     };
- 
+
     obj.showTipLoading = function (text, time) {
         obj.showNotify({
             type: "loading",
@@ -48,7 +49,7 @@
             time: time || 3000
         });
     };
- 
+
     obj.showNotify = function (opts) {
         if (window.IsPC) {
             var $Vue = (document.querySelector(".content") || document.querySelector(".p-web")).__vue__;
@@ -64,7 +65,7 @@
             window.app.$toast.show(opts);
         }
     };
- 
+
     obj.hideNotify = function() {
         if (window.IsPC) {
             var $Vue = (document.querySelector(".content") || document.querySelector(".p-web")).__vue__;
@@ -76,7 +77,7 @@
             window.app.$loading.hide();
         }
     };
- 
+
     obj.getFileSize = function(e, t, n, i) {
         if (!(e && e.toString().search(/B|K|M|G|T/) > -1)) {
             var o, a, r, s = parseFloat(e), l = Math.abs(s);
@@ -96,7 +97,7 @@
             return e;
         }
     };
- 
+
     obj.getSignatureMobile = function (e) {
         for (var t = 1; t < arguments.length; t++) {
             var n = arguments[t];
@@ -114,7 +115,7 @@
         e = i.join("&");
         return CryptoJS.MD5(e).toString();
     };
- 
+
     obj.getDownloadUrlMobile = function (fileId, shareId) {
         var accessToken = localStorage.getItem("accessToken").replace(/[\"\\]/g, "")
         , timestamp = Date.now()
@@ -124,7 +125,7 @@
             fileId: fileId
         }, shareId ? {dt: 1, shareId: shareId} : {})
         , signature = obj.getSignatureMobile(data);
- 
+
         return new Promise(function (resolve) {
             $.ajax({
                 url: "https://api.cloud.189.cn/open/file/getFileDownloadUrl.action" + "?fileId=" + fileId + (shareId ? "&dt=1&shareId=" + shareId : ""),
@@ -156,17 +157,17 @@
             });
         });
     };
- 
+
     obj.buildPackageUrlMobile = function (folderId, shareId) {
         var url = "https://api.cloud.189.cn/downloadMultiFiles.action";
     };
- 
+
     obj.getSelectedFileListMobile = function () {
         var fileListAO = obj.file_page.fileListAO;
         if (fileListAO.count == 0) {
             return fileListAO.fileList || fileListAO.folderList || [];
         }
- 
+
         var selectedFileList = [], selectedNotFileList = [], fileList = [];
         var $route = window.app.$route;
         if (["singleFile", "MultiFile"].includes($route.name)) {
@@ -178,7 +179,7 @@
         }
         else if (["cloud", "family"].includes($route.name)) {
         }
- 
+
         if (selectedFileList.length) {
             return selectedFileList;
         }
@@ -186,43 +187,43 @@
             return selectedNotFileList;
         }
     };
- 
+
     obj.showBoxMobile = function (body) {
         var template = '<div class="mask"></div><div class="dialog"><div class="confirm-header"><h2 class="confirm-title">文件下载</h2></div> <div class="confirm-body" style="max-height: 10rem;"></div><div class="confirm-footer"> <button class="btn confirm-btn confirm success">取消</button></div></div>';
         if ($(".confirm-container").length == 0) {
             $("body").append('<div class="dialog-container confirm-container"><!----> <!----></div>');
         }
- 
+
         $(".confirm-container").append(template);
         $(".confirm-container .confirm-body").append(body);
         $(".confirm-container").show();
- 
+
         $(".confirm-container .confirm-btn").off("click").on("click", function () {
             $(".confirm-container").hide();
             $(".confirm-container .mask").remove();
             $(".confirm-container .dialog").remove();
         });
     };
- 
+
     obj.showDownloadMobile = function () {
         if (! localStorage.getItem("accessToken")) {
             obj.showTipError("无法显示链接，请登录后重试");
             return;
         }
- 
+
         var fileList = obj.getSelectedFileListMobile();
         if (fileList.length == 0) {
             obj.showTipError("getSelectedFileListMobile 获取选中文件出错");
             return;
         }
- 
+
         obj.showTipLoading("正在获取链接...");
         var html = '<div style="padding: 0px; height: 350px; overflow-y: auto;">';
         var rowStyle = "margin:10px 0px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;";
- 
+
         var shareInfo = obj.file_page.shareInfo,
             shareId = Object.keys(shareInfo).length > 0 ? shareInfo.shareId : "";
- 
+
         var retCount = 0;
         fileList.forEach(function (item, index) {
             if (item.isFolder) {
@@ -249,7 +250,7 @@
             }
         }, 500);
     };
- 
+
     obj.initDownloadPageMobile = function () {
         if ($(".btn-show-link").length) {
             return;
@@ -259,7 +260,7 @@
             $(".btn-show-link").on("click", obj.showDownloadMobile);
         }
     };
- 
+
     obj.getDownloadUrl = function (fileId, shareId) {
         return new Promise(function (resolve) {
             $.ajax({
@@ -288,7 +289,7 @@
             });
         });
     };
- 
+
     obj.buildPackageUrl = function (folderId, shareId) {
         var sessionKey = obj.file_page.sessionKey || sessionStorage.getItem("sessionKey");
         if (sessionKey) {
@@ -298,15 +299,16 @@
             return ""
         }
     };
- 
+
     obj.getSelectedFileList = function () {
         var fileListAO = obj.file_page.fileListAO;
         if (fileListAO.count == 0) {
             return fileListAO.fileList || fileListAO.folderList || [];
         }
- 
-        var $Vue = document.querySelector(".c-file-list").__vue__;
-        if ($Vue instanceof Object) {
+
+        var $Vue;
+        if (document.querySelector(".c-file-list")) {
+            $Vue = document.querySelector(".c-file-list").__vue__;
             if ($Vue.selectLength > 0) {
                 return $Vue.selectedList;
             }
@@ -314,27 +316,31 @@
                 return $Vue.fileList;
             }
         }
+        else if (document.querySelector(".info-detail")) {
+            $Vue = document.querySelector(".info-detail").__vue__;
+            return [$Vue.fileDetail] || [];
+        }
         else {
             return [];
         }
     };
- 
+
     obj.showBox = function (body) {
         var template = '<div data-v-8956c4ce="" class="share-content"><div data-v-8956c4ce="" class="share-content-head"><span data-v-8956c4ce="" class="share-content-head-span">文件下载</span><span data-v-8956c4ce="" class="share-content-head-close">×</span></div><div data-v-8956c4ce="" class="share-detail" style="height: 450px;"></div>';
         if ($(".c-share").length == 0) {
             $("body").append('<section data-v-8956c4ce="" class="c-share" style="display: none;"></section>');
         }
- 
+
         $(".c-share").append(template);
         $(".c-share .share-detail").append(body);
         $(".c-share").show();
- 
+
         $(".c-share .share-content-head-close").off("click").on("click", function () {
             $(".c-share").hide();
             $(".c-share .share-content").remove();
         });
     };
- 
+
     obj.showDownload = function () {
         var login_user = window._ux21cn.cookie.get("COOKIE_LOGIN_USER");
         if (!login_user || login_user.length == 16) {
@@ -346,27 +352,26 @@
             obj.showTipError("getSelectedFileList 获取选中文件出错");
             return;
         }
- 
+
         obj.showTipLoading("正在获取链接...");
         var html = '<div style="padding: 20px; height: 450px; overflow-y: auto;">';
         var rowStyle = "margin:10px 0px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;";
- 
-        var shareInfo = obj.file_page.shareInfo,
-            shareId = Object.keys(shareInfo).length > 0 ? shareInfo.shareId : "";
- 
+
+        var shareId = obj.file_page.shareId;
+
         if (fileList.length > 1 && obj.file_page.folderId > 0) {
             var downloadUrl = obj.buildPackageUrl(obj.file_page.folderId, shareId);
             html += '<p>压缩包</p>';
             html += '<p style="' + rowStyle + '"><a title="' + downloadUrl + '" href="' + downloadUrl + '" style="color: blue;">' + downloadUrl + '</a></p>';
             html += '<p>&nbsp;</p>';
         }
- 
+
         var retCount = 0;
         fileList.forEach(function (item, index) {
             item.id || (item.id = item.fileId);
             item.name || (item.name = item.fileName);
             item.size || (item.size = item.fileSize);
- 
+
             if (item.isFolder) {
                 item.downloadUrl = item.downloadUrl || obj.buildPackageUrl(item.id, shareId);
                 html += '<p>' + (++index) + '：' + (item.name ? item.name : item.id) + ' || <font color="green">文件夹</font></p>';
@@ -398,7 +403,7 @@
             }
         }, 500);
     };
- 
+
     obj.initDownloadPage = function () {
         if ($(".btn-show-link").length) {
             return;
@@ -414,7 +419,7 @@
             $(".btn-show-link").on("click", obj.showDownload);
         }
     };
- 
+
     obj.initPageFileInfo = function () {
         var open = XMLHttpRequest.prototype.open;
         XMLHttpRequest.prototype.open = function() {
@@ -422,7 +427,7 @@
                 if (! (this.readyState == 4 && this.status == 200)) {
                     return;
                 }
- 
+
                 var responseURL = this.responseURL;
                 var response = this.response;
                 if (responseURL.indexOf("/getUserBriefInfo.action") > 0) {
@@ -430,8 +435,14 @@
                         obj.file_page.sessionKey = response.sessionKey;
                     }
                 }
+
                 if (response instanceof Object && response.res_code == 0) {
-                    if (responseURL.indexOf("/getShareInfoByCode.action") > 0) {
+                    if (responseURL.indexOf("/checkAccessCode.action") > 0) {
+                        if (response.shareId) {
+                            obj.file_page.shareId = response.shareId;
+                        }
+                    }
+                    else if (responseURL.indexOf("/getShareInfoByCode.action") > 0) {
                         if (response.shareId) {
                             obj.file_page.shareInfo = response;
                         }
@@ -454,6 +465,6 @@
             open.apply(this, arguments);
         };
     }();
- 
+
     // Your code here...
 })();
