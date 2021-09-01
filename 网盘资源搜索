@@ -1,8 +1,9 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.2.0
+// @version      0.2.2
 // @description  功能概述：【[1]：[百度.蓝奏.天翼.阿里.]等网盘页面增加资源搜索快捷方式】【[2]：[资源站点]自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地数据库搜索，已支持[百度|蓝奏|天翼]盘 ...】
+// @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
 // @match        *://pan.baidu.com/*
 // @match        *://yun.baidu.com/*
@@ -282,6 +283,11 @@
                     link: "http://wjsou.com/s2.jsp?q=%sv%",
                     type: 7,
                 },
+                {
+                    name: "小小汁源库",
+                    link: "http://xxdyk.cn/?s=%sv%",
+                    type: 7,
+                },
                 // 《8》不用扫码
                 {
                     name: "搜索盘",
@@ -380,11 +386,6 @@
                     type: 8,
                 },
                 {
-                    name: "小说搜搜",
-                    link: "https://www.xssousou.com/s/%sv%.html",
-                    type: 8,
-                },
-                {
                     name: "搜度",
                     link: "http://www.sodu123.com/sodu/so.php?q=%sv%",
                     type: 8,
@@ -461,6 +462,16 @@
                     type: 9,
                 },
                 {
+                    name: "小说搜搜",
+                    link: "https://www.xssousou.com/s/%sv%.html",
+                    type: 10,
+                },
+                {
+                    name: "熊猫搜书",
+                    link: "https://ebook.huzerui.com/#/",
+                    type: 10,
+                },
+                {
                     name: "云盘搜",
                     link: "https://www.ypso.cc/#/result?keyword=%sv%",
                     type: 10,
@@ -507,7 +518,12 @@
                 },
                 {
                     name: "凌风云",
-                    link: "https://www.lingfengyun.com/search?wd=%sv%&so_token=38c730c6ceb4e98eff51c0775ee4ae5d&so_file=wang_pan&so_source=all_pan",
+                    link: "https://www.lingfengyun.com/",
+                    type: 10,
+                },
+                {
+                    name: "微贴网",
+                    link: "https://www.weitiewang.com/",
                     type: 10,
                 },
                 {
@@ -552,16 +568,11 @@
                 link: "http://www.sssoou.com/",
                 type: 10,
             },
-            {
-                name: "熊猫搜书",
-                link: "https://ebook.huzerui.com/#/",
-                type: 10,
-            },
             https://polished-sea-d9de.xfyz.workers.dev/
             {
                 name: "云盘助手",
                 link: "https://yunpanzhushou.com/?q=%sv%",
-                type: 9,
+                type: 11,
             },
             */
             ],
@@ -574,6 +585,11 @@
                 {
                     name: "熊崩",
                     link: "https://www.xiongbeng.com/",
+                    type: 1,
+                },
+                {
+                    name: "异星软件空间",
+                    link: "https://www.yxssp.com/",
                     type: 1,
                 },
             ],
@@ -634,6 +650,9 @@
         }
         else if (shareLink.indexOf("aliyundrive.com") > 0) {
             return (/aliyundrive\.com\/s\/([a-zA-Z\d]+)/.exec(shareLink) || [])[1];
+        }
+        else if (shareLink.indexOf("caiyun.139.com") > 0) {
+            return (/caiyun\.139\.com\/w\/[ri]\/([a-zA-Z\d]+)/.exec(shareLink) || [])[1];
         }
         else {
             return "";
@@ -1360,7 +1379,7 @@
     };
 
     ty189.registerStoreSharePwd = function() {
-        var origOpen = XMLHttpRequest.prototype.open;
+        var open = XMLHttpRequest.prototype.open;
         XMLHttpRequest.prototype.open = function() {
             this.addEventListener("load", function() {
                 var responseURL = this.responseURL;
@@ -1389,11 +1408,8 @@
                     obj.setSharePwdLocal(shareData);
                     obj.share_pwd == sharePwd || obj.storeSharePwd(shareData);
                 }
-                else if (responseURL.indexOf("/portal/listFiles.action") > 0) {
-                    ty189.addSearchWebsite();
-                }
             });
-            origOpen.apply(this, arguments);
+            open.apply(this, arguments);
         };
     };
 
@@ -1403,31 +1419,28 @@
             var $Vue = $node.__vue__;
             var shareInfo = $Vue.fileDetail || $Vue.shareFileInfo;
             if (shareInfo.shareMode > 0) {
-                if (shareInfo.shareMode == 1) {
-                    shareInfo.shareId || (shareInfo.shareId = $Vue.shareId);
-                    var getCookie = unsafeWindow._ux21cn.cookie.get;
-                    var shareIdCookie = getCookie("share_" + shareInfo.shareId) || getCookie("shareId_" + shareInfo.shareId);
-                    if (! shareIdCookie) {
-                        ty189.registerStoreSharePwd();
-                        var shareId = obj.getShareId(location.href);
-                        obj.querySharePwd("ty189", shareId, function(response) {
-                            if (response instanceof Object) {
-                                obj.share_pwd = response.share_pwd;
-                                ty189.submitPwd(response.share_pwd);
-                                obj.showTipSuccess("查询提取码成功");
+                var getCookie = unsafeWindow._ux21cn.cookie.get;
+                var shareId = obj.getShareId();
+                var shareIdCookie = getCookie("share_" + shareId) || getCookie("shareId_" + shareId);
+                if (!shareIdCookie && shareInfo.shareMode == 1) {
+                    ty189.registerStoreSharePwd();
+                    obj.querySharePwd("ty189", shareId, function(response) {
+                        if (response instanceof Object) {
+                            obj.share_pwd = response.share_pwd;
+                            ty189.submitPwd(response.share_pwd);
+                            obj.showTipSuccess("查询提取码成功");
+                        }
+                        else {
+                            var shareData = obj.getSharePwdLocal(shareId);
+                            if (shareData instanceof Object) {
+                                ty189.submitPwd(shareData.share_pwd);
+                                obj.showTipSuccess("本地回填密码成功");
                             }
                             else {
-                                var shareData = obj.getSharePwdLocal(shareId);
-                                if (shareData instanceof Object) {
-                                    ty189.submitPwd(shareData.share_pwd);
-                                    obj.showTipSuccess("本地回填密码成功");
-                                }
-                                else {
-                                    obj.showTipError("未找到密码");
-                                }
+                                obj.showTipError("未找到密码");
                             }
-                        });
-                    }
+                        }
+                    });
                 }
             }
             else {
@@ -1484,81 +1497,6 @@
         return false;
     };
 
-    var xunlei = {};
-
-    xunlei.submitPwd = function(pwd) {
-        try {
-            var $Vue = document.querySelector(".pan-share-web").__vue__;
-            $Vue.passCode = pwd;
-            var button = document.querySelector(".td-button");
-            button && button.click();
-        } catch (e) {
-            console.error("xunlei.submitPwd 错误", e);
-        };
-    };
-
-    xunlei.registerStoreSharePwd = function () {
-        $(document.body).one("DOMNodeInserted", ".share-file-list", function () {
-            var shareId = obj.getShareId();
-            var sharePwd = localStorage["share_passcode_" + shareId];
-            if (!sharePwd) {
-                return;
-            }
-            if (sessionStorage.getItem(shareId)) {
-                return;
-            }
-            sessionStorage.setItem(shareId, "repeat");
-
-            var shareData = obj.getSharePwdLocal(shareId);
-            if (shareData instanceof Object && shareData.share_name) {
-                return;
-            }
-            shareData = Object.assign(shareData || {}, {
-                share_source: "xunlei",
-                share_id: shareId,
-                share_pwd: sharePwd,
-                share_url:"https://pan.xunlei.com/s/" + shareId,
-                share_name: $(".share-file-list").find("a:first").text()
-            });
-            shareData.origin_url || (shareData.origin_url = document.referrer.indexOf(location.host) < 0 ? document.referrer : "");
-            obj.setSharePwdLocal(shareData);
-            sharePwd == obj.share_pwd || obj.storeSharePwd(shareData);
-        })
-    };
-
-    xunlei.autoPaddingPwd = function() {
-        $(document).one("DOMNodeInserted", ".pass-body", function () {
-            xunlei.registerStoreSharePwd();
-            var shareId = obj.getShareId(location.href);
-            obj.querySharePwd("xunlei", shareId, function(response) {
-                if (response instanceof Object) {
-                    obj.share_pwd = response.share_pwd;
-                    xunlei.submitPwd(response.share_pwd);
-                    obj.showTipSuccess("查询提取码成功");
-                }
-                else {
-                    var shareData = obj.getSharePwdLocal(shareId);
-                    if (shareData instanceof Object) {
-                        xunlei.submitPwd(shareData.share_pwd);
-                        obj.showTipSuccess("本地回填密码成功");
-                    }
-                    else {
-                        obj.showTipError("未找到密码");
-                    }
-                }
-            });
-        });
-    };
-
-    xunlei.run = function() {
-        var url = location.href;
-        if (url.indexOf("pan.xunlei.com/s/") > 0) {
-            xunlei.autoPaddingPwd();
-            return true;
-        }
-        return false;
-    };
-
     var aliyundrive = {};
 
     aliyundrive.submitPwd = function(pwd) {
@@ -1577,45 +1515,42 @@
     };
 
     aliyundrive.registerStoreSharePwd = function () {
-        var origOpen = XMLHttpRequest.prototype.open;
+        var open = XMLHttpRequest.prototype.open;
         XMLHttpRequest.prototype.open = function() {
             this.addEventListener("load", function() {
                 if (!(this.readyState == 4 && this.status == 200)) {
                     return;
                 }
-                var that = this;
                 var responseURL = this.responseURL;
+                if (!(responseURL.indexOf("/share_link/get_share_token") > 0 || responseURL.indexOf("/file/list") > 0)) {
+                    return;
+                }
+                var shareId = obj.getShareId(), shareData = obj.getSharePwdLocal(shareId);
                 if (responseURL.indexOf("/share_link/get_share_token") > 0) {
                     var sharePwd = JSON.parse(this.sendParams[0]).share_pwd;
                     if (!sharePwd) {
                         return;
                     }
-                    obj.share_pwd = sharePwd;
+                    shareData = Object.assign(shareData || {}, {
+                        share_source: "aliyundrive",
+                        share_url:location.href,
+                        share_id: shareId,
+                        share_pwd: sharePwd
+                    });
                 }
-                if (responseURL.indexOf("/file/list") > 0) {
-                    if (sessionStorage.getItem(shareId)) {
-                        return;
-                    }
-                    sessionStorage.setItem(shareId, "repeat");
-
-                    var shareId = obj.getShareId();
-                    var shareData = obj.getSharePwdLocal(shareId);
-                    if (shareData instanceof Object && shareData.share_name) {
+                else if (responseURL.indexOf("/file/list") > 0) {
+                    if (!shareData || shareData.share_name) {
                         return;
                     }
                     shareData = Object.assign(shareData || {}, {
-                        share_source: "aliyundrive",
-                        share_id: shareId,
-                        share_pwd: obj.share_pwd,
-                        share_url:location.href,
-                        share_name:JSON.parse(that.response).items[0].name
+                        share_name:JSON.parse(this.response).items[0].name
                     });
                     shareData.origin_url || (shareData.origin_url = document.referrer.indexOf(location.host) < 0 ? document.referrer : "");
                     obj.setSharePwdLocal(shareData);
-                    sharePwd == obj.share_pwd || obj.storeSharePwd(shareData);
+                    shareData.share_pwd == obj.share_pwd || obj.storeSharePwd(shareData);
                 }
             });
-            origOpen.apply(this, arguments);
+            open.apply(this, arguments);
         };
     };
 
@@ -1679,6 +1614,167 @@
         }
         else if (url.indexOf(".aliyundrive.com/drive") > 0) {
             aliyundrive.addSearchHomePage();
+            return true;
+        }
+        return false;
+    };
+
+    var xunlei = {};
+
+    xunlei.submitPwd = function(pwd) {
+        try {
+            var $Vue = document.querySelector(".pan-share-web").__vue__;
+            $Vue.passCode = pwd;
+            $Vue.getShare();
+        } catch (e) {
+            console.error("xunlei.submitPwd 错误", e);
+        };
+    };
+
+    xunlei.registerStoreSharePwd = function () {
+        $(document.body).one("DOMNodeInserted", ".share-file-list", function () {
+            var shareId = obj.getShareId();
+            var sharePwd = localStorage["share_passcode_" + shareId];
+            if (!sharePwd) {
+                return;
+            }
+
+            var shareData = obj.getSharePwdLocal(shareId);
+            if (shareData instanceof Object && shareData.share_name) {
+                return;
+            }
+            shareData = Object.assign(shareData || {}, {
+                share_source: "xunlei",
+                share_id: shareId,
+                share_pwd: sharePwd,
+                share_url:"https://pan.xunlei.com/s/" + shareId,
+                share_name: $(".share-file-list").find("a:first").text()
+            });
+            shareData.origin_url || (shareData.origin_url = document.referrer.indexOf(location.host) < 0 ? document.referrer : "");
+            obj.setSharePwdLocal(shareData);
+            sharePwd == obj.share_pwd || obj.storeSharePwd(shareData);
+        })
+    };
+
+    xunlei.autoPaddingPwd = function() {
+        $(document).one("DOMNodeInserted", ".pass-body", function () {
+            xunlei.registerStoreSharePwd();
+            var shareId = obj.getShareId(location.href);
+            obj.querySharePwd("xunlei", shareId, function(response) {
+                if (response instanceof Object) {
+                    obj.share_pwd = response.share_pwd;
+                    xunlei.submitPwd(response.share_pwd);
+                    obj.showTipSuccess("查询提取码成功");
+                }
+                else {
+                    var shareData = obj.getSharePwdLocal(shareId);
+                    if (shareData instanceof Object) {
+                        xunlei.submitPwd(shareData.share_pwd);
+                        obj.showTipSuccess("本地回填密码成功");
+                    }
+                    else {
+                        obj.showTipError("未找到密码");
+                    }
+                }
+            });
+        });
+    };
+
+    xunlei.run = function() {
+        var url = location.href;
+        if (url.indexOf("pan.xunlei.com/s/") > 0) {
+            xunlei.autoPaddingPwd();
+            return true;
+        }
+        return false;
+    };
+
+    var caiyun = {};
+
+    caiyun.submitPwd = function(pwd) {
+        try {
+            var $Vue = document.querySelector(".page").__vue__;
+            $Vue.token = pwd;
+            $Vue.getFiles();
+            sessionStorage.setItem(obj.getShareId(), pwd);
+        } catch (e) {
+            console.error("caiyun.submitPwd 错误", e);
+        };
+    };
+
+    caiyun.registerStoreSharePwd = function () {
+        var open = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function() {
+            this.addEventListener("load", function() {
+                var responseURL = this.responseURL;
+                if (responseURL.indexOf("/stapi/outlink/info") > 0) {
+                    var response = JSON.parse(this.response);
+                    if (response.code != 0) {
+                        return;
+                    }
+                    var shareId = obj.getShareId();
+                    var sharePwd = sessionStorage.getItem(shareId);
+                    if (!sharePwd) {
+                        return;
+                    }
+
+                    var shareData = obj.getSharePwdLocal(shareId);
+                    shareData = Object.assign(shareData || {}, {
+                        share_source: "caiyun",
+                        share_id: shareId,
+                        share_pwd: sharePwd,
+                        share_url: "https://caiyun.139.com/m/i?" + shareId,
+                        share_name: response.data.lkName
+                    });
+                    shareData.origin_url || (shareData.origin_url = document.referrer.indexOf(location.host) < 0 ? document.referrer : "");
+                    obj.setSharePwdLocal(shareData);
+                    sharePwd == obj.share_pwd || obj.storeSharePwd(shareData);
+                }
+            });
+            open.apply(this, arguments);
+        };
+    };
+
+    caiyun.autoPaddingPwd = function() {
+        if (document.querySelector(".page")) {
+            if (document.querySelector(".token")) {
+                caiyun.registerStoreSharePwd();
+                var shareId = obj.getShareId();
+                obj.querySharePwd("caiyun", shareId, function(response) {
+                    if (response instanceof Object) {
+                        obj.share_pwd = response.share_pwd;
+                        caiyun.submitPwd(response.share_pwd);
+                        obj.showTipSuccess("查询提取码成功");
+                    }
+                    else {
+                        var shareData = obj.getSharePwdLocal(shareId);
+                        if (shareData instanceof Object) {
+                            caiyun.submitPwd(shareData.share_pwd);
+                            obj.showTipSuccess("本地回填密码成功");
+                        }
+                        else {
+                            obj.showTipError("未找到密码");
+                        }
+                    }
+                });
+            }
+            else if (document.querySelector(".main")) {
+            }
+            else if (document.querySelector(".invalid")) {
+            }
+            else {
+                setTimeout(caiyun.autoPaddingPwd, 500);
+            }
+        }
+        else {
+            setTimeout(caiyun.autoPaddingPwd, 500);
+        }
+    };
+
+    caiyun.run = function() {
+        var url = location.href;
+        if (url.indexOf("caiyun.139.com/w") > 0 || url.indexOf("caiyun.139.com/m") > 0) {
+            caiyun.autoPaddingPwd();
             return true;
         }
         return false;
@@ -2210,6 +2306,7 @@
             ty189: /(https?:\/\/(?:h5\.)?cloud\.189\.cn\/(?:web\/share\?code|share\.html#)?(?:=|t\/)([\w]{12}))([^\w]*(?:提取|访问|查阅|授权|密\s*)码[^\w]*([\w]{4}))?/gim,
             xunlei: /(https?:\/\/pan\.xunlei\.com\/s\/([\w-]{26}))([&\w=]*[^\w]*(?:提取|密)码[^\w]*([\w]{4}))?/gim,
             aliyundrive: /(https?:\/\/www\.aliyundrive\.com\/s\/([a-z\d]{11}))([^\w]*(?:提取|密)码[^\w]*([\w]{4}))?/gim,
+            caiyun: /(https?:\/\/caiyun\.(?:139|feixin\.10086)\.(?:com|cn)\/(?:m\/i\?|dl\/)([a-z\d]{13,14}))([^\w]*(?:提取|密)码[^\w]*([a-z\d]{4}))?/gim,
         };
 
         var innerText = document.body.innerText, shareList = [];
@@ -2246,8 +2343,9 @@
             baidu.run,
             lanzous.run,
             ty189.run,
-            xunlei.run,
             aliyundrive.run,
+            xunlei.run,
+            caiyun.run,
             target.run,
             nuxt.run,
             b64Node.run,
