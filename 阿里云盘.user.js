@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      0.4
+// @version      0.5
 // @description  支持分享链接页面生成并展示下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，...
 // @author       You
 // @require      https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js
@@ -60,12 +60,12 @@
                 return;
             }
 
-            var positionDiv = $(this).offset();
+            var positionDiv = $(that).children("div:first").offset();
             var distenceX = event.pageX - positionDiv.left;
             var distenceY = event.pageY - positionDiv.top;
 
             $(document).mousemove(function(event){
-                var $that = $(that);
+                var $that = $(that).children("div:first");
                 var $document = $(document);
                 $that.css({cursor: "move"});
 
