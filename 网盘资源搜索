@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.2.2
+// @version      0.2.3
 // @description  功能概述：【[1]：[百度.蓝奏.天翼.阿里.]等网盘页面增加资源搜索快捷方式】【[2]：[资源站点]自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地数据库搜索，已支持[百度|蓝奏|天翼]盘 ...】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -263,9 +263,11 @@
                     link: "https://disk.misiai.com/search?kw=%sv%&what=disk",
                     type: 7,
                 },
+                ////https://bbs.misiai.com/
+                //https://disk.upanso.com/main/leftSearch?time=ALL&kw=2022&diskType=ALL
                 {
                     name: "优盘搜",
-                    link: "https://upanso.com/main/leftSearch?time=ALL&kw=%sv%&diskType=ALL",
+                    link: "https://search.youpanso.com/?kw=%sv%",
                     type: 7,
                 },
                 {
@@ -654,6 +656,9 @@
         else if (shareLink.indexOf("caiyun.139.com") > 0) {
             return (/caiyun\.139\.com\/w\/[ri]\/([a-zA-Z\d]+)/.exec(shareLink) || [])[1];
         }
+        else if (shareLink.indexOf("share.weiyun.com") > 0) {
+            return (/share\.weiyun\.com\/([a-zA-Z\d]+)/.exec(shareLink) || [])[1];
+        }
         else {
             return "";
         }
@@ -859,7 +864,7 @@
                 var oneShare = shareList[shareId];
                 var strShare = oneShare.share_url + (oneShare.share_pwd || "") + (oneShare.share_name || oneShare.origin_title || "")
                 if (strShare.indexOf(sValue) >= 0) {
-                    var source = {baidu: "百度", lanzous: "蓝奏", ty189: "天翼", xunlei: "迅雷", aliyundrive: "阿里"}[oneShare.share_source];
+                    var source = {baidu: "百度", lanzous: "蓝奏", ty189: "天翼", xunlei: "迅雷", aliyundrive: "阿里", caiyun: "彩云", weiyun: "微云"}[oneShare.share_source];
                     var html = '<div><em>['.concat(++index) + ']</em><span>'.concat('<em>[ ' + source + ' ]</em>').concat(oneShare.share_name || (oneShare.origin_title || "").split("-")[0] || "") + '</span></div>';
                     html += '<div class="item">链接：<a class="cache-link" href="'.concat(oneShare.share_url, '" target="_blank">').concat(oneShare.share_url, '</a><span class="pwd">').concat(oneShare.share_pwd ? "提取码：" + oneShare.share_pwd : "", "</span></div>");
                     $(".cache-wrapper .find-links").append(html);
@@ -1719,6 +1724,9 @@
                     }
 
                     var shareData = obj.getSharePwdLocal(shareId);
+                    if (shareData instanceof Object && shareData.share_name) {
+                        return;
+                    }
                     shareData = Object.assign(shareData || {}, {
                         share_source: "caiyun",
                         share_id: shareId,
@@ -1775,6 +1783,91 @@
         var url = location.href;
         if (url.indexOf("caiyun.139.com/w") > 0 || url.indexOf("caiyun.139.com/m") > 0) {
             caiyun.autoPaddingPwd();
+            return true;
+        }
+        return false;
+    };
+
+    var weiyun = {};
+
+    weiyun.submitPwd = function(pwd) {
+        try {
+            var $Vue = document.querySelector(".mod-media").__vue__;
+            $Vue.password = pwd;
+            $Vue.submit();
+        } catch (e) {
+            //console.error("weiyun.submitPwd 错误", e);
+        };
+    };
+
+    weiyun.registerStoreSharePwd = function () {
+        var open = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function() {
+            this.addEventListener("load", function() {
+                var responseURL = this.responseURL;
+                if (responseURL.indexOf("/weiyunShareNoLogin/WeiyunShareView") > 0) {
+                    var response = JSON.parse(this.response);
+                    if (!(response && response.data.rsp_header.retcode == 0)) {
+                        return;
+                    }
+                    var sharePwd = response.data.rsp_body.RspMsg_body.pwd;
+                    var shareId = obj.getShareId();
+                    var shareData = obj.getSharePwdLocal(shareId);
+                    if (shareData instanceof Object && shareData.share_name) {
+                        return;
+                    }
+                    shareData = Object.assign(shareData || {}, {
+                        share_source: "weiyun",
+                        share_id: shareId,
+                        share_pwd: sharePwd,
+                        share_url: location.href,
+                        share_name: response.data.rsp_body.RspMsg_body.share_name
+                    });
+                    shareData.origin_url || (shareData.origin_url = document.referrer.indexOf(location.host) < 0 ? document.referrer : "");
+                    obj.setSharePwdLocal(shareData);
+                    sharePwd == obj.share_pwd || obj.storeSharePwd(shareData);
+                }
+            }, false);
+            open.apply(this, arguments);
+        };
+    };
+
+    weiyun.autoPaddingPwd = function() {
+        if (document.querySelector(".mod-media")) {
+            if (document.querySelector(".title")) {
+                return;
+            }
+            weiyun.registerStoreSharePwd();
+            var shareId = obj.getShareId();
+            obj.querySharePwd("weiyun", shareId, function(response) {
+                if (response instanceof Object && response.share_pwd) {
+                    obj.share_pwd = response.share_pwd;
+                    weiyun.submitPwd(response.share_pwd);
+                    obj.showTipSuccess("查询提取码成功");
+                }
+                else {
+                    var shareData = obj.getSharePwdLocal(shareId);
+                    if (shareData instanceof Object) {
+                        weiyun.submitPwd(shareData.share_pwd);
+                        obj.showTipSuccess("本地回填密码成功");
+                    }
+                    else {
+                        obj.showTipError("未找到密码");
+                    }
+                }
+            });
+        }
+        else if (document.querySelectorAll(".layout-main-bd").length == 2) {
+        }
+        else {
+            setTimeout(weiyun.autoPaddingPwd, 500);
+        }
+    };
+
+    weiyun.run = function() {
+        var url = location.href;
+        if (url.indexOf("share.weiyun.com/") > 0) {
+            weiyun.autoPaddingPwd();
             return true;
         }
         return false;
@@ -2307,6 +2400,7 @@
             xunlei: /(https?:\/\/pan\.xunlei\.com\/s\/([\w-]{26}))([&\w=]*[^\w]*(?:提取|密)码[^\w]*([\w]{4}))?/gim,
             aliyundrive: /(https?:\/\/www\.aliyundrive\.com\/s\/([a-z\d]{11}))([^\w]*(?:提取|密)码[^\w]*([\w]{4}))?/gim,
             caiyun: /(https?:\/\/caiyun\.(?:139|feixin\.10086)\.(?:com|cn)\/(?:m\/i\?|dl\/)([a-z\d]{13,14}))([^\w]*(?:提取|密)码[^\w]*([a-z\d]{4}))?/gim,
+            weiyun: /(https?:\/\/share\.weiyun\.com\/([a-z\d]{7,32}))([^\w]*(?:提取|访问|密)码[^\w]*([\w]{1,6}))?/gim
         };
 
         var innerText = document.body.innerText, shareList = [];
@@ -2346,6 +2440,7 @@
             aliyundrive.run,
             xunlei.run,
             caiyun.run,
+            weiyun.run,
             target.run,
             nuxt.run,
             b64Node.run,
