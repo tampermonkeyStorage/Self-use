@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.2.3.1
+// @version      0.2.4
 // @description  功能概述：【[1]：[百度.蓝奏.天翼.阿里.]等网盘页面增加资源搜索快捷方式】【[2]：[资源站点]自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地数据库搜索，已支持[百度|蓝奏|天翼]盘 ...】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -101,8 +101,13 @@
                     type: 2,
                 },
                 {
-                    name: "Pan58",
-                    link: "http://www.pan58.com/s?wd=%sv%",
+                    name: "淘易搜",
+                    link: "http://www.taoyisou.com/s?k=%sv%",
+                    type: 3,
+                },
+                {
+                    name: "易搜盘",
+                    link: "http://www.yisopan.com/s?key=%sv%",
                     type: 3,
                 },
                 {
@@ -131,13 +136,14 @@
                     type: 3,
                 },
                 {
-                    name: "大漠盘搜",
-                    link: "http://www.dmpans.com/search?wd=%sv%",
-                    type: 3,
-                },
-                {
                     name: "乐乐搜索",
                     link: "http://www.lele360.com/search?word=%sv%",
+                    type: 3,
+                },
+                /*
+                {
+                    name: "大漠盘搜",
+                    link: "http://www.dmpans.com/search?wd=%sv%",
                     type: 3,
                 },
                 {
@@ -145,6 +151,12 @@
                     link: "http://www.panmeme.com/query?key=%sv%",
                     type: 3,
                 },
+                {
+                    name: "Pan58",
+                    link: "http://www.pan58.com/s?wd=%sv%",
+                    type: 3,
+                },
+                */
                 {
                     name: "58网盘",
                     link: "http://www.58wangpan.com/search/kw%sv%",
@@ -621,6 +633,11 @@
                     link: "http://www.yunpan123.com/",
                     type: 1,
                 },
+                {
+                    name: "云盘资源分享",
+                    link: "https://oook.xyz/",
+                    type: 1,
+                },
             ]
         }[source];
     };
@@ -910,9 +927,15 @@
         }
         else {
             if (/(页面不存在|404 Not Found)/.test(document.title)) {
-                var url = location.href;
-                if (!sessionStorage.getItem(url)) {
-                    sessionStorage.setItem(url, "reload");
+                var shareId = obj.getShareId();
+                if (!shareId) {
+                    return;
+                }
+                if (sessionStorage.getItem(shareId)) {
+                    obj.removeSharePwdLocal(shareId);
+                }
+                else {
+                    sessionStorage.setItem(shareId, "reload");
                     location.reload();
                 }
             }
@@ -1067,10 +1090,7 @@
 
     baidu.updateShareStorage = function() {
         var shareId = obj.getShareId();
-        if (/(?:链接|页面)不存在/.test(document.title)) {
-            obj.removeSharePwdLocal(shareId);
-        }
-        else {
+        if (shareId && /(.*)_/.test(document.title)) {
             var shareData = obj.getSharePwdLocal(shareId);
             if (!(shareData instanceof Object && shareData.share_name)) {
                 shareData = Object.assign(shareData || {}, {
@@ -2165,9 +2185,9 @@
     };
 
     funcNode.jumpLink = function() {
-        funcNode.getUrlmd5(function(result) {
-            if (result) {
-                funcNode.getShare(result);
+        funcNode.getUrlmd5(function(cur_urlmd5) {
+            if (cur_urlmd5) {
+                funcNode.getShare(cur_urlmd5);
             }
             else {
                 console.error("funcJumpLink 无法获取cur_urlmd5参数！");
@@ -2178,7 +2198,8 @@
 
     funcNode.run = function() {
         var hosts = [
-            "www.pan58.com/f/",
+            "www.taoyisou.com/zy/",
+            "www.yisopan.com/vd/",
             "www.vpanso.com/vfile/",
             "www.vpansou.com/sfile/",
             "www.kengso.com/file/",
@@ -2187,6 +2208,7 @@
             "www.lele360.com/vd/",
             "www.dmpans.com/file/",
             "www.panmeme.com/wenjian/",
+            "www.pan58.com/f/",
         ]
 
         if (obj.isInArray(hosts)) {
