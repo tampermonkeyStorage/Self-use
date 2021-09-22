@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.2.5
+// @version      0.2.6
 // @description  功能概述：【[1]：[百度.蓝奏.天翼.阿里.]等网盘页面增加资源搜索快捷方式】【[2]：[资源站点]自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地数据库搜索，已支持[百度|蓝奏|天翼]盘 ...】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -178,11 +178,6 @@
                     type: 4,
                 },
                 {
-                    name: "百度盘搜",
-                    link: "http://www.baidupan.org/search/kw%sv%",
-                    type: 4,
-                },
-                {
                     name: "搜盘网",
                     link: "http://www.soupan.tv/search/kw%sv%",
                     type: 4,
@@ -193,19 +188,9 @@
                     type: 4,
                 },
                 {
-                    name: "好去网",
-                    link: "http://www.haogow.com/search/kw%sv%",
-                    type: 4,
-                },
-                {
                     name: "Uzi8",
                     link: "http://uzi8.cn/search/kw%sv%",
                     type: 4,
-                },
-                {
-                    name: "胖浩子",
-                    link: "http://www.panghaozi.com/pan/search?keyword=%sv%",
-                    type: 5,
                 },
                 {
                     name: "搜网盘",
@@ -283,11 +268,6 @@
                 {
                     name: "99搜索",
                     link: "http://www.99baiduyun.com/baidu/%sv%",
-                    type: 7,
-                },
-                {
-                    name: "史莱姆",
-                    link: "http://www.slimego.cn/search.html?q=%sv%",
                     type: 7,
                 },
                 {
@@ -422,6 +402,11 @@
                     link: "https://www.panmanman.com/article/list/1",
                     type: 8,
                 },
+                {
+                    name: "好去网",
+                    link: "https://www.haogow.com/search?keyword=%sv%",
+                    type: 8,
+                },
                 // 《9》需要扫码
                 {
                     name: "小马盘",
@@ -466,11 +451,6 @@
                 {
                     name: "毕方铺",
                     link: "https://www.iizhi.cn/resource/search/%sv%",
-                    type: 9,
-                },
-                {
-                    name: "胶囊汁源",
-                    link: "https://www.jnzy.pro/result?keyword=%sv%",
                     type: 9,
                 },
                 {
@@ -586,6 +566,26 @@
                 link: "https://mianbaoshu.cc/search/%sv%",
                 type: 10,
             },
+            {
+                name: "胖浩子",
+                link: "http://www.panghaozi.com/pan/search?keyword=%sv%",
+                type: 5,
+            },
+            {
+                name: "百度盘搜",
+                link: "http://www.baidupan.org/search/kw%sv%",
+                type: 4,
+            },
+                {
+                    name: "史莱姆",
+                    link: "http://www.slimego.cn/search.html?q=%sv%",
+                    type: 7,
+                },
+                {
+                    name: "胶囊汁源",
+                    link: "https://www.jnzy.pro/result?keyword=%sv%",
+                    type: 9,
+                },
             */
             ],
             "lanzous": [
@@ -636,6 +636,16 @@
                 {
                     name: "云盘资源分享",
                     link: "https://oook.xyz/",
+                    type: 1,
+                },
+                {
+                    name: "阿里资源小站",
+                    link: "https://www.uimoe.cn/",
+                    type: 1,
+                },
+                {
+                    name: "云盘资源",
+                    link: "https://www.yunpanziyuan.com/",
                     type: 1,
                 },
             ]
@@ -879,7 +889,7 @@
             var index = 0;
             Object.keys(shareList).forEach(function(shareId) {
                 var oneShare = shareList[shareId];
-                var strShare = oneShare.share_url + (oneShare.share_pwd || "") + (oneShare.share_name || oneShare.origin_title || "")
+                var strShare = Object.values(oneShare).join(" ");
                 if (strShare.indexOf(sValue) >= 0) {
                     var source = {baidu: "百度", lanzous: "蓝奏", ty189: "天翼", xunlei: "迅雷", aliyundrive: "阿里", caiyun: "彩云", weiyun: "微云"}[oneShare.share_source];
                     var html = '<div><em>['.concat(++index) + ']</em><span>'.concat('<em>[ ' + source + ' ]</em>').concat(oneShare.share_name || (oneShare.origin_title || "").split("-")[0] || "") + '</span></div>';
@@ -997,12 +1007,12 @@
                         obj.queryShareRandsk("baidu", shareId, function(response) {
                             if (response instanceof Object) {
                                 obj.showTipSuccess("解锁成功，强制跳转");
-                                baidu.reloadPage(response.Randsk);
                                 shareData = Object.assign(shareData || {}, {
                                     share_id: shareId,
                                     share_randsk: response.Randsk
                                 });
                                 obj.setSharePwdLocal(shareData);
+                                baidu.reloadPage(response.Randsk);
                             }
                             else {
                                 obj.showTipError("未找到密码");
@@ -1093,17 +1103,28 @@
         var shareId = obj.getShareId();
         if (shareId && /(.*)_/.test(document.title)) {
             var shareData = obj.getSharePwdLocal(shareId);
-            if (!(shareData instanceof Object && shareData.share_name)) {
-                shareData = Object.assign(shareData || {}, {
+            if (shareData instanceof Object) {
+                if (!shareData.share_name) {
+                    shareData = Object.assign(shareData, {
+                        share_source: "baidu",
+                        share_id: shareId,
+                        share_url: decodeURIComponent(location.href),
+                        share_name: (/(.*)_/.exec(document.title) || [])[1]
+                    });
+                    obj.setSharePwdLocal(shareData);
+                    shareData.share_randsk || unsafeWindow.currentSekey && (shareData.share_randsk = unsafeWindow.currentSekey);
+                    shareData.origin_url || document.referrer && document.referrer.indexOf(location.host) < 0 && (shareData.origin_url = document.referrer);
+                    obj.storeSharePwd(shareData);
+                }
+            }
+            else {
+                shareData = {
                     share_source: "baidu",
                     share_id: shareId,
                     share_url: decodeURIComponent(location.href),
                     share_name: (/(.*)_/.exec(document.title) || [])[1]
-                });
-                shareData.share_randsk || unsafeWindow.currentSekey && (shareData.share_randsk = unsafeWindow.currentSekey);
-                shareData.origin_url || document.referrer && document.referrer.indexOf(location.host) < 0 && (shareData.origin_url = document.referrer);
+                };
                 obj.setSharePwdLocal(shareData);
-                obj.storeSharePwd(shareData);
             }
         }
     };
@@ -1289,8 +1310,7 @@
     var lanzous = {};
 
     lanzous.submitPwd = function(pwd) {
-        var $pwd = $("#pwd");
-        $pwd.val(pwd);
+        $("#pwd").val(pwd);
         $("#sub").click();
         $(".passwddiv-btn").click();
     };
@@ -2244,8 +2264,6 @@
             "www.58wangpan.com",
             "www.56wangpan.com",
             "www.soupan8.com",
-            "www.baidupan.org",
-            "www.haogow.com",
             "www.soupan.tv",
             "www.rufengso.cc",
             "aizhaomu.com",
@@ -2265,10 +2283,6 @@
 
     winUrl.jumpLink = function() {
         var panSite = {
-            "www.panghaozi.com": {
-                panLink: unsafeWindow.url || "",
-                password: ".password"
-            },
             "www.sowp.cn": {
                 panLink: unsafeWindow.url,
             },
@@ -2292,7 +2306,6 @@
 
     winUrl.run = function() {
         var hosts = [
-            "www.panghaozi.com/pan/search/resource/",
             "www.sowp.cn/detail/",
             "www.51sopan.cn/file/file-"
         ]
