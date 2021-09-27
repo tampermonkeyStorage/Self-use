@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.2.6
+// @version      0.2.7
 // @description  功能概述：【[1]：[百度.蓝奏.天翼.阿里.]等网盘页面增加资源搜索快捷方式】【[2]：[资源站点]自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地数据库搜索，已支持[百度|蓝奏|天翼]盘 ...】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -249,13 +249,15 @@
                     link: "http://yun.java1234.com/search?q=%sv%",
                     type: 6,
                 },
-                {
-                    name: "盘天下",
-                    link: "https://www.pantianxia.com/zh/%sv%",
-                    type: 6,
-                },
                 // 《7》点击直达百度盘
-                {////https://bbs.misiai.com/
+                /*
+                {
+                    name: "misiai",
+                    link: "https://bbs.misiai.com/?q=%sv%",
+                    type: 7,
+                },
+                */
+                {
                     name: "UPanSo",
                     link: "https://disk.upanso.com/main/leftSearch?time=ALL&kw=%sv%&diskType=ALL",
                     type: 7,
@@ -323,11 +325,6 @@
                     type: 8,
                 },
                 {
-                    name: "十月搜索",
-                    link: "http://www.shiyue.org/s/%sv%",
-                    type: 8,
-                },
-                {
                     name: "熊猫搜盘",
                     link: "http://www.sopandas.com/s/%sv%",
                     type: 8,
@@ -350,16 +347,6 @@
                 {
                     name: "酷搜",
                     link: "https://www.kolsou.com/search?q=%sv%&",
-                    type: 8,
-                },
-                {
-                    name: "搜网盘",
-                    link: "http://www.sowangpan.com/search/%sv%-0-全部-0.html",
-                    type: 8,
-                },
-                {
-                    name: "盘无尽",
-                    link: "http://panwujin.com/resources/q.html?q=%sv%",
                     type: 8,
                 },
                 {
@@ -556,36 +543,6 @@
                 type: 10,
             },
             https://polished-sea-d9de.xfyz.workers.dev/
-            {
-                name: "云盘助手",
-                link: "https://yunpanzhushou.com/?q=%sv%",
-                type: 11,
-            },
-            {
-                name: "面包树",
-                link: "https://mianbaoshu.cc/search/%sv%",
-                type: 10,
-            },
-            {
-                name: "胖浩子",
-                link: "http://www.panghaozi.com/pan/search?keyword=%sv%",
-                type: 5,
-            },
-            {
-                name: "百度盘搜",
-                link: "http://www.baidupan.org/search/kw%sv%",
-                type: 4,
-            },
-                {
-                    name: "史莱姆",
-                    link: "http://www.slimego.cn/search.html?q=%sv%",
-                    type: 7,
-                },
-                {
-                    name: "胶囊汁源",
-                    link: "https://www.jnzy.pro/result?keyword=%sv%",
-                    type: 9,
-                },
             */
             ],
             "lanzous": [
@@ -646,6 +603,11 @@
                 {
                     name: "云盘资源",
                     link: "https://www.yunpanziyuan.com/",
+                    type: 1,
+                },
+                {
+                    name: "阿里盘盘",
+                    link: "https://www.panpanr.com/",
                     type: 1,
                 },
             ]
@@ -1758,13 +1720,20 @@
             var $Vue = document.querySelector(".page").__vue__;
             $Vue.token = pwd;
             $Vue.getFiles();
-            sessionStorage.setItem(obj.getShareId(), pwd);
         } catch (e) {
             console.error("caiyun.submitPwd 错误", e);
         };
     };
 
     caiyun.registerStoreSharePwd = function () {
+        var sharePwd, send = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.send = function(data) {
+            if (typeof(data) == "string" && data.indexOf("pass=") > 0) {
+                sharePwd = (data.match(/pass=([^&]+)/) || [])[1];
+            }
+            send.apply(this, arguments);
+        };
+
         var open = XMLHttpRequest.prototype.open;
         XMLHttpRequest.prototype.open = function() {
             this.addEventListener("load", function() {
@@ -1774,12 +1743,11 @@
                     if (response.code != 0) {
                         return;
                     }
-                    var shareId = obj.getShareId();
-                    var sharePwd = sessionStorage.getItem(shareId);
                     if (!sharePwd) {
                         return;
                     }
 
+                    var shareId = obj.getShareId();
                     var shareData = obj.getSharePwdLocal(shareId);
                     if (shareData instanceof Object && shareData.share_name) {
                         return;
@@ -2307,18 +2275,15 @@
     winUrl.run = function() {
         var hosts = [
             "www.sowp.cn/detail/",
-            "www.51sopan.cn/file/file-"
+            "www.51sopan.cn/"
         ]
         , host = location.host;
 
         if (obj.isInArray(hosts, host)) {
-            var url = window.location.href;
             if (host == "www.51sopan.cn") {
-                var pathname = location.pathname,
-                    s = pathname.split("/");
+                var s = location.pathname.split("/");
                 if (s[1] == "article") {
                     window.location.href = "http://www.51sopan.cn/file/file-" + s[2] + ".html";
-                    console.log("51sopan article 跳转详情页面");
                     return true;
                 }
                 else if (s[1] != "file") {
