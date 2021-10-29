@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.2.8
+// @version      0.3.0
 // @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云】 功能概述：【[1]：网盘页面增加资源搜索快捷方式】【[2]：[资源站点]自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地缓存数据库搜索】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -549,13 +549,13 @@
                     type: 1,
                 },
                 {
-                    name: "熊崩",
-                    link: "https://www.xiongbeng.com/",
+                    name: "异星软件空间",
+                    link: "https://www.yxssp.com/",
                     type: 1,
                 },
                 {
-                    name: "异星软件空间",
-                    link: "https://www.yxssp.com/",
+                    name: "乐享",
+                    link: "https://www.lxapk.com/",
                     type: 1,
                 },
             ],
@@ -797,16 +797,16 @@
 
         var cssArr = [
             ".cache-wrapper{z-index:999999;width:100%;height:100%;position:fixed;top:0;left:0;bottom:0;background-color:rgba(0,0,0,0.5);display:none;justify-content:center;align-items:center;box-shadow:0 0.5rem 1rem rgba(0,0,0,0.15) !important}",
-            ".cache-wrapper .card{width:550px;padding:10px 10px 20px 10px;background-color:#fff;border-radius:5px;margin-top:0px}",
-            ".cache-wrapper .card .heading{user-select:none;font-size:20px;font-weight:bold;border-bottom:1px solid #ddd;padding-bottom:5px}",
-            ".cache-wrapper .card .heading .clear-close{user-select:none;float:right;font-size:26px;cursor:pointer;padding-right:10px}",
+            ".cache-wrapper .card{width:550px;padding:10px 10px 10px 10px;background-color:#fff;border-radius:5px;margin-top:0px}",
+            ".cache-wrapper .card .heading{user-select:none;font-size:20px;font-weight:bold;border-bottom:1px solid #ddd;padding-bottom:10px}",
+            ".cache-wrapper .card .heading .clear-close{user-select:none;float:right;font-size:25px;cursor:pointer;padding-right:10px}",
             ".cache-wrapper .card .heading .clear-close:hover{color:#e74c3c}",
-            ".cache-wrapper .card .body{padding:10px;border-bottom:1px solid #ddd}",
-            ".cache-wrapper .card .body p{line-height:40px}",
-            ".cache-wrapper .card .body p .cache-count{color:green}",
-            ".cache-wrapper .card .body p .clear-cache{width:20%;height:auto;color:red}",
-            ".cache-wrapper .card .body p .cache-key{width:75%;height:auto}",
-            ".cache-wrapper .card .body p .cache-find{width:20%;height:auto;color:green}",
+            ".cache-wrapper .card .body{padding:1px;border-bottom:1px solid #ddd}",
+            ".cache-wrapper .card .body p{line-height:30px}",
+            ".cache-wrapper .card .body p .cache-count{color:green;font-weight:900;font-size:20px;}",
+            ".cache-wrapper .card .body p .clear-cache{width:20%;height:30px;color:red;float:right}",
+            ".cache-wrapper .card .body p .cache-key{width:78%;height:25px;}",
+            ".cache-wrapper .card .body p .cache-find{width:20%;height:30px;color:green;float:right}",
 
             ".cache-wrapper .find-links{width:100%;max-height:400px;overflow-y:auto;box-sizing:border-box;padding:1px 10px 1px 10px}",
             ".cache-wrapper .find-links:hover::-webkit-scrollbar{width:5px}",
@@ -823,7 +823,7 @@
         ];
         $("<style></style>").text(cssArr.join("\n")).appendTo(document.head || document.documentElement);
 
-        var html = '<div class="cache-wrapper" style="display: flex;"><div class="card"><div class="heading">本地存储管理<span class="clear-close">×</span></div><div class="body"><p>存储数量：<span class="cache-count">0</span><span>&nbsp;&nbsp;&nbsp;</span><button class="clear-cache">清空缓存</button></p><p><input type="text" class="cache-key" placeholder="请输入链接或密码或文件名关键字"><button class="cache-find">查找分享</button></p></div><div class="find-links"></div></div></div>'
+        var html = '<div class="cache-wrapper" style="display: flex;"><div class="card"><div class="heading">本地存储管理<span class="clear-close">X</span></div><div class="body"><p>存储数量：<span class="cache-count">0</span><button class="clear-cache">清空缓存</button></p><p><input type="text" class="cache-key" placeholder="请输入链接或密码或文件名关键字"><button class="cache-find">查找分享</button></p></div><div class="find-links"></div></div></div>'
         $(document.body).append(html);
 
         var shareList = GM_getValue("share_list") || {};
@@ -906,6 +906,7 @@
                     return;
                 }
                 if (sessionStorage.getItem(shareId)) {
+                    obj.showTipSuccess("链接失效，此条存储信息已删除");
                     obj.removeSharePwdLocal(shareId);
                 }
                 else {
@@ -963,7 +964,7 @@
                 }
                 else {
                     var shareData = obj.getSharePwdLocal(shareId);
-                    if (shareData instanceof Object) {
+                    if (shareData instanceof Object && shareData.share_pwd) {
                         baidu.submitPwd(shareData.share_pwd);
                         obj.showTipSuccess("本地回填密码成功");
                     }
@@ -1067,29 +1068,19 @@
         var shareId = obj.getShareId();
         if (shareId && /(.*)_/.test(document.title)) {
             var shareData = obj.getSharePwdLocal(shareId);
-            if (shareData instanceof Object) {
-                if (!shareData.share_name) {
-                    shareData = Object.assign(shareData, {
-                        share_source: "baidu",
-                        share_id: shareId,
-                        share_url: decodeURIComponent(location.href),
-                        share_name: (/(.*)_/.exec(document.title) || [])[1]
-                    });
-                    obj.setSharePwdLocal(shareData);
-                    shareData.share_randsk || unsafeWindow.currentSekey && (shareData.share_randsk = unsafeWindow.currentSekey);
-                    shareData.origin_url || document.referrer && document.referrer.indexOf(location.host) < 0 && (shareData.origin_url = document.referrer);
-                    obj.storeSharePwd(shareData);
-                }
+            if (shareData instanceof Object && shareData.share_name) {
+                return;
             }
-            else {
-                shareData = {
-                    share_source: "baidu",
-                    share_id: shareId,
-                    share_url: decodeURIComponent(location.href),
-                    share_name: (/(.*)_/.exec(document.title) || [])[1]
-                };
-                obj.setSharePwdLocal(shareData);
-            }
+
+            shareData = Object.assign(shareData, {
+                share_source: "baidu",
+                share_id: shareId,
+                share_url: location.href.replace(location.hash, ""),
+                share_name: (/(.*)_/.exec(document.title) || [])[1]
+            });
+            shareData.origin_url || document.referrer && document.referrer.indexOf(location.host) < 0 && (shareData.origin_url = document.referrer);
+            obj.setSharePwdLocal(shareData);
+            (shareData.share_pwd || shareData.share_randsk) && obj.storeSharePwd(shareData);
         }
     };
 
@@ -1286,8 +1277,7 @@
         unsafeWindow.$(document).ajaxComplete(function (event, xhr, options) {
             var requestUrl = options.url;
             if (requestUrl.indexOf("/ajaxm.php") >= 0 || requestUrl.indexOf("/filemoreajax.php") >= 0) {
-                var response = {};
-                try { response = JSON.parse(xhr.response); } catch (e) {};
+                var response = JSON.parse(xhr.response);
                 if (response && response.zt == 1) {
                     var sharePwd = decodeURIComponent((options.data.match(/&pwd=([^&]+)/) || options.data.match(/&p=([^&]+)/) || [])[1] || "");
                     if (!sharePwd) {
@@ -1336,6 +1326,7 @@
             });
         }
         else if ($(".off").length) {
+            obj.showTipSuccess("链接失效，此条存储信息已删除");
             obj.removeSharePwdLocal(shareId);
         }
     };
@@ -1433,47 +1424,50 @@
     };
 
     ty189.autoPaddingPwd = function() {
+        var errNode = document.querySelector(".error-content");
+        if (errNode && !errNode.style.display) {
+            obj.showTipSuccess("链接失效，此条存储信息已删除");
+            obj.removeSharePwdLocal(obj.getShareId());
+            return;
+        }
+
         var $node = document.querySelector(".get-file-container") || document.querySelector(".outlink-wrapper");
         if ($node && $node.__vue__) {
             var $Vue = $node.__vue__;
             var shareInfo = $Vue.fileDetail || $Vue.shareFileInfo;
             if (shareInfo.shareMode > 0) {
-                var getCookie = unsafeWindow._ux21cn.cookie.get;
-                var shareId = obj.getShareId();
-                var shareIdCookie = getCookie("share_" + shareId) || getCookie("shareId_" + shareId);
-                if (!shareIdCookie && shareInfo.shareMode == 1) {
-                    ty189.storeSharePwd();
-                    obj.querySharePwd("ty189", shareId, function(response) {
-                        if (response instanceof Object) {
-                            obj.share_pwd = response.share_pwd;
-                            ty189.submitPwd(response.share_pwd);
-                            obj.showTipSuccess("查询提取码成功");
-                        }
-                        else {
-                            var shareData = obj.getSharePwdLocal(shareId);
-                            if (shareData instanceof Object) {
-                                ty189.submitPwd(shareData.share_pwd);
-                                obj.showTipSuccess("本地回填密码成功");
+                if (shareInfo.shareMode == 1) {
+                    var getCookie = unsafeWindow._ux21cn.cookie.get;
+                    var shareId = obj.getShareId();
+                    var shareIdCookie = getCookie("share_" + shareId) || getCookie("shareId_" + shareId);
+                    if (!shareIdCookie) {
+                        ty189.storeSharePwd();
+                        obj.querySharePwd("ty189", shareId, function(response) {
+                            if (response instanceof Object) {
+                                obj.share_pwd = response.share_pwd;
+                                ty189.submitPwd(response.share_pwd);
+                                obj.showTipSuccess("查询提取码成功");
                             }
                             else {
-                                obj.showTipError("未找到密码");
+                                var shareData = obj.getSharePwdLocal(shareId);
+                                if (shareData instanceof Object) {
+                                    ty189.submitPwd(shareData.share_pwd);
+                                    obj.showTipSuccess("本地回填密码成功");
+                                }
+                                else {
+                                    obj.showTipError("未找到密码");
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
                 }
-            }
-            else {
-                setTimeout(ty189.autoPaddingPwd, 500)
-            }
-        }
-        else {
-            var errNode = document.querySelector(".error-content");
-            if (errNode && !errNode.style.display) {
-                obj.removeSharePwdLocal(obj.getShareId());
             }
             else {
                 setTimeout(ty189.autoPaddingPwd, 500);
             }
+        }
+        else {
+            setTimeout(ty189.autoPaddingPwd, 500);
         }
     };
 
@@ -1547,16 +1541,16 @@
                     return;
                 }
                 var responseURL = this.responseURL;
-                if (responseURL.indexOf("/share_link/get_share_token") > 0) {
-                    sessionStorage.setItem("shareReqData", this.sendParams[0]);
-                }
-                else if (responseURL.indexOf("/file/list") > 0) {
-                    var shareId = obj.getShareId(), shareReqData = JSON.parse(sessionStorage.getItem("shareReqData"));
-                    var sharePwd = shareId == shareReqData.share_id ? shareReqData.share_pwd : "";
-                    if (!sharePwd) {
-                        return;
+                if (responseURL.indexOf("/share_link/get_share_by_anonymous") > 0 || responseURL.indexOf("/share_link/get_share_token") > 0) {
+                    var response = JSON.parse(this.response);
+                    if (response.share_name) {
+                        if (response.file_infos.length == 0) {
+                            aliyundrive.share_name = response.share_name;
+                            return;
+                        }
                     }
 
+                    var shareId = obj.getShareId();
                     var shareData = obj.getSharePwdLocal(shareId);
                     if (shareData instanceof Object && shareData.share_name) {
                         return;
@@ -1564,13 +1558,16 @@
                     shareData = Object.assign(shareData || {}, {
                         share_source: "aliyundrive",
                         share_id: shareId,
-                        share_pwd: sharePwd,
                         share_url: decodeURIComponent(location.href),
-                        share_name:JSON.parse(this.response).items[0].name
+                        share_name:response.share_name || aliyundrive.share_name
                     });
                     shareData.origin_url || document.referrer && document.referrer.indexOf(location.host) < 0 && (shareData.origin_url = document.referrer);
+                    if (this.sendParams) {
+                        var sendParam = JSON.parse(this.sendParams[0]) || {}, sharePwd = sendParam.share_pwd || null;
+                        shareData.share_pwd = sharePwd;
+                        obj.share_pwd == sharePwd || obj.storeSharePwd(shareData);
+                    }
                     obj.setSharePwdLocal(shareData);
-                    shareData.share_pwd == obj.share_pwd || obj.storeSharePwd(shareData);
                 }
             });
             open.apply(this, arguments);
@@ -1579,7 +1576,6 @@
 
     aliyundrive.autoPaddingPwd = function() {
         if ($("#root input").length) {
-            aliyundrive.storeSharePwd();
             var shareId = obj.getShareId();
             obj.querySharePwd("aliyundrive", shareId, function(response) {
                 if (response instanceof Object) {
@@ -1601,7 +1597,8 @@
         }
         else if ($("#root header").length) {
             if (document.querySelector(".share-error--2N71i") && location.href.indexOf("/folder/") < 0) {
-                obj.removeSharePwdLocal(shareId);
+                obj.showTipSuccess("链接失效，此条存储信息已删除");
+                obj.removeSharePwdLocal(obj.getShareId());
             }
         }
         else {
@@ -1650,6 +1647,7 @@
     aliyundrive.run = function() {
         var url = location.href;
         if (url.indexOf(".aliyundrive.com/s/") > 0) {
+            aliyundrive.storeSharePwd();
             aliyundrive.autoPaddingPwd();
             aliyundrive.addSearchSharePage();
             return true;
@@ -1689,7 +1687,7 @@
                 share_source: "xunlei",
                 share_id: shareId,
                 share_pwd: sharePwd,
-                share_url: decodeURIComponent(location.href),
+                share_url: location.href.replace(location.search, ""),
                 share_name: $(".share-file-list").find("a:first").text()
             });
             shareData.origin_url || document.referrer && document.referrer.indexOf(location.host) < 0 && (shareData.origin_url = document.referrer);
@@ -1721,6 +1719,7 @@
             });
         });
         $(document).one("DOMNodeInserted", ".last-level-font", function () {
+            obj.showTipSuccess("链接失效，此条存储信息已删除");
             obj.removeSharePwdLocal(obj.getShareId());
         });
     };
@@ -1815,6 +1814,8 @@
             else if (document.querySelector(".main")) {
             }
             else if (document.querySelector(".invalid")) {
+                obj.showTipSuccess("链接失效，此条存储信息已删除");
+                obj.removeSharePwdLocal(obj.getShareId());
             }
             else {
                 setTimeout(caiyun.autoPaddingPwd, 500);
@@ -1880,11 +1881,13 @@
 
     weiyun.autoPaddingPwd = function() {
         if (document.querySelector(".mod-media")) {
+            var shareId = obj.getShareId();
             if (document.querySelector(".title")) {
+                obj.showTipSuccess("链接失效，此条存储信息已删除");
+                obj.removeSharePwdLocal(shareId);
                 return;
             }
             weiyun.storeSharePwd();
-            var shareId = obj.getShareId();
             obj.querySharePwd("weiyun", shareId, function(response) {
                 if (response instanceof Object && response.share_pwd) {
                     obj.share_pwd = response.share_pwd;
