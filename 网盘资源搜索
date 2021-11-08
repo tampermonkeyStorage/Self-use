@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.3.1
+// @version      0.3.2
 // @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云】 功能概述：【[1]：网盘页面增加资源搜索快捷方式】【[2]：[资源站点]自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地缓存数据库搜索】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -2447,7 +2447,7 @@
         var shareRegExp = {
             baidu: /(https?:\/\/(?:pan|yun)\.baidu\.com\/(?:s\/\d|(?:share|wap)\/init\?surl\=)([\w-]{5,25}))([^\w]*(?:提取|访问|查阅|授权|密\s*)码[^\w]*([\w]{4}))?/gim,
             lanzous: /(https?:\/\/[\w-]*\.?lanzou.?\.com\/([\w]{6,13}))([^\w]*(?:提取|访问|查阅|授权|密\s*)码[^\w]*([\w-]{4,12}))?/gim,
-            ty189: /(https?:\/\/(?:h5\.)?cloud\.189\.cn\/(?:web\/share\?code|share\.html#)?(?:=|t\/)([\w]{12}))([^\w]*(?:提取|访问|查阅|授权|密\s*)码[^\w]*([\w]{4}))?/gim,
+            ty189: /(https?:\/\/(?:h5\.)?cloud\.189\.cn\/(?:web\/share\?code|share\.html#\/)?(?:=|t\/)([\w]{12}))([^\w]*(?:提取|访问|查阅|授权|密\s*)码[^\w]*([\w]{4}))?/gim,
             xunlei: /(https?:\/\/pan\.xunlei\.com\/s\/([\w-]{26}))([&\w=]*[^\w]*(?:提取|密)码[^\w]*([\w]{4}))?/gim,
             aliyundrive: /(https?:\/\/www\.aliyundrive\.com\/s\/([a-z\d]{11}))([^\w]*(?:提取|密)码[^\w]*([\w]{4}))?/gim,
             weiyun: /(https?:\/\/share\.weiyun\.com\/([a-z\d]{7,32}))([^\w]*(?:提取|访问|密)码[^\w]*([\w]{1,6}))?/gim,
@@ -2460,8 +2460,8 @@
             allShare.forEach(function (item) {
                 var shareLink = item[1], shareId = item[2], sharePwd = item[4] || "";
                 sharePwd || shareSource == "aliyundrive" && (sharePwd = (/((?:提取码|密码)?[^\w]*([\w]{4}))[^\w]*(https?:\/\/www\.aliyundrive\.com\/s\/([a-z\d]{11}))/gim.exec(innerText) || [])[2]);
-                if (!shareList[shareId]) {
-                    shareList[shareLink] = {
+                if (!shareList[shareId] || (sharePwd && !shareList[shareId].share_pwd)) {
+                    shareList[shareId] = {
                         share_source: shareSource,
                         share_id: shareId,
                         share_pwd: sharePwd,
@@ -2469,13 +2469,13 @@
                         origin_url: decodeURIComponent(location.href),
                         origin_title: document.title
                     };
-                    obj.getSharePwdLocal(shareId) || obj.setSharePwdLocal(shareList[shareLink]);
+                    obj.getSharePwdLocal(shareId) || obj.setSharePwdLocal(shareList[shareId]);
                 }
             });
         });
 
         var sharePwdRegExp = /(?:提取|访问|查阅|授权|密\s*)[码碼][\[【(（：: ]?([\w-]{3,6})/g;
-        $("a[href^='http']").each(function () {
+        $("a[href^='http']:not([href*='" + location.hostname + "']").each(function () {
             var $this = $(this);
             Object.keys(shareRegExp).forEach(function (shareSource) {
                 var shareLinkReg = shareRegExp[shareSource].exec($this.attr("href"));
@@ -2509,7 +2509,7 @@
                             }
                         };
 
-                        shareList[shareLink] = {
+                        shareList[shareId] = {
                             share_source: shareSource,
                             share_id: shareId,
                             share_pwd: sharePwd,
@@ -2517,7 +2517,7 @@
                             origin_url: decodeURIComponent(location.href),
                             origin_title: document.title
                         };
-                        obj.getSharePwdLocal(shareId) || obj.setSharePwdLocal(shareList[shareLink]);
+                        obj.getSharePwdLocal(shareId) || obj.setSharePwdLocal(shareList[shareId]);
                     }
                 }
             });
