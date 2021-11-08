@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.3.2
+// @version      0.3.3
 // @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云】 功能概述：【[1]：网盘页面增加资源搜索快捷方式】【[2]：[资源站点]自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地缓存数据库搜索】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -174,11 +174,6 @@
                 {
                     name: "如风搜",
                     link: "http://www.rufengso.cc/search/kw%s",
-                    type: 4,
-                },
-                {
-                    name: "Uzi8",
-                    link: "http://uzi8.cn/search/kw%s",
                     type: 4,
                 },
                 {
@@ -580,18 +575,13 @@
             ],
             "aliyundrive": [
                 {
-                    name: "阿里小站",
-                    link: "http://alixiaozhan.com/",
+                    name: "云盘资源分享",
+                    link: "https://oook.xyz/",
                     type: 1,
                 },
                 {
                     name: "阿里盘搜",
                     link: "https://www.alipanso.com/",
-                    type: 1,
-                },
-                {
-                    name: "云盘资源分享",
-                    link: "https://oook.xyz/",
                     type: 1,
                 },
                 {
@@ -908,7 +898,7 @@
             location.reload();
         }
         else {
-            if (/(页面不存在|404 Not Found)/.test(document.title)) {
+            if (/(链接不存在|页面不存在|404 Not Found)/.test(document.title)) {
                 var shareId = obj.getShareId();
                 if (!shareId) {
                     return;
@@ -2268,8 +2258,7 @@
             "www.soupan8.com",
             "www.soupan.tv",
             "www.rufengso.cc",
-            "aizhaomu.com",
-            "uzi8.cn"
+            "aizhaomu.com"
         ];
 
         if (obj.isInArray(hosts)) {
@@ -2453,8 +2442,9 @@
             weiyun: /(https?:\/\/share\.weiyun\.com\/([a-z\d]{7,32}))([^\w]*(?:提取|访问|密)码[^\w]*([\w]{1,6}))?/gim,
             caiyun: /(https?:\/\/caiyun\.(?:139|feixin\.10086)\.(?:com|cn)\/(?:m\/i\?|dl\/)([a-z\d]{13,14}))([^\w]*(?:提取|密)码[^\w]*([a-z\d]{4}))?/gim,
         };
+        var shareList = {};
 
-        var innerText = document.body.innerText, shareList = {};
+        var innerText = document.body.innerText;
         Object.keys(shareRegExp).forEach(function (shareSource) {
             var allShare = checkShare.matchShare(innerText, shareRegExp[shareSource]);
             allShare.forEach(function (item) {
@@ -2481,7 +2471,7 @@
                 var shareLinkReg = shareRegExp[shareSource].exec($this.attr("href"));
                 if (Array.isArray(shareLinkReg)) {
                     var sharePwd, shareLink = shareLinkReg[1], shareId = shareLinkReg[2];
-                    if (!shareList[shareId]) {
+                    if (!shareList[shareId] || !shareList[shareId].share_pwd) {
                         var $node = $this, $node0 = $node, $node1 = $node;
                         var i = 0, j = 0;
                         while (!sharePwd && $node.get(0) != document.body) {
