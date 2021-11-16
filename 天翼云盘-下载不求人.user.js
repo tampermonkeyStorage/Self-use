@@ -59,30 +59,10 @@
         $Vue.$loading.hide();
     };
 
-    obj.getFileSize = function(e, t, n, i) {
-        if (!(e && e.toString().search(/B|K|M|G|T/) > -1)) {
-            var o, a, r, s = parseFloat(e), l = Math.abs(s);
-            void 0 === t && (t = 2);
-            void 0 === n && (n = !0);
-            l < 1024 ? (t = 0, o = s, a = "B") :
-            l < 921600 ? (o = s / 1024, a = "K") :
-            l < 943718400 ? (o = s / 1048576, a = "M") :
-            l < 966367641600 || 0 === t && l < 1099511627776 ? (o = s / 1073741824, a = "G") :
-            (o = s / 1099511627776, a = "T");
-            o = (Math.round(o * Math.pow(10, t)) / parseFloat(Math.pow(10, t))).toFixed(t);
-            r = i && t > 0 ? o !== Math.floor(o) ? o : parseInt(Math.floor(o), 10) : o;
-            n && (r += a);
-            return r;
-        }
-        else {
-            return e;
-        }
-    };
-
     obj.getDownloadUrl = function (fileId, shareId) {
         return new Promise(function (resolve) {
             $.ajax({
-                url: "https://cloud.189.cn/api/open/file/getFileDownloadUrl.action" + "?noCache".concat(Math.random(), "&fileId=").concat(fileId, "&dt=").concat(1, "&shareId=").concat(shareId || ""),
+                url: "https://cloud.189.cn/api/open/file/getFileDownloadUrl.action?noCache=".concat(Math.random(), "&fileId=").concat(fileId, "&dt=1").concat(shareId ? "&shareId=" + shareId : ""),
                 headers: {
                     accept: "application/json;charset=UTF-8"
                 },
@@ -166,24 +146,25 @@
         var html = '<div style="padding: 20px; height: 450px; overflow-y: auto;">';
         var rowStyle = "margin:10px 0px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;";
 
-        var shareId = obj.file_page.shareId;
+        var shareId = location.href.match("/web/main/") ? null : obj.file_page.shareId;
         var retCount = 0;
         fileList.forEach(function (item, index) {
+            console.log(item);
             if (item.isFolder) {
-                html += '<p>' + (++index) + '：' + (item.name ? item.name : item.fileId) + ' || <font color="green">文件夹</font></p>';
+                html += '<p>' + (++index) + '：' + (item.fileName ? item.fileName : item.fileId) + ' || <font color="green">请进入文件夹下载</font></p>';
                 html += '<p style="' + rowStyle + '"></p>';
                 retCount++;
             }
             else {
                 if (item.downloadUrl) {
-                    html += '<p>' + (++index) + '：' + (item.fileName ? item.fileName : item.fileId) + ' || <font color="green">' + obj.getFileSize(item.fileSize) + '</font></p>';
+                    html += '<p>' + (++index) + '：' + (item.fileName ? item.fileName : item.fileId) + ' || <font color="green">' + item.fileSize + '</font></p>';
                     html += '<p style="' + rowStyle + '"><a title="' + item.downloadUrl + '" href="' + item.downloadUrl + '" style="color: blue;">' + item.downloadUrl + '</a></p>';
                     retCount++;
                 }
                 else {
                     obj.getDownloadUrl(item.fileId, shareId).then(function (downloadUrl) {
                         item.downloadUrl = downloadUrl;
-                        html += '<p>' + (++index) + '：' + (item.fileName ? item.fileName : item.fileId) + ' || <font color="green">' + obj.getFileSize(item.fileSize) + '</font></p>';
+                        html += '<p>' + (++index) + '：' + (item.fileName ? item.fileName : item.fileId) + ' || <font color="green">' + item.fileSize + '</font></p>';
                         html += '<p style="' + rowStyle + '"><a title="' + item.downloadUrl + '" href="' + item.downloadUrl + '" style="color: blue;">' + item.downloadUrl + '</a></p>';
                         retCount++;
                     });
@@ -193,7 +174,6 @@
         var waitId = setInterval(function(){
             if (retCount == fileList.length){
                 html += '</div>';
-                html += '<br/><p>提示：如链接获取失败请尝试刷新一次本页面</p>';
                 obj.showBox(html);
                 obj.hideNotify();
                 clearInterval(waitId);
@@ -244,6 +224,8 @@
             open.apply(this, arguments);
         };
     }();
+
+    console.log("=== 天翼云盘 ===");
 
     // Your code here...
 })();
