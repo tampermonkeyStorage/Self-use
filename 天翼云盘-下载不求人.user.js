@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         天翼云盘-下载不求人
 // @namespace    http://tampermonkey.net/
-// @version      0.5.2
+// @version      0.5.3
 // @description  让下载成为一件愉快的事情
 // @author       You
 // @match        https://cloud.189.cn/web/*
@@ -228,7 +228,7 @@
                 var responseURL = this.responseURL;
                 var response = this.response;
                 if (response instanceof Object && response.res_code == 0) {
-                    if (responseURL.indexOf("/checkAccessCode.action") > 0) {
+                    if (responseURL.indexOf("/checkAccessCode.action") > 0 || responseURL.indexOf("/getShareInfoByCode.action") > 0) {
                         if (response.shareId) {
                             obj.file_page.shareId = response.shareId;
                         }
