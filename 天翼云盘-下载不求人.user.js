@@ -228,7 +228,7 @@
                 var responseURL = this.responseURL;
                 var response = this.response;
                 if (response instanceof Object && response.res_code == 0) {
-                    if (responseURL.indexOf("/checkAccessCode.action") > 0 || responseURL.indexOf("/getShareInfoByCode.action") > 0) {
+                    if (responseURL.indexOf("/checkAccessCode.action") > 0 || responseURL.indexOf("/getShareInfoByCodeV2.action") > 0) {
                         if (response.shareId) {
                             obj.file_page.shareId = response.shareId;
                         }
