@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      0.9
+// @version      1.0
 // @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，...
 // @author       You
 // @require      https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js
@@ -17,9 +17,10 @@
     var $ = $ || window.$;
     var obj = {
         file_page: {
+            parent_file_id: "root",
             token_type: "",
             access_token: "",
-            lists: []
+            items: []
         },
     };
 
@@ -173,12 +174,12 @@
         if ($(".action--9-qBb").length) {
             obj.file_page.access_token || obj.tokenRefresh();
 
-            var html = '<div style="margin:0px 8px;"></div><div class="button-wrapper--1UkG6 button-download--batch" data-type="primary" data-disabled="false" data-spm-anchor-id="0.0.0.i1.44273575TyIS3B">显示链接</div>';
+            var html = '<div class="button-wrapper--1UkG6 button-download--batch" data-type="primary">显示链接</div>';
             $(".action--9-qBb").append(html);
             $(".button-download--batch").on("click", obj.showDownloadSharePage);
         }
         else {
-            setTimeout(obj.initDownloadSharePage, 1000)
+            setTimeout(obj.initDownloadSharePage, 500)
         }
     };
 
@@ -189,7 +190,7 @@
         if ($(".actions--2qvID").length) {
             obj.file_page.access_token || obj.tokenRefresh();
 
-            var html = '<div style="margin:0px 8px;"></div><div class="button-wrapper--1UkG6 button-download--batch" data-type="primary" data-disabled="false" data-spm-anchor-id="0.0.0.i1.44273575TyIS3B">显示链接</div>';
+            var html = '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 button-download--batch">显示链接</button>';
             $(".actions--2qvID").append(html);
             $(".button-download--batch").on("click", obj.showDownloadHomePage);
         }
@@ -374,10 +375,7 @@
     };
 
     obj.getSelectedFileList = function () {
-        var selectedFileList = [], fileList = [];
-        obj.file_page.lists.forEach(function (item) {
-            fileList.push.apply(fileList, item.items);
-        })
+        var selectedFileList = [], fileList = obj.file_page.items;
         if (fileList.length == 0) {
             console.error("致命错误：劫持文件列表失败");
             return [];
@@ -415,16 +413,21 @@
                         }
                     }
                     else if (responseURL.indexOf("/file/list") > 0) {
-                        response = JSON.parse(this.response);
-                        if (response.next_marker == "") {
-                            if (location.href.includes("/s/") && response.items[0].drive_id) {
-                                //排除【全部保存到我的云盘】
-                                return;
-                            }
-                            obj.file_page.lists = [];
+                        var parent_file_id = ((location.href.match(/\/folder\/(\w+)/) || [])[1]) || "root";
+                        var body = JSON.parse(this.config.body);
+                        if (body.parent_file_id != parent_file_id) {
+                            //排除【保存 移动 等行为触发】
+                            return;
                         }
-                        obj.file_page.lists.push(response);
-                        //obj.showTipSuccess("文件列表获取完成 共：" + obj.file_page.lists.length + "项");
+                        if (parent_file_id != obj.file_page.page_id) {
+                            //变换页面
+                            obj.file_page.page_id = parent_file_id;
+                            obj.file_page.items = [];
+                        }
+
+                        response = JSON.parse(this.response);
+                        obj.file_page.items = obj.file_page.items.concat(response.items);
+                        obj.showTipSuccess("文件列表获取完成 共：" + obj.file_page.items.length + "项");
                     }
                 }
             }, false);
@@ -619,7 +622,7 @@
         }
 
         setTimeout(function () {
-            obj.hideTip()
+            obj.hideTip();
         }, timeout || 3000);
     };
 
