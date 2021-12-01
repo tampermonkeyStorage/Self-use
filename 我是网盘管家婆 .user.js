@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.3.7
+// @version      0.3.8
 // @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云】 功能概述：【[1]：网盘页面增加资源搜索快捷方式】【[2]：[资源站点]自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地缓存数据库搜索】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -177,17 +177,6 @@
                     type: 4,
                 },
                 {
-                    name: "搜网盘",
-                    link: "http://www.sowp.cn/search?kw=%s",
-                    type: 5,
-                },
-                {
-                    name: "51搜盘",
-                    link: "http://www.51sopan.cn/search?keywords=%s",
-                    type: 5,
-                },
-
-                {
                     name: "巧眯网",
                     link: "http://www.qiaomi.cn/s/%s",
                     type: 6,
@@ -214,16 +203,6 @@
                 },
 
                 {
-                    name: "天天云搜",
-                    link: "https://www.ttyunsou.cn/s?keyword=%s",
-                    type: 6,
-                },
-                {
-                    name: "乐伊分享",
-                    link: "https://www.dyroy.com/html/search.html?q=%s",
-                    type: 6,
-                },
-                {
                     name: "6miu",
                     link: "http://baiduyun.6miu.com/word.html?kw=%s",
                     type: 6,
@@ -245,11 +224,6 @@
                     type: 7,
                 },
                 {
-                    name: "文件搜",
-                    link: "http://wjsou.com/s2.jsp?q=%s",
-                    type: 7,
-                },
-                {
                     name: "小小汁源库",
                     link: "http://xxdyk.cn/?s=%s",
                     type: 7,
@@ -263,21 +237,6 @@
                 {
                     name: "搜索盘",
                     link: "https://www.sosuopan.cn/search?q=%s",
-                    type: 8,
-                },
-                {
-                    name: "盘131",
-                    link: "http://www.pan131.com/yun/%s/",
-                    type: 8,
-                },
-                {
-                    name: "盘搜搜",
-                    link: "https://www.pansoso.la/zh/%s",
-                    type: 8,
-                },
-                {
-                    name: "我搜云网盘",
-                    link: "https://www.wosouyun.com/wd/%s",
                     type: 8,
                 },
                 {
@@ -322,23 +281,8 @@
                     type: 8,
                 },
                 {
-                    name: "酷搜",
-                    link: "https://www.kolsou.com/search?q=%s&",
-                    type: 8,
-                },
-                {
-                    name: "网盘之家",
-                    link: "https://www.45256.com/so/%s",
-                    type: 8,
-                },
-                {
                     name: "网盘搜索",
                     link: "http://www.kaclub.cn/search?q=%s",
-                    type: 8,
-                },
-                {
-                    name: "资源搜索",
-                    link: "http://www.olecn.com/?s=%s",
                     type: 8,
                 },
                 {
@@ -349,21 +293,6 @@
                 {
                     name: "一个桔",
                     link: "http://zhannei.baidu.com/cse/search?q=%s&s=8741474853775767192",
-                    type: 8,
-                },
-                {
-                    name: "bdY搜",
-                    link: "http://www.bdyso.com/",
-                    type: 8,
-                },
-                {
-                    name: "云盘狗",
-                    link: "http://www.yunpangou.com",
-                    type: 8,
-                },
-                {
-                    name: "盘满满",
-                    link: "https://www.panmanman.com/article/list/1",
                     type: 8,
                 },
                 {
@@ -379,6 +308,23 @@
                 {
                     name: "百度搜吧",
                     link: "https://www.bdsoba.com/search/type_0_1_%s",
+                    type: 8,
+                },
+
+                //不能直接搜索
+                {
+                    name: "bdY搜",
+                    link: "http://www.bdyso.com/",
+                    type: 8,
+                },
+                {
+                    name: "云盘狗",
+                    link: "http://www.yunpangou.com",
+                    type: 8,
+                },
+                {
+                    name: "盘满满",
+                    link: "https://www.panmanman.com/article/list/1",
                     type: 8,
                 },
                 // 《9》需要扫码
@@ -415,11 +361,6 @@
                 {
                     name: "飞猪盘",
                     link: "http://www.feizhupan.com/#/main/search?keyword=%s",
-                    type: 9,
-                },
-                {
-                    name: "罗马盘",
-                    link: "https://www.luomapan.com/search?keyword=%s",
                     type: 9,
                 },
                 {
@@ -512,17 +453,17 @@
                 },
                 {
                     name: "众人搜索网",
-                    link: "http://wangpan.renrensousuo.com/jieguo?sa=%E7%BD%91%E7%9B%98%E6%90%9C%E7%B4%A2&q=%s",
+                    link: "http://wangpan.renrensousuo.com/jieguo?sa=网盘搜索&q=%s",
                     type: 11,
                 },
                 {
                     name: "天天搜索",
-                    link: "http://www.daysou.com/s?q=%s&start=0&isget=1&tp=baipan&cl=0&line=4",
+                    link: "http://www.daysou.com/s?q=%s&start=0&isget=1&tp=baipan&cl=0&line=2",
                     type: 11,
                 },
                 {
                     name: "verypan",
-                    link: "http://www.verypan.com/index/index/baidusearch?keyword=%s",
+                    link: "http://www.verypan.com/index/index/baidusearch?keyword=%s&res_type=&orderBy=1",
                     type: 11,
                 },
                 {
@@ -636,7 +577,7 @@
             return (/cloud\.189\.cn[a-z\d\/\?\.#]*(?:code=|\/t\/)([\w]{12})/.exec(shareLink) || [])[1];
         }
         else if (/[\w-]*\.?lanzou.?\.com/.test(shareLink)) {
-            return (/lanzou[sxi]?\.com\/[\w]+\/([\w]+)/.exec(shareLink) || /lanzou[sxi]?\.com\/([\w]+)/.exec(shareLink) || [])[1];
+            return (/lanzou.?\.com\/[\w]+\/([\w]+)/.exec(shareLink) || /lanzou.?\.com\/([\w]+)/.exec(shareLink) || [])[1];
         }
         else if (shareLink.indexOf("pan.xunlei.com") > 0) {
             return (/pan\.xunlei\.com\/s\/([\w-]+)/.exec(shareLink) || [])[1];
@@ -754,7 +695,15 @@
             },
             success: function (response) {
                 if (response instanceof Object && Array.isArray(response.results)) {
-                    callback && callback(response.results[0]);
+                    var pwds = [], results = [];
+                    response.results.forEach(function(item) {
+                        var pwd = item.share_pwd || item.share_randsk;
+                        if (pwd && !pwds.includes(pwd)) {
+                            pwds.push(pwd);
+                            results.push(item);
+                        }
+                    });
+                    callback && callback(results.length ? results : "");
                 }
                 else {
                     callback && callback("");
@@ -954,22 +903,25 @@
             var shareId = obj.getShareId();
             obj.querySharePwd("baidu", shareId, function(response) {
                 if (response instanceof Object) {
-                    if (response.share_pwd) {
-                        obj.showTipSuccess("查询提取码成功");
-                        obj.share_pwd = response.share_pwd;
-                        baidu.submitPwd(response.share_pwd);
-                    }
-                    else if (response.share_randsk) {
-                        obj.showTipSuccess("解锁成功，强制跳转");
-                        obj.share_randsk = response.share_randsk;
-                        baidu.reloadPage(response.share_randsk);
-                    }
+                    response.forEach(function(response) {
+                        if (response.share_pwd) {
+                            obj.showTipSuccess("查询提取码成功");
+                            obj.share_pwd = response.share_pwd;
+                            baidu.submitPwd(response.share_pwd);
+                        }
+                        else if (response.share_randsk) {
+                            obj.showTipSuccess("解锁成功，强制跳转");
+                            obj.share_randsk = response.share_randsk;
+                            baidu.reloadPage(response.share_randsk);
+                        }
+                    });
                     obj.setSharePwdLocal(response);
                 }
                 else {
                     var shareData = obj.getSharePwdLocal(shareId);
                     if (shareData instanceof Object && shareData.share_pwd) {
                         obj.showTipSuccess("本地回填密码成功");
+                        obj.share_pwd = response.share_pwd;
                         baidu.submitPwd(shareData.share_pwd);
                     }
                     else {
@@ -1315,8 +1267,10 @@
             obj.querySharePwd("lanzous", shareId, function (response) {
                 if (response instanceof Object) {
                     obj.showTipSuccess("查询密码成功");
-                    obj.share_pwd = response.share_pwd;
-                    lanzous.submitPwd(response.share_pwd);
+                    response.forEach(function(response) {
+                        obj.share_pwd = response.share_pwd;
+                        lanzous.submitPwd(response.share_pwd);
+                    });
                 }
                 else {
                     var shareData = obj.getSharePwdLocal(shareId);
@@ -1449,9 +1403,11 @@
                         ty189.storeSharePwd();
                         obj.querySharePwd("ty189", shareId, function(response) {
                             if (response instanceof Object) {
-                                obj.share_pwd = response.share_pwd;
-                                ty189.submitPwd(response.share_pwd);
                                 obj.showTipSuccess("查询提取码成功");
+                                response.forEach(function(response) {
+                                    obj.share_pwd = response.share_pwd;
+                                    ty189.submitPwd(response.share_pwd);
+                                });
                             }
                             else {
                                 var shareData = obj.getSharePwdLocal(shareId);
@@ -1584,9 +1540,11 @@
             var shareId = obj.getShareId();
             obj.querySharePwd("aliyundrive", shareId, function(response) {
                 if (response instanceof Object) {
-                    obj.share_pwd = response.share_pwd;
-                    aliyundrive.submitPwd(response.share_pwd);
                     obj.showTipSuccess("查询提取码成功");
+                    response.forEach(function(response) {
+                        obj.share_pwd = response.share_pwd;
+                        aliyundrive.submitPwd(response.share_pwd);
+                    });
                 }
                 else {
                     var shareData = obj.getSharePwdLocal(shareId);
@@ -1707,9 +1665,11 @@
             var shareId = obj.getShareId();
             obj.querySharePwd("xunlei", shareId, function(response) {
                 if (response instanceof Object) {
-                    obj.share_pwd = response.share_pwd;
-                    xunlei.submitPwd(response.share_pwd);
                     obj.showTipSuccess("查询提取码成功");
+                    response.forEach(function(response) {
+                        obj.share_pwd = response.share_pwd;
+                        xunlei.submitPwd(response.share_pwd);
+                    });
                 }
                 else {
                     var shareData = obj.getSharePwdLocal(shareId);
@@ -1805,9 +1765,11 @@
                 var shareId = obj.getShareId();
                 obj.querySharePwd("caiyun", shareId, function(response) {
                     if (response instanceof Object) {
-                        obj.share_pwd = response.share_pwd;
-                        caiyun.submitPwd(response.share_pwd);
                         obj.showTipSuccess("查询提取码成功");
+                        response.forEach(function(response) {
+                            obj.share_pwd = response.share_pwd;
+                            caiyun.submitPwd(response.share_pwd);
+                        });
                     }
                     else {
                         var shareData = obj.getSharePwdLocal(shareId);
@@ -1902,10 +1864,12 @@
             }
             weiyun.storeSharePwd();
             obj.querySharePwd("weiyun", shareId, function(response) {
-                if (response instanceof Object && response.share_pwd) {
-                    obj.share_pwd = response.share_pwd;
-                    weiyun.submitPwd(response.share_pwd);
+                if (response instanceof Object) {
                     obj.showTipSuccess("查询提取码成功");
+                    response.forEach(function(response) {
+                        obj.share_pwd = response.share_pwd;
+                        weiyun.submitPwd(response.share_pwd);
+                    });
                 }
                 else {
                     var shareData = obj.getSharePwdLocal(shareId);
@@ -2282,57 +2246,6 @@
     };
 
     /*=====================================================================================================================*/
-    var winUrl = {};
-
-    winUrl.jumpLink = function() {
-        var panSite = {
-            "www.sowp.cn": {
-                panLink: unsafeWindow.url,
-            },
-            "www.51sopan.cn": {
-                panLink: unsafeWindow.baiduurl,
-                password: ".meta-item.copy-item"
-            },
-        }[location.host];
-
-        if (panSite.panLink) {
-            console.log("panSite.panLink", panSite.panLink);
-            var password = (/[\w]{4}/.exec($(panSite.password || "").text()) || [])[0];
-            console.log("panSite.password", password);
-            baidu.checkUrlValid(panSite.panLink, password);
-        }
-        else {
-            console.error("winUrl 无法获取链接", panSite.panLink);
-            obj.showTipError("无法获取链接");
-        }
-    };
-
-    winUrl.run = function() {
-        var hosts = [
-            "www.sowp.cn/detail/",
-            "www.51sopan.cn/"
-        ]
-        , host = location.host;
-
-        if (obj.isInArray(hosts, host)) {
-            if (host == "www.51sopan.cn") {
-                var s = location.pathname.split("/");
-                if (s[1] == "article") {
-                    window.location.href = "http://www.51sopan.cn/file/file-" + s[2] + ".html";
-                    return true;
-                }
-                else if (s[1] != "file") {
-                    return false;
-                }
-            }
-
-            winUrl.jumpLink();
-            return true;
-        }
-        return false;
-    };
-
-    /*=====================================================================================================================*/
     var node = {};
 
     node.jumpLink = function() {
@@ -2360,14 +2273,6 @@
             /*
             ↑以上破解扫码后跳转↑↓以下不用扫码直接跳转↓
             */
-            "www.ttyunsou.cn": {
-                linkId: ".bdylink",
-                passId: "",
-            },
-            "www.dyroy.com": {
-                linkId: ".col-xs-6.pannopand:eq(1) a:eq(2)",
-                passId: "",
-            },
             "baiduyun.6miu.com": {
                 linkId: ".downbutton.center a",
                 passId: "",
@@ -2417,8 +2322,6 @@
             "www.lqkweb.com/file/id=",
             "www.panso.org/file/",
             "www.h2ero.com/baiduwangpan/",
-            "www.ttyunsou.cn/article-pid-",
-            "www.dyroy.com/show/",
             "baiduyun.6miu.com/show-",
             "yun.java1234.com/article/",
             "www.pantianxia.com",
@@ -2547,7 +2450,6 @@
             b64Node.run,
             funcNode.run,
             dialog_fileId.run,
-            winUrl.run,
             node.run,
             checkShare.run,
         ];
