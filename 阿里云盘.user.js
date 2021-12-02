@@ -1,14 +1,14 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.0
-// @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，...
+// @version      1.5
+// @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换），...
 // @author       You
-// @require      https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js
-// @require      https://unpkg.com/ajax-hook@2.0.3/dist/ajaxhook.min.js
 // @match        https://www.aliyundrive.com/s/*
 // @match        https://www.aliyundrive.com/drive*
 // @icon         https://gw.alicdn.com/imgextra/i3/O1CN01aj9rdD1GS0E8io11t_!!6000000000620-73-tps-16-16.ico
+// @require      https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js
+// @run-at       document-body
 // @grant        none
 // ==/UserScript==
 
@@ -18,53 +18,60 @@
     var obj = {
         file_page: {
             parent_file_id: "root",
+            order_by: "",
+            order_direction: "",
             token_type: "",
             access_token: "",
             items: []
         },
+        video_page: {
+            play_info: {},
+            elevideo: "",
+            dPlayer: null
+        }
     };
 
     obj.customSharePwd = function () {
         $(document).on("DOMNodeInserted", ".ant-modal-root", function() {
             if ($(".input-share-pwd").length == 0) {
                 var sharePwd = localStorage.getItem("share_pwd");
-                var html = '<div class="pick-wrapper--3pNxV"><div class="ant-dropdown-trigger share-expire-wrapper--3y_Nn" data-spm-anchor-id="aliyundrive.drive.0.i4.6af76c75XMD1rF">自定义提取码</div></div>';
+                var html = '<div class="pick-wrapper--3pNxV"><div class="ant-dropdown-trigger share-expire-wrapper--3y_Nn">自定义提取码</div></div>';
                 html += '<input type="text" class="ant-input input-share-pwd" value="' + (sharePwd ? sharePwd : "") + '" placeholder="" style="margin-left: 12px;width: 99px;height: 28px;line-height: normal;border: 1px solid #D4D7DE;text-align: center;"></div>'
                 $(".share-by-url--LfcNg").append(html);
             }
         });
 
-        window.ah.proxy({
-            onRequest: (config, handler) => {
-                if (config.url.includes("/share_link/create") || config.url.includes("/share_link/update")) {
+        (function(send) {
+            XMLHttpRequest.prototype.send = function() {
+                if (arguments[0] && arguments[0].includes("expiration")) {
                     var sharePwd = localStorage.getItem("share_pwd");
                     if (sharePwd) {
-                        var body = JSON.parse(config.body);
+                        var body = JSON.parse(arguments[0]);
                         body.share_pwd = sharePwd;
-                        config.body = JSON.stringify(body);
+                        arguments[0] = JSON.stringify(body);
                     }
                 }
-                handler.next(config);
-            },
-            onResponse: (response, handler) => {
-                if ((response.config.url).includes("/share_link/create") || (response.config.url).includes("/share_link/update")) {
-                    var sharePwd = localStorage.getItem("share_pwd");
-                    if (sharePwd) {
-                        if ((response.config.body).includes(sharePwd)) {
-                            obj.showTipSuccess("自定义分享密码 成功");
-                        }
-                        else {
-                            localStorage.removeItem("share_pwd");
-                            obj.showTipError("自定义分享密码 失败，请修改分享密码后重试");
+                this.addEventListener("load", function() {
+                    if (this.readyState == 4 && this.status == 200) {
+                        var responseURL = this.responseURL;
+                        if (responseURL.includes("/share_link/create") || responseURL.includes("/share_link/update")) {
+                            var sharePwd = localStorage.getItem("share_pwd");
+                            if (sharePwd) {
+                                var response = JSON.parse(this.response);
+                                if (response.share_pwd = sharePwd) {
+                                    obj.showTipSuccess("自定义分享密码 成功");
+                                }
+                                else {
+                                    localStorage.removeItem("share_pwd");
+                                    obj.showTipError("自定义分享密码 失败，请修改分享密码后重试");
+                                }
+                            }
                         }
                     }
-                }
-                handler.next(response);
-            },
-            onError: (err, handler) => {
-                handler.next(err)
-            }
-        })
+                }, false);
+                send.apply(this, arguments);
+            };
+        })(XMLHttpRequest.prototype.send);
 
         $(document).on("change", ".input-share-pwd", function () {
             var value = this.value;
@@ -73,38 +80,110 @@
     };
 
     obj.unlockVideoLimit = function () {
-        window.ah.proxy({
-            onRequest: (config, handler) => {
-                handler.next(config);
-            },
-            onResponse: (response, handler) => {
-                if ((response.config.url).includes("/file/get_share_link_video_preview_play_info")) {
-                    var responseJson = JSON.parse(response.response);
-                    responseJson.video_preview_play_info.live_transcoding_task_list.forEach(function (item) {
-                        item.preview_url = item.url;
-                    });
-                    response.response = JSON.stringify(responseJson);
+        (function(open) {
+            XMLHttpRequest.prototype.open = function() {
+                if (!this._hooked) {
+                    this._hooked = true;
+                    setupHook(this);
                 }
-                handler.next(response);
-            },
-            onError: (err, handler) => {
-                handler.next(err)
+                open.apply(this, arguments);
             }
-        })
+        })(XMLHttpRequest.prototype.open);
+
+        function setupHook(xhr) {
+            function setup() {
+                Object.defineProperty(xhr, "responseText", {
+                    get: function() {
+                        delete xhr.responseText;
+                        var responseText = xhr.responseText;
+                        if (xhr.responseURL.includes("/file/get_share_link_video_preview_play_info") && responseText && responseText.includes("preview_url")) {
+                            var responseJson = JSON.parse(responseText);
+                            responseJson.video_preview_play_info.live_transcoding_task_list.forEach(function (item) {
+                                item.preview_url = item.url;
+                            });
+                            responseText = JSON.stringify(responseJson);
+                        }
+                        setup();
+                        return responseText;
+                    },
+                    configurable: true
+                });
+            }
+            setup();
+        }
+    };
+
+    obj.switchPlayer = function () {
+        $(document).on("click", ".header-more--a8O0Y, .ant-dropdown-trigger", function() {
+            if (document.querySelector("video") || document.querySelector("#dplayer")) {
+                if ($(".ant-switch-player").length == 0) {
+                    var text = obj.getItem("default_player") == "Original" ? "切换到DPlayer播放器" : "切换到原生播放器";
+                    var _class = location.pathname.indexOf("/s/") == 0 ? "menu-inner--18Omt" : "outer-menu--ihDUR";
+                    $(".ant-dropdown-menu").append('<li class="ant-dropdown-menu-item ant-switch-player" role="menuitem"><div class=' + _class + '><div>' + text + '</div></div></li>');
+
+                    $(".ant-switch-player").click(function() {
+                        if (obj.getItem("default_player") == "Original") {
+                            obj.setItem("default_player", "DPlayer");
+                            $(this).find("div").find("div").text("切换到原生播放器");
+                            obj.showTipSuccess("正在切换到DPlayer播放器");
+
+                            obj.videoPageOptimization();
+
+                            obj.dplayerSupport();
+                            setTimeout(function () {
+                                obj.dplayerStart();
+                            }, 500);
+                        }
+                        else {
+                            obj.setItem("default_player", "Original");
+                            $(this).find("div").find("div").text("切换到DPlayer播放器");
+                            obj.showTipSuccess("正在切换到原生播放器");
+
+                            obj.videoPageOptimization();
+
+                            obj.video_page.dPlayer && obj.video_page.dPlayer.destroy();
+                            setTimeout(function () {
+                                $(".dplayer").parent().append(obj.video_page.elevideo);
+                                $(".dplayer").remove();
+                                $(".video-player--29_72").css({display: "block"});
+                                $(".video-player--29_72 .btn--1cZfA").click();
+                                $(".video-player--29_72").css({opacity: 0, bottom: "-68px"});
+                            }, 500);
+                        }
+                    });
+                }
+            }
+            else {
+                var ant_switch = $(".ant-switch-player");
+                ant_switch.length && ant_switch.remove();
+            }
+        });
     };
 
     obj.videoPageOptimization = function () {
+        var default_player = obj.getItem("default_player");
+        if (!default_player || default_player == "DPlayer") {
+            $(document).off("DOMNodeInserted", ".video-player--29_72 .btn--1cZfA");
+            $(document).off("click", "video");
+            $(document).off("mouseover mouseout mousedown", ".video-player--29_72");
+            return;
+        }
+
         $(document).on("DOMNodeInserted", ".video-player--29_72 .btn--1cZfA", function() {
-            var elevideo = document.querySelector("video");
-            if (elevideo.paused) {
-                $(this).click();
+            if (obj.video_page.dplayer) {
+                return;
             }
-            setTimeout(function () {
-                try {
-                    elevideo.paused && elevideo.play();
-                    $(".video-player--29_72").css({opacity: 0});
-                } catch (a) {};
-            }, 500);
+
+            var video = document.querySelector("video");
+            if (video.paused) {
+                $(this).click();
+                setTimeout(function () {
+                    try {
+                        video.paused && video.play();
+                        $(".video-player--29_72").css({opacity: 0, bottom: "-68px"});
+                    } catch (a) {};
+                }, 500);
+            }
         });
 
         $(document).on("click", "video", function(event) {
@@ -167,6 +246,108 @@
         });
     };
 
+    obj.dplayerSupport = function () {
+        if (document.body) {
+            if (obj.video_page.dPlayer || obj.getItem("default_player") == "Original") {
+                return;
+            }
+
+            function loadScript(src) {
+                var dom, extname = src.split(".").pop();
+                if (extname == "js") {
+                    dom = document.createElement("script");
+                    dom.src = src;
+                    dom.async = true;
+                }
+                else if ("css") {
+                    dom = document.createElement("link");
+                    dom.rel = "stylesheet";
+                    dom.href = src;
+                }
+                document.body.appendChild(dom);
+            }
+
+            loadScript("https://cdn.jsdelivr.net/npm/hls.js/dist/hls.min.js");
+            loadScript("https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.css");
+            loadScript("https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.js");
+
+            var css = document.createElement("style");
+            css.textContent = "body{display:block!important;} .dplayer {max-width:100%;height:100%;}";
+            document.head.appendChild(css);
+        }
+        else {
+            setTimeout(obj.dplayerSupport, 500);
+            return;
+        }
+    };
+
+    obj.dplayerStart = function () {
+        var default_player = obj.getItem("default_player");
+        if (!default_player) {
+            obj.showTipSuccess("脚本提示：打开页面右侧[更多]菜单可【切换播放器】", 10000);
+        }
+        else if (default_player == "Original") {
+            return;
+        }
+
+
+        var video = document.querySelector("video");
+        if (video) {
+            obj.video_page.elevideo = video;
+
+            var player = document.createElement("div");
+            player.setAttribute("id", "dplayer");
+            video.parentNode.appendChild(player);
+            video.parentNode.removeChild(video);
+        }
+        else {
+            return;
+        }
+
+        var options = {
+            container: document.getElementById("dplayer"),
+            video: {},
+            autoplay: true,
+            screenshot: true,
+            hotkey: true,
+            airplay: true,
+            volume: 1.0,
+            playbackSpeed: [0.5, 0.75, 1, 1.25, 1.5, 2],
+            contextmenu: [],
+            theme: "#b7daff"
+        };
+
+        var play_info = obj.video_page.play_info.video_preview_play_info || {};
+        if (Array.isArray(play_info.live_transcoding_task_list)) {
+            var task_list = play_info.live_transcoding_task_list;
+            var p = {
+                FHD: "1080 全高清",
+                HD: "720 高清",
+                SD: "540 标清",
+                LD: "360 流畅"
+            };
+            options.video.quality = [];
+            task_list.forEach(function (item) {
+                options.video.quality.push({
+                    name: p[item.template_id],
+                    url: item.url,
+                    type: "hls"
+                });
+            });
+
+            options.video.defaultQuality = task_list.length - 1;
+        }
+        else {
+            return;
+        }
+        obj.video_page.dPlayer = new window.DPlayer(options);
+
+        obj.video_page.dPlayer.on("loadstart", function () {
+            var controller = document.querySelector(".video-player--29_72");
+            controller && (controller.style.display = "none");
+        });
+    };
+
     obj.initDownloadSharePage = function () {
         if ($(".button-download--batch").length) {
             return;
@@ -215,26 +396,11 @@
             return;
         }
 
-        var share_id = obj.getShareId();
         obj.showBox('<div class="item-list" style="padding: 20px; height: 410px; overflow-y: auto;"></div>');
         var rowStyle = "margin:10px 0px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;";
 
-        if (fileList.length > 1) {
-            var archive_name = fileList[0].name + "等" + fileList.length + "个文件";
-            var fileIdList = [];
-            fileList.forEach(function (item, index) {
-                fileIdList.push({file_id: item.file_id});
-            });
-            obj.getShareMultiDownloadUrl(fileIdList, share_id, archive_name, function (download_url) {
-                if (download_url) {
-                    var html = '<p>压缩包：' + archive_name + '</p>';
-                    html += '<p style="' + rowStyle + '"><a title="' + download_url + '" href="' + download_url + '" style="color: blue;">' + download_url + '</a></p>';
-                    $(".item-list").append(html);
-                }
-            });
-        }
-
-        setTimeout(function() {
+        var share_id = obj.getShareId();
+        var addSingleFile = function(fileList) {
             fileList.forEach(function (item, index) {
                 if (item.download_url) {
                     var html = '<p>' + (++index) + '：' + item.name + '</p>';
@@ -263,7 +429,26 @@
                 }
             });
             obj.hideTip();
-        }, 500);
+        };
+
+        if (fileList.length > 1) {
+            var archive_name = fileList[0].name + "等" + fileList.length + "个文件";
+            var fileIdList = [];
+            fileList.forEach(function (item, index) {
+                fileIdList.push({file_id: item.file_id});
+            });
+            obj.getShareMultiDownloadUrl(fileIdList, share_id, archive_name, function (download_url) {
+                if (download_url) {
+                    var html = '<p>压缩包：' + archive_name + '</p>';
+                    html += '<p style="' + rowStyle + '"><a title="' + download_url + '" href="' + download_url + '" style="color: blue;">' + download_url + '</a></p>';
+                    $(".item-list").append(html);
+                }
+                addSingleFile(fileList);
+            });
+        }
+        else {
+            addSingleFile(fileList);
+        }
     };
 
     obj.showDownloadHomePage = function () {
@@ -271,7 +456,7 @@
             obj.showTipLoading("正在获取链接...");
         }
         else {
-            obj.showTipError("缺少必要参数，请登陆后刷新此页面重试！");
+            obj.showTipError("缺少必要参数，请刷新此页面重试！");
             return;
         }
 
@@ -281,6 +466,9 @@
             obj.showTipError("致命错误：获取个人文件列表失败");
             return;
         }
+
+        obj.showBox('<div class="item-list" style="padding: 20px; height: 410px; overflow-y: auto;"></div>');
+        var rowStyle = "margin:10px 0px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;";
 
         var Re = function(e) {
             var t = document.createElement("a");
@@ -297,28 +485,9 @@
                     e.dispatchEvent(t);
                 }
             }(t));
+            t.parentNode.removeChild(t);
         };
-
-        obj.showBox('<div class="item-list" style="padding: 20px; height: 410px; overflow-y: auto;"></div>');
-        var rowStyle = "margin:10px 0px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;";
-
-        if (fileList.length > 1) {
-            var archive_name = "".concat(fileList[0].name, "等").concat(fileList.length, "个文件");
-            var fileIdList = [];
-            fileList.forEach(function (item, index) {
-                fileIdList.push({file_id: item.file_id});
-            });
-            var drive_id = fileList[0].drive_id;
-            obj.getHomeMultiDownloadUrl(fileIdList, drive_id, archive_name, function (download_url) {
-                if (download_url) {
-                    var html = '<p>压缩包：' + archive_name + '</p>';
-                    html += '<p style="' + rowStyle + '"><a title="' + download_url + '" href="' + download_url + '" style="color: blue;">' + download_url + '</a></p>';
-                    $(".item-list").append(html);
-                }
-            });
-        }
-
-        setTimeout(function() {
+        var addSingleFile = function(fileList) {
             fileList.forEach(function (item, index) {
                 if (item.download_url) {
                     var html = '<p>' + (++index) + '：' + item.name + '</p>';
@@ -361,16 +530,43 @@
                     Re(url);
                 }
             });
-        }, 500);
+        };
+        if (fileList.length > 1) {
+            var archive_name = "".concat(fileList[0].name, "等").concat(fileList.length, "个文件");
+            var fileIdList = [];
+            fileList.forEach(function (item, index) {
+                fileIdList.push({file_id: item.file_id});
+            });
+            var drive_id = fileList[0].drive_id;
+            obj.getHomeMultiDownloadUrl(fileIdList, drive_id, archive_name, function (download_url) {
+                if (download_url) {
+                    var html = '<p>压缩包：' + archive_name + '</p>';
+                    html += '<p style="' + rowStyle + '"><a title="' + download_url + '" href="' + download_url + '" style="color: blue;">' + download_url + '</a></p>';
+                    $(".item-list").append(html);
+                }
+                addSingleFile(fileList);
+            });
+        }
+        else {
+            addSingleFile(fileList);
+        }
     };
 
     obj.showBox = function (body) {
-        var template = '<div class="ant-modal-root ant-modal-my"><div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap" role="dialog" aria-labelledby="rcDialogTitle1" style=""><div role="document" class="ant-modal modal-wrapper--2yJKO" style="width: 440px; transform-origin: 325.5px 243px;"><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle1" data-spm-anchor-id="0.0.0.i12.35676c753FPwhu">文件下载</div></div><div class="ant-modal-body"><div class="icon-wrapper--3dbbo"><span data-role="icon" data-render-as="svg" data-icon-type="PDSClose" class="close-icon--33bP0 icon--d-ejA "><svg viewBox="0 0 1024 1024" data-spm-anchor-id="0.0.0.i11.35676c753FPwhu"><use xlink:href="#PDSClose" data-spm-anchor-id="0.0.0.i4.35676c753FPwhu"></use></svg></span></div>';
+        var template = '<div class="ant-modal-root ant-modal-my"><div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap" role="dialog"><div role="document" class="ant-modal modal-wrapper--2yJKO" style="width: 666px;"><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle1">文件下载</div></div><div class="ant-modal-body"><div class="icon-wrapper--3dbbo"><span data-role="icon" data-render-as="svg" data-icon-type="PDSClose" class="close-icon--33bP0 icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSClose"></use></svg></span></div>';
         template += body;
-        template += '</div><div class="ant-modal-footer" data-spm-anchor-id="0.0.0.i10.35676c753FPwhu"></div></div><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div></div></div></div>';
+        template += '</div><div class="ant-modal-footer"></div></div></div></div></div>';
         $("body").append(template);
         $(".icon-wrapper--3dbbo").one("click", function () {
             $(".ant-modal-my").remove();
+        });
+
+        //$(".ant-modal.modal-wrapper--2yJKO").css({width: "666px"}); //调整宽度（"666px" 改成 "777px"  "888px"  "999px" ...）
+        $(".ant-modal-wrap").off("click").on("click", function (event) {
+            //点击链接窗口外部自动关闭窗口
+            if ($(event.target).closest(".ant-modal-content").length == 0) {
+                $(".ant-modal-my").remove();
+            }
         });
     };
 
@@ -399,46 +595,9 @@
         return selectedFileList.length ? selectedFileList : fileList;
     };
 
-    obj.addPageFileList = function () {
-        var open = XMLHttpRequest.prototype.open;
-        XMLHttpRequest.prototype.open = function() {
-            this.addEventListener("load", function() {
-                if (this.readyState == 4 && this.status == 200) {
-                    var response, responseURL = this.responseURL;
-                    if (responseURL.indexOf("/token/refresh") > 0) {
-                        response = JSON.parse(this.response);
-                        if (response.access_token && response.token_type) {
-                            obj.file_page.access_token = response.access_token;
-                            obj.file_page.token_type = response.token_type;
-                        }
-                    }
-                    else if (responseURL.indexOf("/file/list") > 0) {
-                        var parent_file_id = ((location.href.match(/\/folder\/(\w+)/) || [])[1]) || "root";
-                        var body = JSON.parse(this.config.body);
-                        if (body.parent_file_id != parent_file_id) {
-                            //排除【保存 移动 等行为触发】
-                            return;
-                        }
-                        if (parent_file_id != obj.file_page.page_id) {
-                            //变换页面
-                            obj.file_page.page_id = parent_file_id;
-                            obj.file_page.items = [];
-                        }
-
-                        response = JSON.parse(this.response);
-                        obj.file_page.items = obj.file_page.items.concat(response.items);
-                        obj.showTipSuccess("文件列表获取完成 共：" + obj.file_page.items.length + "项");
-                    }
-                }
-            }, false);
-            open.apply(this, arguments);
-        };
-    };
-
     obj.tokenRefresh = function (callback) {
         var token = obj.getItem("token"), refresh_token = token ? token.refresh_token : null;
         if (!refresh_token) {
-            obj.showTipError("如需要下载，请先登录！");
             callback && callback("");
             return;
         }
@@ -601,13 +760,17 @@
     obj.getItem = function(n) {
         n = window.localStorage.getItem(n);
         if (!n) {
-            return {};
+            return null;
         }
         try {
             return JSON.parse(n);
-        } catch (n) {
-            return {};
+        } catch (e) {
+            return n;
         }
+    };
+
+    obj.setItem = function(n, t) {
+        n && t && window.localStorage.setItem(n, t);
     };
 
     obj.showTipSuccess = function (msg, timeout) {
@@ -631,10 +794,10 @@
 
         var $element = $(".aDrive div");
         if ($element.length) {
-            $element.append('<div class="aDrive-notice"><div class="aDrive-notice-content"><div class="aDrive-custom-content aDrive-error"><span data-role="icon" data-render-as="svg" data-icon-type="PDSCloseCircleFill" class="error-icon--1Ov4I icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSCloseCircleFill"></use></svg></span><span><div class="content-wrapper--B7mAG" data-desc="false" style="margin-left: 44px; padding-right: 20px;"><div class="title-wrapper--3bQQ2" data-spm-anchor-id="0.0.0.i41.35676c75yBZNPh">' + msg + '<div class="desc-wrapper--218x0"></div></div></div></span></div></div></div>');
+            $element.append('<div class="aDrive-notice"><div class="aDrive-notice-content"><div class="aDrive-custom-content aDrive-error"><span data-role="icon" data-render-as="svg" data-icon-type="PDSCloseCircleFill" class="error-icon--1Ov4I icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSCloseCircleFill"></use></svg></span><span><div class="content-wrapper--B7mAG" data-desc="false" style="margin-left: 44px; padding-right: 20px;"><div class="title-wrapper--3bQQ2">' + msg + '<div class="desc-wrapper--218x0"></div></div></div></span></div></div></div>');
         }
         else {
-            $(document.body).append('<div><div class="aDrive"><div><div class="aDrive-notice"><div class="aDrive-notice-content"><div class="aDrive-custom-content aDrive-error"><span data-role="icon" data-render-as="svg" data-icon-type="PDSCloseCircleFill" class="error-icon--1Ov4I icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSCloseCircleFill"></use></svg></span><span><div class="content-wrapper--B7mAG" data-desc="false" style="margin-left: 44px; padding-right: 20px;"><div class="title-wrapper--3bQQ2" data-spm-anchor-id="0.0.0.i41.35676c75yBZNPh">' + msg + '<div class="desc-wrapper--218x0"></div></div></div></span></div></div></div></div></div></div>');
+            $(document.body).append('<div><div class="aDrive"><div><div class="aDrive-notice"><div class="aDrive-notice-content"><div class="aDrive-custom-content aDrive-error"><span data-role="icon" data-render-as="svg" data-icon-type="PDSCloseCircleFill" class="error-icon--1Ov4I icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSCloseCircleFill"></use></svg></span><span><div class="content-wrapper--B7mAG" data-desc="false" style="margin-left: 44px; padding-right: 20px;"><div class="title-wrapper--3bQQ2">' + msg + '<div class="desc-wrapper--218x0"></div></div></div></span></div></div></div></div></div></div>');
         }
 
         setTimeout(function () {
@@ -663,13 +826,68 @@
         t.length && "function" == typeof t.remove ? t.remove() : "function" == typeof t.removeNode && t.removeNode(!0);
     };
 
+    obj.addPageFileList = function () {
+        var send = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.send = function(data) {
+            this.addEventListener("load", function(event) {
+                if (this.readyState == 4 && this.status == 200) {
+                    var response, responseURL = this.responseURL;
+                    if (responseURL.indexOf("/token/refresh") > 0) {
+                        response = JSON.parse(this.response);
+                        if (response.access_token && response.token_type) {
+                            obj.file_page.access_token = response.access_token;
+                            obj.file_page.token_type = response.token_type;
+                        }
+                    }
+                    else if (responseURL.indexOf("/file/list") > 0) {
+                        //排除【保存 移动 等行为触发】
+                        if (document.querySelector(".ant-modal-mask")) {
+                            return;
+                        };
+
+                        data = JSON.parse(data);
+                        var parent_file_id = ((location.href.match(/\/folder\/(\w+)/) || [])[1]) || "root";
+                        if (parent_file_id != obj.file_page.page_id) {
+                            //变换页面
+                            obj.file_page.page_id = parent_file_id;
+                            obj.file_page.order_by = data.order_by;
+                            obj.file_page.order_direction = data.order_direction;
+                            obj.file_page.items = [];
+                        }
+                        else if (data.order_by != obj.file_page.order_by || data.order_direction != obj.file_page.order_direction) {
+                            //排序改变
+                            obj.file_page.order_by = data.order_by;
+                            obj.file_page.order_direction = data.order_direction;
+                            obj.file_page.items = [];
+                        }
+
+                        response = JSON.parse(this.response);
+                        obj.file_page.items = obj.file_page.items.concat(response.items);
+                        obj.showTipSuccess("文件列表获取完成 共：" + obj.file_page.items.length + "项");
+                    }
+                    else if ((responseURL.indexOf("/file/get_share_link_video_preview_play_info") > 0 || responseURL.indexOf("/file/get_video_preview_play_info") > 0)) {
+                        response = JSON.parse(this.response);
+                        if (response.file_id != obj.video_page.play_info.file_id) {
+                            obj.video_page.play_info = response;
+                        }
+                        obj.getItem("default_player") != "Original" && obj.dplayerStart();
+                    }
+                }
+            }, false);
+            send.apply(this, arguments);
+        };
+    };
+
     var url = location.href;
     if (url.indexOf(".aliyundrive.com/s/") > 0) {
         obj.addPageFileList();
         obj.initDownloadSharePage();
 
         obj.unlockVideoLimit();
+
+        obj.switchPlayer();
         obj.videoPageOptimization();
+        obj.dplayerSupport();
     }
     else if (url.indexOf(".aliyundrive.com/drive") > 0) {
         obj.addPageFileList();
@@ -677,7 +895,9 @@
 
         obj.customSharePwd();
 
+        obj.switchPlayer();
         obj.videoPageOptimization();
+        obj.dplayerSupport();
     }
     console.log("=== 阿里云盘 ===");
 
