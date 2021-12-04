@@ -293,9 +293,9 @@
         }
 
 
-        var video = document.querySelector("video");
+        var video = document.querySelector("video[class=video--26SLZ]");
         if (video && video.src) {
-            obj.video_page.elevideo || (obj.video_page.elevideo = video);
+            obj.video_page.elevideo = video;
 
             var player = document.createElement("div");
             player.setAttribute("id", "dplayer");
@@ -321,7 +321,9 @@
 
         var options = {
             container: document.getElementById("dplayer"),
-            video: {},
+            video: {
+                quality: []
+            },
             autoplay: true,
             screenshot: true,
             hotkey: true,
@@ -341,7 +343,6 @@
                 SD: "540 标清",
                 LD: "360 流畅"
             };
-            options.video.quality = [];
             task_list.forEach(function (item) {
                 options.video.quality.push({
                     name: p[item.template_id],
