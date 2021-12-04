@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.5
+// @version      1.6
 // @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -26,8 +26,12 @@
         },
         video_page: {
             play_info: {},
+            file_id: "",
             elevideo: "",
-            dPlayer: null
+            dPlayer: null,
+            attributes: {},
+            start_time: 0,
+            media_num: 0
         }
     };
 
@@ -300,8 +304,18 @@
             video.parentNode.appendChild(player);
             video.parentNode.removeChild(video);
         }
+
+        var dPlayer = obj.video_page.dPlayer, file_id = obj.video_page.play_info.file_id;
+        if (dPlayer instanceof Object && obj.video_page.file_id == file_id) {
+            obj.video_page.attributes = {
+                currentTime: dPlayer.video.currentTime,
+                playbackRate: dPlayer.video.playbackRate,
+            }
+
+            dPlayer.destroy();
+        }
         else {
-            return;
+            obj.video_page.file_id = file_id;
         }
 
         var options = {
@@ -340,13 +354,117 @@
         else {
             return;
         }
-        obj.video_page.dPlayer = new window.DPlayer(options);
 
-        obj.video_page.dPlayer.on("loadstart", function () {
+        dPlayer = new window.DPlayer(options);
+        obj.video_page.dPlayer = dPlayer;
+
+        dPlayer.on("loadstart", function () {
             var controller = document.querySelector(".video-player--29_72");
             controller && (controller.style.display = "none");
+
+            var attributes = obj.video_page.attributes;
+            if (Object.keys(attributes).length) {
+                dPlayer.seek(attributes.currentTime);
+                dPlayer.speed(attributes.playbackRate);
+            }
         });
     };
+
+    obj.getVideoPreviewPlayInfo = function () {
+        sessionStorage.count || (sessionStorage.count = 0);
+        if (location.href.includes("aliyundrive.com/s/")) {
+            obj.get_share_link_video_preview_play_info(function (response) {
+                if (response instanceof Object) {
+                    sessionStorage.count = 0
+                }
+                else {
+                    if (sessionStorage.count < 3) {
+                        sessionStorage.count = sessionStorage.count + 1;
+                        setTimeout(obj.getVideoPreviewPlayInfo, 500);
+                    }
+                }
+            });
+        }
+        else {
+            obj.get_video_preview_play_info(function (response) {
+                if (response instanceof Object) {
+                    sessionStorage.count = 0
+                }
+                else {
+                    if (sessionStorage.count < 3) {
+                        sessionStorage.count = sessionStorage.count + 1;
+                        setTimeout(obj.getVideoPreviewPlayInfo, 500);
+                    }
+                }
+            });
+        }
+    }
+
+    obj.get_share_link_video_preview_play_info = function (callback) {
+        var share_id = (/aliyundrive\.com\/s\/([a-zA-Z\d]+)/.exec(location.href) || [])[1], file_id = obj.video_page.play_info.file_id;
+        if (!(share_id && file_id)) {
+            obj.showTipError("获取分享页面视频信息错误 缺少必要参数");
+            return;
+        }
+        $.ajax({
+            type: "post",
+            url: "https://api.aliyundrive.com/v2/file/get_share_link_video_preview_play_info",
+            data: JSON.stringify({
+                category: "live_transcoding",
+                file_id: file_id,
+                get_preview_url: true,
+                share_id: share_id,
+                template_id: ""
+            }),
+            headers: {
+                "authorization": "".concat(obj.getItem("token").token_type || "", " ").concat(obj.getItem("token").access_token || ""),
+                "x-share-token": obj.getItem("shareToken").share_token
+            },
+            async: true,
+            success: function (response) {
+                callback && callback(response);
+            },
+            error: function (error) {
+                console.error("get_video_preview_play_info 错误", error);
+                callback && callback("");
+            }
+        });
+    };
+
+    obj.get_video_preview_play_info = function (callback) {
+        var token = obj.getItem("token"), drive_id = token ? token.default_drive_id : token, file_id = obj.video_page.play_info.file_id;
+        if (!(drive_id && file_id)) {
+            obj.showTipError("获取个人页面视频信息错误 缺少必要参数");
+            return;
+        }
+        $.ajax({
+            type: "post",
+            url: "https://api.aliyundrive.com/v2/file/get_video_preview_play_info",
+            data: JSON.stringify({
+                category: "live_transcoding",
+                drive_id: drive_id,
+                file_id: file_id,
+                template_id: ""
+            }),
+            headers: {
+                "authorization": "".concat(obj.getItem("token").token_type || "", " ").concat(obj.getItem("token").access_token || "")
+            },
+            async: true,
+            success: function (response) {
+                callback && callback(response);
+            },
+            error: function (error) {
+                console.error("get_video_preview_play_info 错误", error);
+                callback && callback("");
+            }
+        });
+    };
+
+    obj.expires = function (e) {
+        var t = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : 6e3
+        , n = e.match(/&x-oss-expires=(\d+)&/);
+        return !n || n && n[1] && +"".concat(n[1], "000") - t < Date.now();
+    }
 
     obj.initDownloadSharePage = function () {
         if ($(".button-download--batch").length) {
@@ -770,7 +888,7 @@
     };
 
     obj.setItem = function(n, t) {
-        n && t && window.localStorage.setItem(n, t);
+        n && t && window.localStorage.setItem(n, JSON.stringify(t));
     };
 
     obj.showTipSuccess = function (msg, timeout) {
@@ -866,11 +984,24 @@
                         obj.showTipSuccess("文件列表获取完成 共：" + obj.file_page.items.length + "项");
                     }
                     else if ((responseURL.indexOf("/file/get_share_link_video_preview_play_info") > 0 || responseURL.indexOf("/file/get_video_preview_play_info") > 0)) {
-                        response = JSON.parse(this.response);
-                        if (response.file_id != obj.video_page.play_info.file_id) {
-                            obj.video_page.play_info = response;
+                        if (obj.getItem("default_player") != "Original") {
+                            obj.video_page.play_info = JSON.parse(this.response);
+                            if (Date.now() - obj.video_page.start_time > 1000) {
+                                obj.video_page.start_time = Date.now();
+                                obj.dplayerStart();
+                            }
                         }
-                        obj.getItem("default_player") != "Original" && obj.dplayerStart();
+                    }
+                }
+                else if (this.readyState == 4 && this.status == 403) {
+                    if (this.responseURL.match(/media-\d+\.ts/) && obj.expires(this.responseURL)) {
+                        if (obj.getItem("default_player") != "Original" && obj.video_page.dPlayer) {
+                            var media_num = (this.responseURL.match(/media-(\d+)\.ts/) || [])[1] || 0;
+                            if (media_num > 5 && obj.video_page.media_num != media_num) {
+                                obj.video_page.media_num = media_num;
+                                obj.getVideoPreviewPlayInfo();
+                            }
+                        }
                     }
                 }
             }, false);
@@ -899,7 +1030,7 @@
         obj.videoPageOptimization();
         obj.dplayerSupport();
     }
-    console.log("=== 阿里云盘 ===");
+    console.log("=== 阿里云盘 好棒棒！===");
 
     // Your code here...
 })();
