@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.6
+// @version      1.6.1
 // @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -30,7 +30,6 @@
             elevideo: "",
             dPlayer: null,
             attributes: {},
-            start_time: 0,
             media_num: 0
         }
     };
@@ -145,7 +144,7 @@
 
                             obj.videoPageOptimization();
 
-                            obj.video_page.dPlayer && obj.video_page.dPlayer.destroy();
+                            obj.video_page.dPlayer && obj.video_page.dPlayer.pause();
                             setTimeout(function () {
                                 $(".dplayer").parent().append(obj.video_page.elevideo);
                                 $(".dplayer").remove();
@@ -250,7 +249,7 @@
         });
     };
 
-    obj.dplayerSupport = function (callback) {
+    obj.dplayerSupport = function () {
         if (document.body) {
             if (obj.video_page.dPlayer || obj.getItem("default_player") == "Original") {
                 return;
@@ -296,8 +295,8 @@
 
 
         var video = document.querySelector("video");
-        if (video) {
-            obj.video_page.elevideo = video;
+        if (video && video.src) {
+            obj.video_page.elevideo || (obj.video_page.elevideo = video);
 
             var player = document.createElement("div");
             player.setAttribute("id", "dplayer");
@@ -998,13 +997,8 @@
                     else if ((responseURL.indexOf("/file/get_share_link_video_preview_play_info") > 0 || responseURL.indexOf("/file/get_video_preview_play_info") > 0)) {
                         response = JSON.parse(this.response);
                         if (response instanceof Object && response.file_id) {
-                            if (obj.getItem("default_player") != "Original") {
-                                obj.video_page.play_info = JSON.parse(this.response);
-                                if (Date.now() - obj.video_page.start_time > 1000) {
-                                    obj.video_page.start_time = Date.now();
-                                    obj.dplayerStart();
-                                }
-                            }
+                            obj.video_page.play_info = response;
+                            obj.getItem("default_player") != "Original" && obj.dplayerStart();
                         }
                     }
                 }
@@ -1031,9 +1025,9 @@
 
         obj.unlockVideoLimit();
 
+        obj.dplayerSupport();
         obj.switchPlayer();
         obj.videoPageOptimization();
-        obj.dplayerSupport();
     }
     else if (url.indexOf(".aliyundrive.com/drive") > 0) {
         obj.addPageFileList();
@@ -1041,9 +1035,9 @@
 
         obj.customSharePwd();
 
+        obj.dplayerSupport();
         obj.switchPlayer();
         obj.videoPageOptimization();
-        obj.dplayerSupport();
     }
     console.log("=== 阿里云盘 好棒棒！===");
 
