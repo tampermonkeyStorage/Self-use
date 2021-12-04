@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.5
+// @version      1.6
 // @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -136,7 +136,7 @@
                             obj.dplayerSupport();
                             setTimeout(function () {
                                 obj.dplayerStart();
-                            }, 500);
+                            }, 1000);
                         }
                         else {
                             obj.setItem("default_player", "Original");
@@ -152,7 +152,7 @@
                                 $(".video-player--29_72").css({display: "block"});
                                 $(".video-player--29_72 .btn--1cZfA").click();
                                 $(".video-player--29_72").css({opacity: 0, bottom: "-68px"});
-                            }, 500);
+                            }, 1000);
                         }
                     });
                 }
@@ -250,7 +250,7 @@
         });
     };
 
-    obj.dplayerSupport = function () {
+    obj.dplayerSupport = function (callback) {
         if (document.body) {
             if (obj.video_page.dPlayer || obj.getItem("default_player") == "Original") {
                 return;
@@ -352,6 +352,12 @@
             options.video.defaultQuality = task_list.length - 1;
         }
         else {
+            if (play_info.file_id) {
+                obj.getVideoPreviewPlayInfo();
+            }
+            else {
+                obj.showTipError("获取播放信息失败：请刷新网页重试");
+            }
             return;
         }
 
@@ -398,6 +404,9 @@
                 }
             });
         }
+        if (sessionStorage.count == 3) {
+            obj.showTipError("获取播放信息失败：请刷新网页重试");
+        }
     }
 
     obj.get_share_link_video_preview_play_info = function (callback) {
@@ -418,6 +427,7 @@
             }),
             headers: {
                 "authorization": "".concat(obj.getItem("token").token_type || "", " ").concat(obj.getItem("token").access_token || ""),
+                "content-type": "application/json;charset=UTF-8",
                 "x-share-token": obj.getItem("shareToken").share_token
             },
             async: true,
@@ -447,7 +457,8 @@
                 template_id: ""
             }),
             headers: {
-                "authorization": "".concat(obj.getItem("token").token_type || "", " ").concat(obj.getItem("token").access_token || "")
+                "authorization": "".concat(obj.getItem("token").token_type || "", " ").concat(obj.getItem("token").access_token || ""),
+                "content-type": "application/json;charset=UTF-8",
             },
             async: true,
             success: function (response) {
@@ -980,15 +991,20 @@
                         }
 
                         response = JSON.parse(this.response);
-                        obj.file_page.items = obj.file_page.items.concat(response.items);
-                        obj.showTipSuccess("文件列表获取完成 共：" + obj.file_page.items.length + "项");
+                        if (response instanceof Object && response.items) {
+                            obj.file_page.items = obj.file_page.items.concat(response.items);
+                            obj.showTipSuccess("文件列表获取完成 共：" + obj.file_page.items.length + "项");
+                        }
                     }
                     else if ((responseURL.indexOf("/file/get_share_link_video_preview_play_info") > 0 || responseURL.indexOf("/file/get_video_preview_play_info") > 0)) {
-                        if (obj.getItem("default_player") != "Original") {
-                            obj.video_page.play_info = JSON.parse(this.response);
-                            if (Date.now() - obj.video_page.start_time > 1000) {
-                                obj.video_page.start_time = Date.now();
-                                obj.dplayerStart();
+                        response = JSON.parse(this.response);
+                        if (response instanceof Object && response.file_id) {
+                            if (obj.getItem("default_player") != "Original") {
+                                obj.video_page.play_info = JSON.parse(this.response);
+                                if (Date.now() - obj.video_page.start_time > 1000) {
+                                    obj.video_page.start_time = Date.now();
+                                    obj.dplayerStart();
+                                }
                             }
                         }
                     }
