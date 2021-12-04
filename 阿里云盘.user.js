@@ -614,7 +614,6 @@
                     e.dispatchEvent(t);
                 }
             }(t));
-            t.parentNode.removeChild(t);
         };
         var addSingleFile = function(fileList) {
             fileList.forEach(function (item, index) {
