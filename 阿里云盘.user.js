@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.6.3
+// @version      1.7
 // @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -20,8 +20,6 @@
             parent_file_id: "root",
             order_by: "",
             order_direction: "",
-            token_type: "",
-            access_token: "",
             items: []
         },
         video_page: {
@@ -379,46 +377,22 @@
     };
 
     obj.getVideoPreviewPlayInfo = function () {
-        sessionStorage.count || (sessionStorage.count = 0);
         if (location.href.includes("aliyundrive.com/s/")) {
-            obj.get_share_link_video_preview_play_info(function (response) {
-                if (response instanceof Object) {
-                    sessionStorage.count = 0
-                }
-                else {
-                    if (sessionStorage.count < 3) {
-                        sessionStorage.count = sessionStorage.count + 1;
-                        setTimeout(obj.getVideoPreviewPlayInfo, 500);
-                    }
-                }
-            });
+            obj.get_share_link_video_preview_play_info();
         }
         else {
-            obj.get_video_preview_play_info(function (response) {
-                if (response instanceof Object) {
-                    sessionStorage.count = 0
-                }
-                else {
-                    if (sessionStorage.count < 3) {
-                        sessionStorage.count = sessionStorage.count + 1;
-                        setTimeout(obj.getVideoPreviewPlayInfo, 500);
-                    }
-                }
-            });
-        }
-        if (sessionStorage.count == 3) {
-            obj.showTipError("获取播放信息失败：请刷新网页重试");
+            obj.get_video_preview_play_info();
         }
     }
 
     obj.get_share_link_video_preview_play_info = function (callback) {
-        var share_id = (/aliyundrive\.com\/s\/([a-zA-Z\d]+)/.exec(location.href) || [])[1], file_id = obj.video_page.play_info.file_id;
-        if (!(share_id && file_id)) {
+        var token = obj.getItem("token"), share_id = (/aliyundrive\.com\/s\/([a-zA-Z\d]+)/.exec(location.href) || [])[1], file_id = obj.video_page.play_info.file_id;
+        if (!(token && share_id && file_id)) {
             obj.showTipError("获取分享页面视频信息错误 缺少必要参数");
             return;
         }
-        $.ajax({
-            type: "post",
+
+        var options = {
             url: "https://api.aliyundrive.com/v2/file/get_share_link_video_preview_play_info",
             data: JSON.stringify({
                 category: "live_transcoding",
@@ -428,49 +402,35 @@
                 template_id: ""
             }),
             headers: {
-                "authorization": "".concat(obj.getItem("token").token_type || "", " ").concat(obj.getItem("token").access_token || ""),
+                "authorization": "".concat(token.token_type || "", " ").concat(token.access_token || ""),
                 "content-type": "application/json;charset=UTF-8",
                 "x-share-token": obj.getItem("shareToken").share_token
-            },
-            async: true,
-            success: function (response) {
-                callback && callback(response);
-            },
-            error: function (error) {
-                console.error("get_video_preview_play_info 错误", error);
-                callback && callback("");
             }
-        });
+        };
+        obj.ajax(options, callback);
     };
 
     obj.get_video_preview_play_info = function (callback) {
-        var token = obj.getItem("token"), drive_id = token ? token.default_drive_id : token, file_id = obj.video_page.play_info.file_id;
-        if (!(drive_id && file_id)) {
+        var token = obj.getItem("token"), file_id = obj.video_page.play_info.file_id;
+        if (!(token.default_drive_id && file_id)) {
             obj.showTipError("获取个人页面视频信息错误 缺少必要参数");
             return;
         }
-        $.ajax({
-            type: "post",
+
+        var options = {
             url: "https://api.aliyundrive.com/v2/file/get_video_preview_play_info",
             data: JSON.stringify({
                 category: "live_transcoding",
-                drive_id: drive_id,
+                drive_id: token.default_drive_id,
                 file_id: file_id,
                 template_id: ""
             }),
             headers: {
-                "authorization": "".concat(obj.getItem("token").token_type || "", " ").concat(obj.getItem("token").access_token || ""),
+                "authorization": "".concat(token.token_type || "", " ").concat(token.access_token || ""),
                 "content-type": "application/json;charset=UTF-8",
             },
-            async: true,
-            success: function (response) {
-                callback && callback(response);
-            },
-            error: function (error) {
-                console.error("get_video_preview_play_info 错误", error);
-                callback && callback("");
-            }
-        });
+        };
+        obj.ajax(options, callback);
     };
 
     obj.expires = function (e) {
@@ -484,8 +444,6 @@
             return;
         }
         if ($(".action--9-qBb").length) {
-            obj.file_page.access_token || obj.tokenRefresh();
-
             var html = '<div class="button-wrapper--1UkG6 button-download--batch" data-type="primary">显示链接</div>';
             $(".action--9-qBb").append(html);
             $(".button-download--batch").on("click", obj.showDownloadSharePage);
@@ -500,8 +458,6 @@
             return;
         }
         if ($(".actions--2qvID").length) {
-            obj.file_page.access_token || obj.tokenRefresh();
-
             var html = '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 button-download--batch">显示链接</button>';
             $(".actions--2qvID").append(html);
             $(".button-download--batch").on("click", obj.showDownloadHomePage);
@@ -512,7 +468,7 @@
     };
 
     obj.showDownloadSharePage = function () {
-        if (obj.file_page.access_token) {
+        if (obj.getItem("token").access_token) {
             obj.showTipLoading("正在获取链接...");
         }
         else {
@@ -541,16 +497,16 @@
                 else {
                     setTimeout(function() {
                         if (item.type == "folder") {
-                            obj.getShareMultiDownloadUrl([{file_id: item.file_id}], share_id, item.name, function (download_url) {
-                                item.download_url = download_url;
+                            obj.getShareMultiDownloadUrl([{file_id: item.file_id}], share_id, item.name, function (response) {
+                                item.download_url = response ? response.download_url : "";
                                 var html = '<p>' + (++index) + '：' + item.name + '</p>';
                                 html += '<p style="' + rowStyle + '"><a title="' + item.download_url + '" href="' + item.download_url + '" style="color: blue;">' + item.download_url + '</a></p>';
                                 $(".item-list").append(html);
                             });
                         }
                         else {
-                            obj.getShareLinkDownloadUrl(item.file_id, share_id, function (download_url) {
-                                item.download_url = download_url;
+                            obj.getShareLinkDownloadUrl(item.file_id, share_id, function (response) {
+                                item.download_url = response ? response.download_url : "";
                                 var html = '<p>' + (++index) + '：' + item.name + '</p>';
                                 html += '<p style="' + rowStyle + '"><a title="' + item.download_url + '" href="' + item.download_url + '" style="color: blue;">' + item.download_url + '</a></p>';
                                 $(".item-list").append(html);
@@ -568,8 +524,9 @@
             fileList.forEach(function (item, index) {
                 fileIdList.push({file_id: item.file_id});
             });
-            obj.getShareMultiDownloadUrl(fileIdList, share_id, archive_name, function (download_url) {
-                if (download_url) {
+            obj.getShareMultiDownloadUrl(fileIdList, share_id, archive_name, function (response) {
+                if (response && response.download_url) {
+                    var download_url = response.download_url
                     var html = '<p>压缩包：' + archive_name + '</p>';
                     html += '<p style="' + rowStyle + '"><a title="' + download_url + '" href="' + download_url + '" style="color: blue;">' + download_url + '</a></p>';
                     $(".item-list").append(html);
@@ -583,7 +540,7 @@
     };
 
     obj.showDownloadHomePage = function () {
-        if (obj.file_page.access_token) {
+        if (obj.getItem("token").access_token) {
             obj.showTipLoading("正在获取链接...");
         }
         else {
@@ -632,16 +589,16 @@
                 else {
                     setTimeout(function() {
                         if (item.type == "folder") {
-                            obj.getHomeMultiDownloadUrl([{file_id: item.file_id}], item.drive_id, item.name, function (download_url) {
-                                item.download_url = download_url;
+                            obj.getHomeMultiDownloadUrl([{file_id: item.file_id}], item.drive_id, item.name, function (response) {
+                                item.download_url = response ? response.download_url : "";
                                 var html = '<p>' + (++index) + '：' + item.name + '</p>';
                                 html += '<p style="' + rowStyle + '"><a title="' + item.download_url + '" href="' + item.download_url + '" style="color: blue;">' + item.download_url + '</a></p>';
                                 $(".item-list").append(html);
                             });
                         }
                         else {
-                            obj.getHomeLinkDownloadUrl(item.file_id, item.drive_id, function (download_url) {
-                                item.download_url = download_url;
+                            obj.getHomeLinkDownloadUrl(item.file_id, item.drive_id, function (response) {
+                                item.download_url = response ? response.url : "";
                                 var html = '<p>' + (++index) + '：' + item.name + '</p>';
                                 html += '<p style="' + rowStyle + '"><a title="' + item.download_url + '" style="color: blue;">' + item.download_url + '</a></p>';
                                 $(".item-list").append(html);
@@ -668,8 +625,9 @@
                 fileIdList.push({file_id: item.file_id});
             });
             var drive_id = fileList[0].drive_id;
-            obj.getHomeMultiDownloadUrl(fileIdList, drive_id, archive_name, function (download_url) {
-                if (download_url) {
+            obj.getHomeMultiDownloadUrl(fileIdList, drive_id, archive_name, function (response) {
+                if (response && response.download_url) {
+                    var download_url = response.download_url;
                     var html = '<p>压缩包：' + archive_name + '</p>';
                     html += '<p style="' + rowStyle + '"><a title="' + download_url + '" href="' + download_url + '" style="color: blue;">' + download_url + '</a></p>';
                     $(".item-list").append(html);
@@ -726,8 +684,9 @@
     };
 
     obj.tokenRefresh = function (callback) {
-        var token = obj.getItem("token"), refresh_token = token ? token.refresh_token : null;
-        if (!refresh_token) {
+        var token = obj.getItem("token");
+        if (!(token && token.refresh_token)) {
+            obj.showTipError("缺少必要参数，请登陆后刷新此页面重试！");
             callback && callback("");
             return;
         }
@@ -736,15 +695,15 @@
             type: "post",
             url: "https://api.aliyundrive.com/token/refresh",
             data: JSON.stringify({
-                refresh_token: refresh_token
+                refresh_token: token.refresh_token
             }),
             headers: {
                 "Content-type": "application/json;charset=utf-8",
             },
             success: function (response) {
                 if (response && response.access_token) {
-                    obj.file_page.token_type = response.token_type;
-                    obj.file_page.access_token = response.access_token;
+                    token.access_token = response.access_token;
+                    obj.setItem("token", token);
                     callback && callback(response);
                 }
                 else {
@@ -758,8 +717,8 @@
     };
 
     obj.getShareMultiDownloadUrl = function (files, share_id, archive_name, callback) {
-        $.ajax({
-            type: "post",
+        var token = obj.getItem("token");
+        var options = {
             url: "https://api.aliyundrive.com/adrive/v1/file/multiDownloadUrl",
             data: JSON.stringify({
                 archive_name: archive_name,
@@ -769,29 +728,16 @@
                 }]
             }),
             headers: {
-                "authorization": "".concat(obj.file_page.token_type || "", " ").concat(obj.file_page.access_token || ""),
+                "authorization": "".concat(token.token_type || "", " ").concat(token.access_token || ""),
                 "content-type": "application/json;charset=utf-8"
-            },
-            async: true,
-            success: function (response) {
-                if (response.download_url) {
-                    callback && callback(response.download_url);
-                }
-                else {
-                    console.error("getShareMultiDownloadUrl 失败", response);
-                    callback && callback("");
-                }
-            },
-            error: function (error) {
-                console.error("getShareMultiDownloadUrl 错误", error);
-                callback && callback("");
             }
-        });
+        };
+        obj.ajax(options, callback);
     };
 
     obj.getShareLinkDownloadUrl = function (file_id, share_id, callback) {
-        $.ajax({
-            type: "post",
+        var token = obj.getItem("token");
+        var options = {
             url: "https://api.aliyundrive.com/v2/file/get_share_link_download_url",
             data: JSON.stringify({
                 expire_sec: 600,
@@ -799,30 +745,17 @@
                 share_id: share_id
             }),
             headers: {
-                "authorization": "".concat(obj.file_page.token_type || "", " ").concat(obj.file_page.access_token || ""),
+                "authorization": "".concat(token.token_type || "", " ").concat(token.access_token || ""),
                 "content-type": "application/json;charset=utf-8",
                 "x-share-token": obj.getItem("shareToken").share_token
-            },
-            async: true,
-            success: function (response) {
-                if (response.download_url) {
-                    callback && callback(response.download_url);
-                }
-                else {
-                    console.error("getShareLinkDownloadUrl 失败", response);
-                    callback && callback("");
-                }
-            },
-            error: function (error) {
-                console.error("getShareLinkDownloadUrl 错误", error);
-                callback && callback("");
             }
-        });
+        };
+        obj.ajax(options, callback);
     };
 
     obj.getHomeMultiDownloadUrl = function (files, drive_id, archive_name, callback) {
-        $.ajax({
-            type: "post",
+        var token = obj.getItem("token");
+        var options = {
             url: "https://api.aliyundrive.com/adrive/v1/file/multiDownloadUrl",
             data: JSON.stringify({
                 archive_name: archive_name,
@@ -832,53 +765,27 @@
                 }]
             }),
             headers: {
-                "authorization": "".concat(obj.file_page.token_type || "", " ").concat(obj.file_page.access_token || ""),
+                "authorization": "".concat(token.token_type || "", " ").concat(token.access_token || ""),
                 "content-type": "application/json;charset=utf-8"
-            },
-            async: true,
-            success: function (response) {
-                if (response.download_url) {
-                    callback && callback(response.download_url);
-                }
-                else {
-                    console.error("getShareMultiDownloadUrl 失败", response);
-                    callback && callback("");
-                }
-            },
-            error: function (error) {
-                console.error("getShareMultiDownloadUrl 错误", error);
-                callback && callback("");
             }
-        });
+        };
+        obj.ajax(options, callback);
     };
 
     obj.getHomeLinkDownloadUrl = function (file_id, drive_id, callback) {
-        $.ajax({
-            type: "post",
+        var token = obj.getItem("token");
+        var options = {
             url: "https://api.aliyundrive.com/v2/file/get_download_url",
             data: JSON.stringify({
                 drive_id: drive_id,
                 file_id: file_id
             }),
             headers: {
-                "authorization": "".concat(obj.file_page.token_type || "", " ").concat(obj.file_page.access_token || ""),
+                "authorization": "".concat(token.token_type || "", " ").concat(token.access_token || ""),
                 "content-type": "application/json;charset=utf-8"
-            },
-            async: true,
-            success: function (response) {
-                if (response.url) {
-                    callback && callback(response.url);
-                }
-                else {
-                    console.error("getHomeLinkDownloadUrl 失败", response);
-                    callback && callback("");
-                }
-            },
-            error: function (error) {
-                console.error("getHomeLinkDownloadUrl 错误", error);
-                callback && callback("");
             }
-        });
+        };
+        obj.ajax(options, callback);
     };
 
     obj.getShareId = function () {
@@ -956,20 +863,51 @@
         t.length && "function" == typeof t.remove ? t.remove() : "function" == typeof t.removeNode && t.removeNode(!0);
     };
 
+    obj.ajax = function (options, callback) {
+        sessionStorage.count || (sessionStorage.count = 0);
+        $.ajax({
+            type: options.type || "post",
+            url: options.url,
+            data: options.data,
+            headers: options.headers,
+            async: true,
+            success: function (response) {
+                sessionStorage.count = 0;
+                callback && callback(response);
+            },
+            error: function (error) {
+                console.error("ajax 错误", error);
+                var code = error.responseJSON.code;
+                if (code == "AccessTokenInvalid") {
+                    sessionStorage.count = sessionStorage.count + 1;
+                    if (sessionStorage.coun < 3) {
+                        obj.tokenRefresh(function (response) {
+                            response ? obj.ajax(options, callback) : callback && callback("");
+                        });
+                    }
+                    else {
+                        sessionStorage.count = 0;
+                        callback && callback("");
+                    }
+                }
+                else if (code == "ShareLinkTokenInvalid") {
+                    obj.showTipError("页面已过期，请刷新此页面重试！");
+                    callback && callback("");
+                }
+                else {
+                    callback && callback("");
+                }
+            }
+        });
+    };
+
     obj.addPageFileList = function () {
         var send = XMLHttpRequest.prototype.send;
         XMLHttpRequest.prototype.send = function(data) {
             this.addEventListener("load", function(event) {
                 if (this.readyState == 4 && this.status == 200) {
                     var response, responseURL = this.responseURL;
-                    if (responseURL.indexOf("/token/refresh") > 0) {
-                        response = JSON.parse(this.response);
-                        if (response.access_token && response.token_type) {
-                            obj.file_page.access_token = response.access_token;
-                            obj.file_page.token_type = response.token_type;
-                        }
-                    }
-                    else if (responseURL.indexOf("/file/list") > 0) {
+                    if (responseURL.indexOf("/file/list") > 0) {
                         //排除【保存 移动 等行为触发】
                         if (document.querySelector(".ant-modal-mask")) {
                             return;
