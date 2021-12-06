@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.7.1
+// @version      1.7.2
 // @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -407,14 +407,20 @@
                 callback && callback(response);
             },
             error: function (error) {
-                console.error("get_video_preview_play_info 错误", error);
                 if (error.responseJSON.code == "AccessTokenInvalid") {
                     obj.tokenRefresh(function (response) {
                         if (response instanceof Object) {
-                            setTimeout(function () {
-                                obj.showTipLoading("更新 tokenRefresh");
-                                obj.get_share_link_video_preview_play_info(callback);
-                            }, 500);
+                            obj.get_share_link_video_preview_play_info(callback);
+                        }
+                        else {
+                            callback && callback("");
+                        }
+                    });
+                }
+                else if (error.responseJSON.code == "ShareLinkTokenInvalid") {
+                    obj.get_share_token(function (response) {
+                        if (response instanceof Object) {
+                            obj.get_share_link_video_preview_play_info(callback);
                         }
                         else {
                             callback && callback("");
@@ -422,8 +428,9 @@
                     });
                 }
                 else {
-                    if (error.responseJSON.code == "ShareLinkTokenInvalid") {
-                        window.alert("页面时效过期，请刷新此页面重试！");
+                    console.error("get_share_link_video_preview_play_info 错误", error);
+                    if (error.responseJSON.code == "InvalidParameterNotMatch.ShareId") {
+                        obj.showTipError("错误：参数不匹配，此错误可能是打开了另一个分享页面导致，请刷新", 10000);
                     }
                     callback && callback("");
                 }
@@ -451,14 +458,10 @@
                 callback && callback(response);
             },
             error: function (error) {
-                console.error("get_video_preview_play_info 错误", error);
                 if (error.responseJSON.code == "AccessTokenInvalid") {
                     obj.tokenRefresh(function (response) {
                         if (response instanceof Object) {
-                            setTimeout(function () {
-                                obj.showTipLoading("更新 tokenRefresh");
-                                obj.get_video_preview_play_info(callback);
-                            }, 500);
+                            obj.get_video_preview_play_info(callback);
                         }
                         else {
                             callback && callback("");
@@ -466,6 +469,7 @@
                     });
                 }
                 else {
+                    console.error("get_video_preview_play_info 错误", error);
                     callback && callback("");
                 }
             }
@@ -747,14 +751,20 @@
                 }
             },
             error: function (error) {
-                console.error("getShareMultiDownloadUrl 错误", error);
                 if (error.responseJSON.code == "AccessTokenInvalid") {
                     obj.tokenRefresh(function (response) {
                         if (response instanceof Object) {
-                            setTimeout(function () {
-                                obj.showTipLoading("更新 tokenRefresh");
-                                obj.getShareMultiDownloadUrl(files, share_id, archive_name, callback);
-                            }, 500);
+                            obj.getShareMultiDownloadUrl(files, share_id, archive_name, callback);
+                        }
+                        else {
+                            callback && callback("");
+                        }
+                    });
+                }
+                else if (error.responseJSON.code == "ShareLinkTokenInvalid") {
+                    obj.get_share_token(function (response) {
+                        if (response instanceof Object) {
+                            obj.getShareMultiDownloadUrl(files, share_id, archive_name, callback);
                         }
                         else {
                             callback && callback("");
@@ -762,8 +772,9 @@
                     });
                 }
                 else {
-                    if (error.responseJSON.code == "ShareLinkTokenInvalid") {
-                        window.alert("页面时效过期，请刷新此页面重试！");
+                    console.error("getShareMultiDownloadUrl 错误", error);
+                    if (error.responseJSON.code == "InvalidParameterNotMatch.ShareId") {
+                        obj.showTipError("错误：参数不匹配，此错误可能是打开了另一个分享页面导致，请刷新", 10000);
                     }
                     callback && callback("");
                 }
@@ -797,14 +808,20 @@
                 }
             },
             error: function (error) {
-                console.error("getShareLinkDownloadUrl 错误", error);
                 if (error.responseJSON.code == "AccessTokenInvalid") {
                     obj.tokenRefresh(function (response) {
                         if (response instanceof Object) {
-                            setTimeout(function () {
-                                obj.showTipLoading("更新 tokenRefresh");
-                                obj.getShareLinkDownloadUrl(file_id, share_id, callback);
-                            }, 500);
+                            obj.getShareLinkDownloadUrl(file_id, share_id, callback);
+                        }
+                        else {
+                            callback && callback("");
+                        }
+                    });
+                }
+                else if (error.responseJSON.code == "ShareLinkTokenInvalid") {
+                    obj.get_share_token(function (response) {
+                        if (response instanceof Object) {
+                            obj.getShareLinkDownloadUrl(file_id, share_id, callback);
                         }
                         else {
                             callback && callback("");
@@ -812,8 +829,9 @@
                     });
                 }
                 else {
-                    if (error.responseJSON.code == "ShareLinkTokenInvalid") {
-                        window.alert("页面时效过期，请刷新此页面重试！");
+                    console.error("getShareLinkDownloadUrl 错误", error);
+                    if (error.responseJSON.code == "InvalidParameterNotMatch.ShareId") {
+                        obj.showTipError("错误：参数不匹配，此错误可能是打开了另一个分享页面导致，请刷新", 10000);
                     }
                     callback && callback("");
                 }
@@ -848,14 +866,10 @@
                 }
             },
             error: function (error) {
-                console.error("getShareMultiDownloadUrl 错误", error);
                 if (error.responseJSON.code == "AccessTokenInvalid") {
                     obj.tokenRefresh(function (response) {
                         if (response instanceof Object) {
-                            setTimeout(function () {
-                                obj.showTipLoading("更新 tokenRefresh");
-                                obj.getHomeMultiDownloadUrl(files, drive_id, archive_name, callback);
-                            }, 500);
+                            obj.getHomeMultiDownloadUrl(files, drive_id, archive_name, callback);
                         }
                         else {
                             callback && callback("");
@@ -863,6 +877,7 @@
                     });
                 }
                 else {
+                    console.error("getHomeMultiDownloadUrl 错误", error);
                     callback && callback("");
                 }
             }
@@ -893,14 +908,10 @@
                 }
             },
             error: function (error) {
-                console.error("getHomeLinkDownloadUrl 错误", error);
                 if (error.responseJSON.code == "AccessTokenInvalid") {
                     obj.tokenRefresh(function (response) {
                         if (response instanceof Object) {
-                            setTimeout(function () {
-                                obj.showTipLoading("更新 tokenRefresh");
-                                obj.getHomeLinkDownloadUrl(file_id, drive_id, callback);
-                            }, 500);
+                            obj.getHomeLinkDownloadUrl(file_id, drive_id, callback);
                         }
                         else {
                             callback && callback("");
@@ -908,6 +919,7 @@
                     });
                 }
                 else {
+                    console.error("getHomeLinkDownloadUrl 错误", error);
                     callback && callback("");
                 }
             }
@@ -932,9 +944,9 @@
             },
             success: function (response) {
                 if (response instanceof Object && response.access_token) {
-                    token.access_token = response.access_token;
-                    token.token_type = response.token_type;
-                    obj.setItem("token", token);
+                    obj.showTipLoading("更新 token");
+                    delete response.user_data;
+                    obj.setItem("token", response);
                     callback && callback(response);
                 }
                 else {
@@ -942,6 +954,36 @@
                 }
             },
             error: function () {
+                callback && callback("");
+            }
+        });
+    };
+
+    obj.get_share_token = function (callback) {
+        $.ajax({
+            type: "post",
+            url: "https://api.aliyundrive.com/v2/share_link/get_share_token",
+            data: JSON.stringify({
+                share_id: obj.getShareId(),
+                share_pwd: ""
+            }),
+            headers: {
+                "Content-type": "application/json;charset=utf-8",
+            },
+            success: function (response) {
+                if (response instanceof Object && response.share_token) {
+                    obj.showTipLoading("更新 share_token");
+                    obj.setItem("shareToken", response);
+                    callback && callback(response);
+                }
+                else {
+                    callback && callback("");
+                }
+            },
+            error: function (error) {
+                if (error.responseJSON.code == "InvalidResource.SharePwd") {
+                    obj.showTipError("更新share_token错误，请刷新并重新填写提取码", 10000);
+                }
                 callback && callback("");
             }
         });
