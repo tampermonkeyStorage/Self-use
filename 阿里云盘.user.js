@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.7.2
+// @version      1.7.3
 // @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -20,6 +20,7 @@
             parent_file_id: "root",
             order_by: "",
             order_direction: "",
+            next_marker_list: [],
             items: []
         },
         video_page: {
@@ -408,7 +409,7 @@
             },
             error: function (error) {
                 if (error.responseJSON.code == "AccessTokenInvalid") {
-                    obj.tokenRefresh(function (response) {
+                    obj.refresh_token(function (response) {
                         if (response instanceof Object) {
                             obj.get_share_link_video_preview_play_info(callback);
                         }
@@ -459,7 +460,7 @@
             },
             error: function (error) {
                 if (error.responseJSON.code == "AccessTokenInvalid") {
-                    obj.tokenRefresh(function (response) {
+                    obj.refresh_token(function (response) {
                         if (response instanceof Object) {
                             obj.get_video_preview_play_info(callback);
                         }
@@ -752,7 +753,7 @@
             },
             error: function (error) {
                 if (error.responseJSON.code == "AccessTokenInvalid") {
-                    obj.tokenRefresh(function (response) {
+                    obj.refresh_token(function (response) {
                         if (response instanceof Object) {
                             obj.getShareMultiDownloadUrl(files, share_id, archive_name, callback);
                         }
@@ -809,7 +810,7 @@
             },
             error: function (error) {
                 if (error.responseJSON.code == "AccessTokenInvalid") {
-                    obj.tokenRefresh(function (response) {
+                    obj.refresh_token(function (response) {
                         if (response instanceof Object) {
                             obj.getShareLinkDownloadUrl(file_id, share_id, callback);
                         }
@@ -867,7 +868,7 @@
             },
             error: function (error) {
                 if (error.responseJSON.code == "AccessTokenInvalid") {
-                    obj.tokenRefresh(function (response) {
+                    obj.refresh_token(function (response) {
                         if (response instanceof Object) {
                             obj.getHomeMultiDownloadUrl(files, drive_id, archive_name, callback);
                         }
@@ -909,7 +910,7 @@
             },
             error: function (error) {
                 if (error.responseJSON.code == "AccessTokenInvalid") {
-                    obj.tokenRefresh(function (response) {
+                    obj.refresh_token(function (response) {
                         if (response instanceof Object) {
                             obj.getHomeLinkDownloadUrl(file_id, drive_id, callback);
                         }
@@ -926,7 +927,7 @@
         });
     };
 
-    obj.tokenRefresh = function (callback) {
+    obj.refresh_token = function (callback) {
         var token = obj.getItem("token");
         if (!(token && token.refresh_token)) {
             obj.showTipError("缺少必要参数，请登陆后刷新此页面重试！", 10000);
@@ -1008,7 +1009,7 @@
     };
 
     obj.setItem = function(n, t) {
-        n && t && window.localStorage.setItem(n, JSON.stringify(t));
+        n && t && window.localStorage.setItem(n, t instanceof Object ? JSON.stringify(t) : t);
     };
 
     obj.showTipSuccess = function (msg, timeout) {
@@ -1071,29 +1072,52 @@
                 if (this.readyState == 4 && this.status == 200) {
                     var response, responseURL = this.responseURL;
                     if (responseURL.indexOf("/file/list") > 0) {
-                        //排除【保存 移动 等行为触发】
                         if (document.querySelector(".ant-modal-mask")) {
+                            //排除【保存 移动 等行为触发】
                             return;
                         };
 
-                        data = JSON.parse(data);
-                        var parent_file_id = ((location.href.match(/\/folder\/(\w+)/) || [])[1]) || "root";
-                        if (parent_file_id != obj.file_page.page_id) {
-                            //变换页面
-                            obj.file_page.page_id = parent_file_id;
-                            obj.file_page.order_by = data.order_by;
-                            obj.file_page.order_direction = data.order_direction;
-                            obj.file_page.items = [];
-                        }
-                        else if (data.order_by != obj.file_page.order_by || data.order_direction != obj.file_page.order_direction) {
-                            //排序改变
-                            obj.file_page.order_by = data.order_by;
-                            obj.file_page.order_direction = data.order_direction;
-                            obj.file_page.items = [];
-                        }
-
                         response = JSON.parse(this.response);
                         if (response instanceof Object && response.items) {
+                            var url = location.href;
+                            if (url.indexOf(".aliyundrive.com/s/") > 0) {
+                                obj.initDownloadSharePage();
+                            }
+                            else if (url.indexOf(".aliyundrive.com/drive") > 0) {
+                                obj.initDownloadHomePage();
+                            }
+
+                            var parent_file_id = ((location.href.match(/\/folder\/(\w+)/) || [])[1]) || "root";
+                            if (parent_file_id != obj.file_page.parent_file_id) {
+                                //变换页面
+                                obj.file_page.parent_file_id = parent_file_id;
+                                obj.file_page.order_by = data.order_by;
+                                obj.file_page.order_direction = data.order_direction;
+                                obj.file_page.next_marker_list = [];
+                                obj.file_page.items = [];
+                            }
+
+                            data = JSON.parse(data);
+                            if (data.order_by != obj.file_page.order_by || data.order_direction != obj.file_page.order_direction) {
+                                //排序改变
+                                obj.file_page.order_by = data.order_by;
+                                obj.file_page.order_direction = data.order_direction;
+                                obj.file_page.next_marker_list = [];
+                                obj.file_page.items = [];
+                            }
+
+                            var next_marker = response.next_marker, next_marker_list = obj.file_page.next_marker_list;
+                            if (next_marker_list.includes(next_marker)) {
+                                if (next_marker_list.indexOf(next_marker) == 0) {
+                                    //重复排序
+                                    obj.file_page.next_marker_list = [response.next_marker];
+                                    obj.file_page.items = [];
+                                }
+                            }
+                            else {
+                                obj.file_page.next_marker_list.push(response.next_marker)
+                            }
+
                             obj.file_page.items = obj.file_page.items.concat(response.items);
                             obj.showTipSuccess("文件列表获取完成 共：" + obj.file_page.items.length + "项");
                         }
@@ -1125,7 +1149,6 @@
     var url = location.href;
     if (url.indexOf(".aliyundrive.com/s/") > 0) {
         obj.addPageFileList();
-        obj.initDownloadSharePage();
 
         obj.unlockVideoLimit();
 
@@ -1135,7 +1158,6 @@
     }
     else if (url.indexOf(".aliyundrive.com/drive") > 0) {
         obj.addPageFileList();
-        obj.initDownloadHomePage();
 
         obj.customSharePwd();
 
