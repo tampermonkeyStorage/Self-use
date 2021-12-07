@@ -512,7 +512,8 @@
     };
 
     obj.showDownloadSharePage = function () {
-        if (obj.getItem("token").access_token) {
+        var token = obj.getItem("token");
+        if (token && token.access_token) {
             obj.showTipLoading("正在获取链接...");
         }
         else {
