@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.7.3
+// @version      1.7.4
 // @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -487,9 +487,9 @@
         if ($(".button-download--batch").length) {
             return;
         }
-        if ($(".action--9-qBb").length) {
-            var html = '<div class="button-wrapper--1UkG6 button-download--batch" data-type="primary">显示链接</div>';
-            $(".action--9-qBb").append(html);
+        if ($("#root header").length) {
+            var html = '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-download--batch">显示链接</button>';
+            $("#root header:eq(0)").append(html);
             $(".button-download--batch").on("click", obj.showDownloadSharePage);
         }
         else {
@@ -501,9 +501,9 @@
         if ($(".button-download--batch").length) {
             return;
         }
-        if ($(".actions--2qvID").length) {
-            var html = '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 button-download--batch">显示链接</button>';
-            $(".actions--2qvID").append(html);
+        if ($("#root header").length) {
+            var html = '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi button-download--batch">显示链接</button>';
+            $("#root header:eq(0)").append(html);
             $(".button-download--batch").on("click", obj.showDownloadHomePage);
         }
         else {
@@ -532,59 +532,35 @@
         var rowStyle = "margin:10px 0px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;";
 
         var share_id = obj.getShareId();
-        var addSingleFile = function(fileList) {
-            fileList.forEach(function (item, index) {
-                if (item.download_url) {
-                    var html = '<p>' + (++index) + '：' + item.name + '</p>';
-                    html += '<p style="' + rowStyle + '"><a title="' + item.download_url + '" href="' + item.download_url + '" style="color: blue;">' + item.download_url + '</a></p>';
+        fileList.forEach(function (item, index) {
+            var html = '<p>' + (++index) + '：' + item.name + '</p>';
+            if (item.download_url) {
+                html += '<p style="' + rowStyle + '"><a title="' + item.download_url + '" href="' + item.download_url + '" style="color: blue;">' + item.download_url + '</a></p>';
+                $(".item-list").append(html);
+            }
+            else {
+                if (item.type == "folder") {
+                    html += '<p style="' + rowStyle + '"><font color="green">&emsp;&emsp;请进入文件夹下载</font></p>';
                     $(".item-list").append(html);
                 }
                 else {
                     setTimeout(function() {
-                        if (item.type == "folder") {
-                            obj.getShareMultiDownloadUrl([{file_id: item.file_id}], share_id, item.name, function (download_url) {
-                                item.download_url = download_url;
-                                var html = '<p>' + (++index) + '：' + item.name + '</p>';
-                                html += '<p style="' + rowStyle + '"><a title="' + item.download_url + '" href="' + item.download_url + '" style="color: blue;">' + item.download_url + '</a></p>';
-                                $(".item-list").append(html);
-                            });
-                        }
-                        else {
-                            obj.getShareLinkDownloadUrl(item.file_id, share_id, function (download_url) {
-                                item.download_url = download_url;
-                                var html = '<p>' + (++index) + '：' + item.name + '</p>';
-                                html += '<p style="' + rowStyle + '"><a title="' + item.download_url + '" href="' + item.download_url + '" style="color: blue;">' + item.download_url + '</a></p>';
-                                $(".item-list").append(html);
-                            });
-                        }
+                        obj.getShareLinkDownloadUrl(item.file_id, share_id, function (download_url) {
+                            item.download_url = download_url;
+                            html += '<p style="' + rowStyle + '"><a title="' + item.download_url + '" href="' + item.download_url + '" style="color: blue;">' + item.download_url + '</a></p>';
+                            $(".item-list").append(html);
+                        });
                     }, 66 * index);
                 }
-            });
-            obj.hideTip();
-        };
+            }
+        });
 
-        if (fileList.length > 1) {
-            var archive_name = fileList[0].name + "等" + fileList.length + "个文件";
-            var fileIdList = [];
-            fileList.forEach(function (item, index) {
-                fileIdList.push({file_id: item.file_id});
-            });
-            obj.getShareMultiDownloadUrl(fileIdList, share_id, archive_name, function (download_url) {
-                if (download_url) {
-                    var html = '<p>压缩包：' + archive_name + '</p>';
-                    html += '<p style="' + rowStyle + '"><a title="' + download_url + '" href="' + download_url + '" style="color: blue;">' + download_url + '</a></p>';
-                    $(".item-list").append(html);
-                }
-                addSingleFile(fileList);
-            });
-        }
-        else {
-            addSingleFile(fileList);
-        }
+        obj.hideTip();
     };
 
     obj.showDownloadHomePage = function () {
-        if (obj.getItem("token").access_token) {
+        var token = obj.getItem("token");
+        if (token && token.access_token) {
             obj.showTipLoading("正在获取链接...");
         }
         else {
@@ -601,7 +577,6 @@
 
         obj.showBox('<div class="item-list" style="padding: 20px; height: 410px; overflow-y: auto;"></div>');
         var rowStyle = "margin:10px 0px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;";
-
         var Re = function(e) {
             var t = document.createElement("a");
             t.rel = "noopener";
@@ -618,69 +593,39 @@
                 }
             }(t));
         };
-        var addSingleFile = function(fileList) {
-            fileList.forEach(function (item, index) {
-                if (item.download_url) {
-                    var html = '<p>' + (++index) + '：' + item.name + '</p>';
-                    if (item.type == "folder") {
-                        html += '<p style="' + rowStyle + '"><a title="' + item.download_url + '" href="' + item.download_url + '" style="color: blue;">' + item.download_url + '</a></p>';
-                    }
-                    else {
-                        html += '<p style="' + rowStyle + '"><a title="' + item.download_url + '" style="color: blue;">' + item.download_url + '</a></p>';
-                    }
+
+        fileList.forEach(function (item, index) {
+            var html = '<p>' + (++index) + '：' + item.name + '</p>';
+            if (item.download_url) {
+                html += '<p style="' + rowStyle + '"><a title="' + item.download_url + '" style="color: blue;">' + item.download_url + '</a></p>';
+                $(".item-list").append(html);
+            }
+            else {
+                if (item.type == "folder") {
+                    html += '<p style="' + rowStyle + '"><font color="green">&emsp;&emsp;请进入文件夹下载</font></p>';
                     $(".item-list").append(html);
                 }
                 else {
                     setTimeout(function() {
-                        if (item.type == "folder") {
-                            obj.getHomeMultiDownloadUrl([{file_id: item.file_id}], item.drive_id, item.name, function (download_url) {
-                                item.download_url = download_url;
-                                var html = '<p>' + (++index) + '：' + item.name + '</p>';
-                                html += '<p style="' + rowStyle + '"><a title="' + item.download_url + '" href="' + item.download_url + '" style="color: blue;">' + item.download_url + '</a></p>';
-                                $(".item-list").append(html);
-                            });
-                        }
-                        else {
-                            obj.getHomeLinkDownloadUrl(item.file_id, item.drive_id, function (download_url) {
-                                item.download_url = download_url;
-                                var html = '<p>' + (++index) + '：' + item.name + '</p>';
-                                html += '<p style="' + rowStyle + '"><a title="' + item.download_url + '" style="color: blue;">' + item.download_url + '</a></p>';
-                                $(".item-list").append(html);
-                            });
-                        }
+                        obj.getHomeLinkDownloadUrl(item.file_id, item.drive_id, function (download_url) {
+                            item.download_url = download_url;
+                            html += '<p style="' + rowStyle + '"><a title="' + item.download_url + '" style="color: blue;">' + item.download_url + '</a></p>';
+                            $(".item-list").append(html);
+                        });
                     }, 66 * index);
                 }
-            });
+            }
+        });
 
-            obj.hideTip();
+        obj.hideTip();
 
-            $(document).on("click", ".item-list a", function(event) {
-                var url = $(this).attr("href");
-                if (!url) {
-                    url = $(this).attr("title");
-                    Re(url);
-                }
-            });
-        };
-        if (fileList.length > 1) {
-            var archive_name = "".concat(fileList[0].name, "等").concat(fileList.length, "个文件");
-            var fileIdList = [];
-            fileList.forEach(function (item, index) {
-                fileIdList.push({file_id: item.file_id});
-            });
-            var drive_id = fileList[0].drive_id;
-            obj.getHomeMultiDownloadUrl(fileIdList, drive_id, archive_name, function (download_url) {
-                if (download_url) {
-                    var html = '<p>压缩包：' + archive_name + '</p>';
-                    html += '<p style="' + rowStyle + '"><a title="' + download_url + '" href="' + download_url + '" style="color: blue;">' + download_url + '</a></p>';
-                    $(".item-list").append(html);
-                }
-                addSingleFile(fileList);
-            });
-        }
-        else {
-            addSingleFile(fileList);
-        }
+        $(document).on("click", ".item-list a", function(event) {
+            var url = $(this).attr("href");
+            if (!url) {
+                url = $(this).attr("title");
+                Re(url);
+            }
+        });
     };
 
     obj.showBox = function (body) {
@@ -724,64 +669,6 @@
         });
 
         return selectedFileList.length ? selectedFileList : fileList;
-    };
-
-    obj.getShareMultiDownloadUrl = function (files, share_id, archive_name, callback) {
-        var token = obj.getItem("token");
-        $.ajax({
-            type: "post",
-            url: "https://api.aliyundrive.com/adrive/v1/file/multiDownloadUrl",
-            data: JSON.stringify({
-                archive_name: archive_name,
-                download_infos: [{
-                    files: files,
-                    share_id: share_id
-                }]
-            }),
-            headers: {
-                "authorization": "".concat(token.token_type || "", " ").concat(token.access_token || ""),
-                "content-type": "application/json;charset=utf-8"
-            },
-            async: true,
-            success: function (response) {
-                if (response instanceof Object && response.download_url) {
-                    callback && callback(response.download_url);
-                }
-                else {
-                    console.error("getShareMultiDownloadUrl 失败", response);
-                    callback && callback("");
-                }
-            },
-            error: function (error) {
-                if (error.responseJSON.code == "AccessTokenInvalid") {
-                    obj.refresh_token(function (response) {
-                        if (response instanceof Object) {
-                            obj.getShareMultiDownloadUrl(files, share_id, archive_name, callback);
-                        }
-                        else {
-                            callback && callback("");
-                        }
-                    });
-                }
-                else if (error.responseJSON.code == "ShareLinkTokenInvalid") {
-                    obj.get_share_token(function (response) {
-                        if (response instanceof Object) {
-                            obj.getShareMultiDownloadUrl(files, share_id, archive_name, callback);
-                        }
-                        else {
-                            callback && callback("");
-                        }
-                    });
-                }
-                else {
-                    console.error("getShareMultiDownloadUrl 错误", error);
-                    if (error.responseJSON.code == "InvalidParameterNotMatch.ShareId") {
-                        obj.showTipError("错误：参数不匹配，此错误可能是打开了另一个分享页面导致，请刷新", 10000);
-                    }
-                    callback && callback("");
-                }
-            }
-        });
     };
 
     obj.getShareLinkDownloadUrl = function (file_id, share_id, callback) {
@@ -835,51 +722,6 @@
                     if (error.responseJSON.code == "InvalidParameterNotMatch.ShareId") {
                         obj.showTipError("错误：参数不匹配，此错误可能是打开了另一个分享页面导致，请刷新", 10000);
                     }
-                    callback && callback("");
-                }
-            }
-        });
-    };
-
-    obj.getHomeMultiDownloadUrl = function (files, drive_id, archive_name, callback) {
-        var token = obj.getItem("token");
-        $.ajax({
-            type: "post",
-            url: "https://api.aliyundrive.com/adrive/v1/file/multiDownloadUrl",
-            data: JSON.stringify({
-                archive_name: archive_name,
-                download_infos: [{
-                    drive_id: drive_id,
-                    files: files
-                }]
-            }),
-            headers: {
-                "authorization": "".concat(token.token_type || "", " ").concat(token.access_token || ""),
-                "content-type": "application/json;charset=utf-8"
-            },
-            async: true,
-            success: function (response) {
-                if (response instanceof Object && response.download_url) {
-                    callback && callback(response.download_url);
-                }
-                else {
-                    console.error("getShareMultiDownloadUrl 失败", response);
-                    callback && callback("");
-                }
-            },
-            error: function (error) {
-                if (error.responseJSON.code == "AccessTokenInvalid") {
-                    obj.refresh_token(function (response) {
-                        if (response instanceof Object) {
-                            obj.getHomeMultiDownloadUrl(files, drive_id, archive_name, callback);
-                        }
-                        else {
-                            callback && callback("");
-                        }
-                    });
-                }
-                else {
-                    console.error("getHomeMultiDownloadUrl 错误", error);
                     callback && callback("");
                 }
             }
@@ -1080,14 +922,6 @@
 
                         response = JSON.parse(this.response);
                         if (response instanceof Object && response.items) {
-                            var url = location.href;
-                            if (url.indexOf(".aliyundrive.com/s/") > 0) {
-                                obj.initDownloadSharePage();
-                            }
-                            else if (url.indexOf(".aliyundrive.com/drive") > 0) {
-                                obj.initDownloadHomePage();
-                            }
-
                             var parent_file_id = ((location.href.match(/\/folder\/(\w+)/) || [])[1]) || "root";
                             if (parent_file_id != obj.file_page.parent_file_id) {
                                 //变换页面
@@ -1121,6 +955,14 @@
 
                             obj.file_page.items = obj.file_page.items.concat(response.items);
                             obj.showTipSuccess("文件列表获取完成 共：" + obj.file_page.items.length + "项");
+
+                            var url = location.href;
+                            if (url.indexOf(".aliyundrive.com/s/") > 0) {
+                                obj.initDownloadSharePage();
+                            }
+                            else if (url.indexOf(".aliyundrive.com/drive") > 0) {
+                                obj.initDownloadHomePage();
+                            }
                         }
                     }
                     else if ((responseURL.indexOf("/file/get_share_link_video_preview_play_info") > 0 || responseURL.indexOf("/file/get_video_preview_play_info") > 0)) {
