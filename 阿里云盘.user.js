@@ -120,8 +120,7 @@
             if (document.querySelector("video") || document.querySelector("#dplayer")) {
                 if ($(".ant-switch-player").length == 0) {
                     var text = obj.getItem("default_player") == "Original" ? "切换到DPlayer播放器" : "切换到原生播放器";
-                    var _class = location.pathname.indexOf("/s/") == 0 ? "menu-inner--18Omt" : "outer-menu--ihDUR";
-                    $(".ant-dropdown-menu").append('<li class="ant-dropdown-menu-item ant-switch-player" role="menuitem"><div class=' + _class + '><div>' + text + '</div></div></li>');
+                    $(".ant-dropdown-menu").append('<li class="ant-dropdown-menu-item ant-switch-player" role="menuitem"><div class="outer-menu--ihDUR"><div>' + text + '</div></div></li>');
 
                     $(".ant-switch-player").click(function() {
                         if (obj.getItem("default_player") == "Original") {
