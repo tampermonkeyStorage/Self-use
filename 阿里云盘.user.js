@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.7.4
+// @version      1.7.5
 // @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -101,7 +101,7 @@
                         if (xhr.responseURL.includes("/file/get_share_link_video_preview_play_info") && responseText && responseText.includes("preview_url")) {
                             var responseJson = JSON.parse(responseText);
                             responseJson.video_preview_play_info.live_transcoding_task_list.forEach(function (item) {
-                                item.preview_url = item.url;
+                                item.preview_url = item.url || item.preview_url;
                             });
                             responseText = JSON.stringify(responseJson);
                         }
@@ -129,7 +129,7 @@
                             $(this).find("div").find("div").text("切换到原生播放器");
                             obj.showTipSuccess("正在切换到DPlayer播放器");
 
-                            obj.videoPageOptimization();
+                            obj.videoPageEvent();
 
                             obj.dplayerSupport();
                             setTimeout(function () {
@@ -141,7 +141,7 @@
                             $(this).find("div").find("div").text("切换到DPlayer播放器");
                             obj.showTipSuccess("正在切换到原生播放器");
 
-                            obj.videoPageOptimization();
+                            obj.videoPageEvent();
 
                             obj.video_page.dPlayer && obj.video_page.dPlayer.pause();
                             setTimeout(function () {
@@ -161,7 +161,7 @@
         });
     };
 
-    obj.videoPageOptimization = function () {
+    obj.videoPageEvent = function () {
         var default_player = obj.getItem("default_player");
         if (!default_player || default_player == "DPlayer") {
             $(document).off("DOMNodeInserted", ".video-player--29_72 .btn--1cZfA");
@@ -171,10 +171,6 @@
         }
 
         $(document).on("DOMNodeInserted", ".video-player--29_72 .btn--1cZfA", function() {
-            if (obj.video_page.dplayer) {
-                return;
-            }
-
             var video = document.querySelector("video");
             if (video.paused) {
                 $(this).click();
@@ -285,21 +281,18 @@
     obj.dplayerStart = function () {
         var default_player = obj.getItem("default_player");
         if (!default_player) {
-            obj.showTipSuccess("脚本提示：打开页面右侧[更多]菜单可【切换播放器】", 10000);
+            obj.showTipSuccess("脚本提示：打开页面右侧[更多]菜单可【切换播放器】", 5000);
         }
         else if (default_player == "Original") {
             return;
         }
 
-
-        var video = document.querySelector("video[class=video--26SLZ]");
-        if (video && video.src) {
-            obj.video_page.elevideo = video;
-
-            var player = document.createElement("div");
-            player.setAttribute("id", "dplayer");
-            video.parentNode.appendChild(player);
-            video.parentNode.removeChild(video);
+        var dPlayerNode = document.getElementById("dplayer");
+        if (!dPlayerNode) {
+            dPlayerNode = document.createElement("div");
+            dPlayerNode.setAttribute("id", "dplayer");
+            var videoParentNode = document.querySelector("video").parentNode.parentNode;
+            obj.video_page.elevideo = videoParentNode.parentNode.replaceChild(dPlayerNode, videoParentNode);
         }
 
         var dPlayer = obj.video_page.dPlayer, file_id = obj.video_page.play_info.file_id;
@@ -307,6 +300,7 @@
             obj.video_page.attributes = {
                 currentTime: dPlayer.video.currentTime,
                 playbackRate: dPlayer.video.playbackRate,
+                muted: dPlayer.video.muted,
             };
 
             dPlayer.destroy();
@@ -321,7 +315,8 @@
         var options = {
             container: document.getElementById("dplayer"),
             video: {
-                quality: []
+                quality: [],
+                defaultQuality: 0
             },
             autoplay: true,
             screenshot: true,
@@ -345,7 +340,7 @@
             task_list.forEach(function (item) {
                 options.video.quality.push({
                     name: p[item.template_id],
-                    url: item.url,
+                    url: item.url || item.preview_url,
                     type: "hls"
                 });
             });
@@ -365,14 +360,12 @@
         dPlayer = new window.DPlayer(options);
         obj.video_page.dPlayer = dPlayer;
 
-        dPlayer.on("loadstart", function () {
-            var controller = document.querySelector(".video-player--29_72");
-            controller && (controller.style.display = "none");
-
+        dPlayer.on("loadedmetadata", function () {
             var attributes = obj.video_page.attributes;
             if (Object.keys(attributes).length) {
                 dPlayer.seek(attributes.currentTime);
                 dPlayer.speed(attributes.playbackRate);
+                dPlayer.video.muted = attributes.muted;
             }
         });
     };
@@ -387,7 +380,7 @@
     }
 
     obj.get_share_link_video_preview_play_info = function (callback) {
-        var token = obj.getItem("token"), share_id = obj.getShareId(), file_id = obj.video_page.play_info.file_id;
+        var token = obj.getItem("token") || {}, share_id = obj.getShareId(), file_id = obj.video_page.play_info.file_id;
         $.ajax({
             type: "post",
             url: "https://api.aliyundrive.com/v2/file/get_share_link_video_preview_play_info",
@@ -440,7 +433,7 @@
     };
 
     obj.get_video_preview_play_info = function (callback) {
-        var token = obj.getItem("token"), file_id = obj.video_page.play_info.file_id;
+        var token = obj.getItem("token") || {}, file_id = obj.video_page.play_info.file_id;
         $.ajax({
             type: "post",
             url: "https://api.aliyundrive.com/v2/file/get_video_preview_play_info",
@@ -672,7 +665,7 @@
     };
 
     obj.getShareLinkDownloadUrl = function (file_id, share_id, callback) {
-        var token = obj.getItem("token");
+        var token = obj.getItem("token") || {};
         $.ajax({
             type: "post",
             url: "https://api.aliyundrive.com/v2/file/get_share_link_download_url",
@@ -729,7 +722,7 @@
     };
 
     obj.getHomeLinkDownloadUrl = function (file_id, drive_id, callback) {
-        var token = obj.getItem("token");
+        var token = obj.getItem("token") || {};
         $.ajax({
             type: "post",
             url: "https://api.aliyundrive.com/v2/file/get_download_url",
@@ -997,7 +990,7 @@
 
         obj.dplayerSupport();
         obj.switchPlayer();
-        obj.videoPageOptimization();
+        obj.videoPageEvent();
     }
     else if (url.indexOf(".aliyundrive.com/drive") > 0) {
         obj.addPageFileList();
@@ -1006,7 +999,7 @@
 
         obj.dplayerSupport();
         obj.switchPlayer();
-        obj.videoPageOptimization();
+        obj.videoPageEvent();
     }
     console.log("=== 阿里云盘 好棒棒！===");
 
