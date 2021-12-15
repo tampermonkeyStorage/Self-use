@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.7.5
+// @version      1.7.6
 // @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -33,52 +33,18 @@
         }
     };
 
-    obj.customSharePwd = function () {
-        $(document).on("DOMNodeInserted", ".ant-modal-root", function() {
-            if ($(".input-share-pwd").length == 0) {
-                var sharePwd = localStorage.getItem("share_pwd");
-                var html = '<div class="pick-wrapper--3pNxV"><div class="ant-dropdown-trigger share-expire-wrapper--3y_Nn">自定义提取码</div></div>';
-                html += '<input type="text" class="ant-input input-share-pwd" value="' + (sharePwd ? sharePwd : "") + '" placeholder="" style="margin-left: 12px;width: 99px;height: 28px;line-height: normal;border: 1px solid #D4D7DE;text-align: center;"></div>'
-                $(".share-by-url--LfcNg").append(html);
-            }
-        });
+    obj.initVideoPage = function () {
+        var default_player = obj.getItem("default_player");
+        if (!default_player || default_player == "DPlayer") {
+            obj.switchPlayer();
 
-        (function(send) {
-            XMLHttpRequest.prototype.send = function() {
-                if (arguments[0] && arguments[0].includes("expiration")) {
-                    var sharePwd = localStorage.getItem("share_pwd");
-                    if (sharePwd) {
-                        var body = JSON.parse(arguments[0]);
-                        body.share_pwd = sharePwd;
-                        arguments[0] = JSON.stringify(body);
-                    }
-                }
-                this.addEventListener("load", function() {
-                    if (this.readyState == 4 && this.status == 200) {
-                        var responseURL = this.responseURL;
-                        if (responseURL.includes("/share_link/create") || responseURL.includes("/share_link/update")) {
-                            var sharePwd = localStorage.getItem("share_pwd");
-                            if (sharePwd) {
-                                var response = JSON.parse(this.response);
-                                if (response.share_pwd = sharePwd) {
-                                    obj.showTipSuccess("自定义分享密码 成功");
-                                }
-                                else {
-                                    localStorage.removeItem("share_pwd");
-                                    obj.showTipError("自定义分享密码 失败，请修改分享密码后重试");
-                                }
-                            }
-                        }
-                    }
-                }, false);
-                send.apply(this, arguments);
-            };
-        })(XMLHttpRequest.prototype.send);
+            obj.dplayerSupport();
+        }
+        else if (default_player == "NativePlayer") {
+            obj.switchPlayer();
 
-        $(document).on("change", ".input-share-pwd", function () {
-            var value = this.value;
-            localStorage.setItem("share_pwd", value);
-        });
+            obj.onNativeVideoPageEvent();
+        }
     };
 
     obj.unlockVideoLimit = function () {
@@ -117,18 +83,18 @@
 
     obj.switchPlayer = function () {
         $(document).on("click", ".header-more--a8O0Y, .ant-dropdown-trigger", function() {
-            if (document.querySelector("video") || document.querySelector("#dplayer")) {
+            if (document.querySelector("video")) {
                 if ($(".ant-switch-player").length == 0) {
-                    var text = obj.getItem("default_player") == "Original" ? "切换到DPlayer播放器" : "切换到原生播放器";
+                    var text = obj.getItem("default_player") == "NativePlayer" ? "切换到DPlayer播放器" : "切换到原生播放器";
                     $(".ant-dropdown-menu").append('<li class="ant-dropdown-menu-item ant-switch-player" role="menuitem"><div class="outer-menu--ihDUR"><div>' + text + '</div></div></li>');
 
                     $(".ant-switch-player").click(function() {
-                        if (obj.getItem("default_player") == "Original") {
+                        if (obj.getItem("default_player") == "NativePlayer") {
                             obj.setItem("default_player", "DPlayer");
                             $(this).find("div").find("div").text("切换到原生播放器");
                             obj.showTipSuccess("正在切换到DPlayer播放器");
 
-                            obj.videoPageEvent();
+                            obj.offNativeVideoPageEvent();
 
                             obj.dplayerSupport();
                             setTimeout(function () {
@@ -136,13 +102,16 @@
                             }, 1000);
                         }
                         else {
-                            obj.setItem("default_player", "Original");
+                            obj.setItem("default_player", "NativePlayer");
                             $(this).find("div").find("div").text("切换到DPlayer播放器");
                             obj.showTipSuccess("正在切换到原生播放器");
 
-                            obj.videoPageEvent();
+                            obj.onNativeVideoPageEvent();
 
-                            obj.video_page.dPlayer && obj.video_page.dPlayer.pause();
+                            if (obj.video_page.dPlayer) {
+                                obj.video_page.dPlayer.destroy();
+                                obj.video_page.dPlayer = null;
+                            }
                             setTimeout(function () {
                                 $(".dplayer").parent().append(obj.video_page.elevideo);
                                 $(".dplayer").remove();
@@ -160,15 +129,7 @@
         });
     };
 
-    obj.videoPageEvent = function () {
-        var default_player = obj.getItem("default_player");
-        if (!default_player || default_player == "DPlayer") {
-            $(document).off("DOMNodeInserted", ".video-player--29_72 .btn--1cZfA");
-            $(document).off("click", "video");
-            $(document).off("mouseover mouseout mousedown", ".video-player--29_72");
-            return;
-        }
-
+    obj.onNativeVideoPageEvent = function () {
         $(document).on("DOMNodeInserted", ".video-player--29_72 .btn--1cZfA", function() {
             var video = document.querySelector("video");
             if (video.paused) {
@@ -242,9 +203,17 @@
         });
     };
 
+    obj.offNativeVideoPageEvent = function () {
+        $(document).off("DOMNodeInserted", ".video-player--29_72 .btn--1cZfA");
+
+        $(document).off("click", "video");
+
+        $(document).off("mouseover mouseout mousedown", ".video-player--29_72");
+    };
+
     obj.dplayerSupport = function () {
         if (document.body) {
-            if (obj.video_page.dPlayer || obj.getItem("default_player") == "Original") {
+            if (window.DPlayer) {
                 return;
             }
 
@@ -281,9 +250,6 @@
         var default_player = obj.getItem("default_player");
         if (!default_player) {
             obj.showTipSuccess("脚本提示：打开页面右侧[更多]菜单可【切换播放器】", 5000);
-        }
-        else if (default_player == "Original") {
-            return;
         }
 
         var dPlayerNode = document.getElementById("dplayer");
@@ -359,7 +325,7 @@
         dPlayer = new window.DPlayer(options);
         obj.video_page.dPlayer = dPlayer;
 
-        dPlayer.on("loadedmetadata", function () {
+        dPlayer.on("loadstart", function () {
             var attributes = obj.video_page.attributes;
             if (Object.keys(attributes).length) {
                 dPlayer.seek(attributes.currentTime);
@@ -473,7 +439,59 @@
         var t = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : 6e3
         , n = e.match(/&x-oss-expires=(\d+)&/);
         return !n || n && n[1] && +"".concat(n[1], "000") - t < Date.now();
-    }
+    };
+
+    obj.customSharePwd = function () {
+        $(document).on("DOMNodeInserted", ".ant-modal-root", function() {
+            if ($(this).find(".ant-modal-title").text() == "分享文件") {
+                if ($(".input-share-pwd").length == 0) {
+                    if ($(".choose-expiration-wrapper--vo0z9").length) {
+                        var sharePwd = localStorage.getItem("share_pwd");
+                        var html = '<label class="label--3Ub6A" style="margin-left: 12px;">自定义提取码</label>';
+                        html += '<input type="text" class="ant-input input-share-pwd" value="' + (sharePwd ? sharePwd : "") + '" placeholder="" style="width: 100px;height: 25px;line-height: normal;border: 1px solid #D4D7DE;text-align: center;"></div>';
+                        $(".choose-expiration-wrapper--vo0z9").append(html);
+                    }
+                }
+            }
+        });
+
+        (function(send) {
+            XMLHttpRequest.prototype.send = function() {
+                if (arguments[0] && arguments[0].includes("expiration")) {
+                    var sharePwd = localStorage.getItem("share_pwd");
+                    if (sharePwd) {
+                        var body = JSON.parse(arguments[0]);
+                        body.share_pwd = sharePwd;
+                        arguments[0] = JSON.stringify(body);
+                    }
+                }
+                this.addEventListener("load", function() {
+                    if (this.readyState == 4 && this.status == 200) {
+                        var responseURL = this.responseURL;
+                        if (responseURL.includes("/share_link/create") || responseURL.includes("/share_link/update")) {
+                            var sharePwd = localStorage.getItem("share_pwd");
+                            if (sharePwd) {
+                                var response = JSON.parse(this.response);
+                                if (response.share_pwd = sharePwd) {
+                                    obj.showTipSuccess("自定义分享密码 成功");
+                                }
+                                else {
+                                    localStorage.removeItem("share_pwd");
+                                    obj.showTipError("自定义分享密码 失败，请修改分享密码后重试");
+                                }
+                            }
+                        }
+                    }
+                }, false);
+                send.apply(this, arguments);
+            };
+        })(XMLHttpRequest.prototype.send);
+
+        $(document).on("change", ".input-share-pwd", function () {
+            var value = this.value;
+            localStorage.setItem("share_pwd", value);
+        });
+    };
 
     obj.initDownloadSharePage = function () {
         if ($(".button-download--batch").length) {
@@ -948,12 +966,14 @@
                             obj.file_page.items = obj.file_page.items.concat(response.items);
                             obj.showTipSuccess("文件列表获取完成 共：" + obj.file_page.items.length + "项");
 
-                            var url = location.href;
-                            if (url.indexOf(".aliyundrive.com/s/") > 0) {
-                                obj.initDownloadSharePage();
-                            }
-                            else if (url.indexOf(".aliyundrive.com/drive") > 0) {
-                                obj.initDownloadHomePage();
+                            if (obj.file_page.items.length) {
+                                var url = location.href;
+                                if (url.indexOf(".aliyundrive.com/s/") > 0) {
+                                    obj.initDownloadSharePage();
+                                }
+                                else if (url.indexOf(".aliyundrive.com/drive") > 0) {
+                                    obj.initDownloadHomePage();
+                                }
                             }
                         }
                     }
@@ -961,13 +981,13 @@
                         response = JSON.parse(this.response);
                         if (response instanceof Object && response.file_id) {
                             obj.video_page.play_info = response;
-                            obj.getItem("default_player") != "Original" && obj.dplayerStart();
+                            obj.getItem("default_player") != "NativePlayer" && obj.dplayerStart();
                         }
                     }
                 }
                 else if (this.readyState == 4 && this.status == 403) {
-                    if (this.responseURL.match(/media-\d+\.ts/) && obj.expires(this.responseURL)) {
-                        if (obj.getItem("default_player") != "Original" && obj.video_page.dPlayer) {
+                    if (obj.expires(this.responseURL)) {
+                        if (obj.video_page.dPlayer) {
                             var media_num = (this.responseURL.match(/media-(\d+)\.ts/) || [])[1] || 0;
                             if (media_num > 5 && obj.video_page.media_num != media_num) {
                                 obj.video_page.media_num = media_num;
@@ -985,20 +1005,16 @@
     if (url.indexOf(".aliyundrive.com/s/") > 0) {
         obj.addPageFileList();
 
-        obj.unlockVideoLimit();
+        obj.initVideoPage();
 
-        obj.dplayerSupport();
-        obj.switchPlayer();
-        obj.videoPageEvent();
+        obj.unlockVideoLimit();
     }
     else if (url.indexOf(".aliyundrive.com/drive") > 0) {
         obj.addPageFileList();
 
-        obj.customSharePwd();
+        obj.initVideoPage();
 
-        obj.dplayerSupport();
-        obj.switchPlayer();
-        obj.videoPageEvent();
+        obj.customSharePwd();
     }
     console.log("=== 阿里云盘 好棒棒！===");
 
