@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.8.0
+// @version      1.8.1
 // @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
 // @match        https://www.aliyundrive.com/drive*
 // @icon         https://gw.alicdn.com/imgextra/i3/O1CN01aj9rdD1GS0E8io11t_!!6000000000620-73-tps-16-16.ico
-// @require      https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js
+// @require      https://cdn.staticfile.org/jquery/3.6.0/jquery.min.js
 // @run-at       document-body
 // @connect      aliyundrive.com
 // @connect      alicloudccp.com
