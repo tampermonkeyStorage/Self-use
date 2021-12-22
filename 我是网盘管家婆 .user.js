@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.3.9
+// @version      0.4.0
 // @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云】 功能概述：【[1]：网盘页面增加资源搜索快捷方式】【[2]：[资源站点]自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地缓存数据库搜索】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -11,6 +11,7 @@
 // @connect      fryaisjx.lc-cn-n1-shared.com
 // @connect      api.kinh.cc
 // @require      https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js
+// @require      https://cdn.staticfile.org/jquery/3.6.0/jquery.min.js
 // @grant        unsafeWindow
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
@@ -85,11 +86,6 @@
                     type: 2,
                 },
                 {
-                    name: "SoV5",
-                    link: "https://www.sov5.cn/search?q=%s",
-                    type: 2,
-                },
-                {
                     name: "淘易搜",
                     link: "http://www.taoyisou.com/s?k=%s",
                     type: 3,
@@ -152,11 +148,6 @@
                     type: 4,
                 },
                 {
-                    name: "56网盘",
-                    link: "http://www.56wangpan.com/search/kw%s",
-                    type: 4,
-                },
-                {
                     name: "搜盘8",
                     link: "https://www.soupan8.com/search/kw%s",
                     type: 4,
@@ -167,46 +158,41 @@
                     type: 4,
                 },
                 {
-                    name: "搜盘网",
-                    link: "http://www.soupan.tv/search/kw%s",
-                    type: 4,
+                    name: "好去网",
+                    link: "https://www.haogow.com/search?keyword=%s",
+                    type: 5,
                 },
                 {
-                    name: "如风搜",
-                    link: "http://www.rufengso.cc/search/kw%s",
-                    type: 4,
+                    name: "乌鸦搜",
+                    link: "https://www.wuyasou.com/search?keyword=%s",
+                    type: 5,
                 },
                 {
-                    name: "巧眯网",
-                    link: "http://www.qiaomi.cn/s/%s",
-                    type: 6,
+                    name: "小悠家",
+                    link: "http://888.xuj.cool/?s=%s",
+                    type: 5,
+                },
+                {
+                    name: "知识库",
+                    link: "https://book.zhishikoo.com/?s=%s",
+                    type: 5,
+                },
+                {
+                    name: "小说搜搜",
+                    link: "https://www.xssousou.com/s/%s.html",
+                    type: 5,
+                },
+                {
+                    name: "熊猫搜书",
+                    link: "https://ebook.huzerui.com/#/",
+                    type: 5,
                 },
                 {
                     name: "小白盘",
                     link: "https://www.xiaobaipan.com/list-%s.html",
                     type: 6,
                 },
-                {
-                    name: "lqkweb",
-                    link: "http://www.lqkweb.com/list?q=%s",
-                    type: 6,
-                },
-                {
-                    name: "盘搜网",
-                    link: "http://www.panso.org/search?q=%s",
-                    type: 6,
-                },
-                {
-                    name: "咕咕云搜索",
-                    link: "https://www.h2ero.com/search?keywords=%s",
-                    type: 6,
-                },
 
-                {
-                    name: "6miu",
-                    link: "http://baiduyun.6miu.com/word.html?kw=%s",
-                    type: 6,
-                },
                 {
                     name: "Java分享网",
                     link: "http://yun.java1234.com/search?q=%s",
@@ -240,11 +226,6 @@
                     type: 8,
                 },
                 {
-                    name: "xingtuhua",
-                    link: "http://wx.xingtuhua.com/so?keyword=%s",
-                    type: 8,
-                },
-                {
                     name: "51网盘搜索",
                     link: "https://m.51caichang.com/so?keyword=%s&page=1&url_path=so",
                     type: 8,
@@ -263,11 +244,6 @@
                 {
                     name: "熊猫搜盘",
                     link: "http://www.sopandas.com/s/%s",
-                    type: 8,
-                },
-                {
-                    name: "云铺子",
-                    link: "http://www.yunpz.net/all/s-%s.html",
                     type: 8,
                 },
                 {
@@ -291,32 +267,12 @@
                     type: 8,
                 },
                 {
-                    name: "一个桔",
-                    link: "http://zhannei.baidu.com/cse/search?q=%s&s=8741474853775767192",
-                    type: 8,
-                },
-                {
-                    name: "好去网",
-                    link: "https://www.haogow.com/search?keyword=%s",
-                    type: 8,
-                },
-                {
-                    name: "乌鸦搜",
-                    link: "https://www.wuyasou.com/search?keyword=%s",
-                    type: 8,
-                },
-                {
                     name: "百度搜吧",
                     link: "https://www.bdsoba.com/search/type_0_1_%s",
                     type: 8,
                 },
 
                 //不能直接搜索
-                {
-                    name: "bdY搜",
-                    link: "http://www.bdyso.com/",
-                    type: 8,
-                },
                 {
                     name: "云盘狗",
                     link: "http://www.yunpangou.com",
@@ -374,21 +330,6 @@
                     type: 9,
                 },
                 {
-                    name: "知识库",
-                    link: "https://book.zhishikoo.com/?s=%s",
-                    type: 10,
-                },
-                {
-                    name: "小说搜搜",
-                    link: "https://www.xssousou.com/s/%s.html",
-                    type: 10,
-                },
-                {
-                    name: "熊猫搜书",
-                    link: "https://ebook.huzerui.com/#/",
-                    type: 10,
-                },
-                {
                     name: "云盘搜",
                     link: "https://www.ypso.cc/#/result?keyword=%s",
                     type: 10,
@@ -399,16 +340,6 @@
                     type: 10,
                 },
                 {
-                    name: "两仪鸟搜索",
-                    link: "http://www.baiduyunsousou.com/search?kw=%s",
-                    type: 10,
-                },
-                {
-                    name: "搜云盘",
-                    link: "https://www.soyunpan.com/search/%s-0-全部-0.html",
-                    type: 10,
-                },
-                {
                     name: "Fastsoso",
                     link: "https://www.fastsoso.cn/search?k=%s",
                     type: 10,
@@ -416,11 +347,6 @@
                 {
                     name: "兄弟盘",
                     link: "https://www.xiongdipan.com/search?k=%s",
-                    type: 10,
-                },
-                {
-                    name: "嗨呀搜索",
-                    link: "http://hy.520mwx.com/search?kw=%s",
                     type: 10,
                 },
                 {
@@ -438,57 +364,33 @@
                     link: "https://www.weitiewang.com/",
                     type: 10,
                 },
-                //影视
-                {
-                    name: "小悠家",
-                    link: "http://888.xuj.cool/?s=%s",
-                    type: 1,
-                },
-                //备选
+                //聚合搜索
                 {
                     name: "盘多多",
                     link: "http://www.panduoduo.top/",
                     //http://www.panduoduo.online/
-                    type: 11,
-                },
-                {
-                    name: "众人搜索网",
-                    link: "http://wangpan.renrensousuo.com/jieguo?sa=网盘搜索&q=%s",
-                    type: 11,
+                    type: 10,
                 },
                 {
                     name: "天天搜索",
                     link: "http://www.daysou.com/s?q=%s&start=0&isget=1&tp=baipan&cl=0&line=2",
-                    type: 11,
-                },
-                {
-                    name: "verypan",
-                    link: "http://www.verypan.com/index/index/baidusearch?keyword=%s&res_type=&orderBy=1",
-                    type: 11,
+                    type: 10,
                 },
                 {
                     name: "微友搜索",
                     link: "http://www.weiyoou8.com/",
-                    type: 11,
+                    type: 10,
                 },
-                /*
-            {
-                name: "城通资源",
-                link: "http://ct.vpan123.com/search/f-%s-1.html",
-                type: 10,
-            },
-            {
-                name: "蓝菊花搜索",
-                link: "http://www.lanjuhua.com/",
-                type: 10,
-            },
-            {
-                name: "telegram",
-                link: "http://www.sssoou.com/",
-                type: 10,
-            },
-            https://polished-sea-d9de.xfyz.workers.dev/
-            */
+                {
+                    name: "telegram",
+                    link: "http://www.sssoou.com/",
+                    type: 10,
+                },
+                {
+                    name: "相逢聚合搜",
+                    link: "https://polished-sea-d9de.xfyz.workers.dev/",
+                    type: 10,
+                },
             ],
             "lanzous": [
                 {
@@ -521,11 +423,6 @@
             ],
             "aliyundrive": [
                 {
-                    name: "云盘资源分享",
-                    link: "https://oook.xyz/",
-                    type: 1,
-                },
-                {
                     name: "阿里盘搜",
                     link: "https://www.alipanso.com/",
                     type: 1,
@@ -533,6 +430,11 @@
                 {
                     name: "阿里云盘小站",
                     link: "https://aliyunshare.cn/",
+                    type: 1,
+                },
+                {
+                    name: "阿里小站",
+                    link: "https://alixiaozhan.net/",
                     type: 1,
                 },
                 {
@@ -546,13 +448,33 @@
                     type: 1,
                 },
                 {
-                    name: "阿里资源论坛",
-                    link: "http://www.yunpan123.com/",
+                    name: "阿里云盘资源论坛",
+                    link: "https://aliyunpanbbs.com/",
                     type: 1,
                 },
                 {
                     name: "阿里云盘资源分享网",
                     link: "https://ypfx.club/",
+                    type: 1,
+                },
+                {
+                    name: "奈斯搜索",
+                    link: "https://www.niceso.fun/",
+                    type: 1,
+                },
+                {
+                    name: "阿里盘搜",
+                    link: "https://www.alipansou.com/",
+                    type: 1,
+                },
+                {
+                    name: "阿里大站",
+                    link: "https://pan.3636360.com/",
+                    type: 1,
+                },
+                {
+                    name: "盘基地",
+                    link: "https://www.panjd.com/",
                     type: 1,
                 },
             ]
@@ -876,21 +798,28 @@
             if (requestUrl.indexOf("/share/verify") >= 0) {
                 var response = xhr.responseJSON;
                 if (!(response instanceof Object && response.errno == 0)) {
-                    obj.share_pwd = null;
                     return;
                 }
                 var sharePwd = (/pwd=([a-z\d]+)/i.exec(options.data) || [])[1];
                 var shareRandsk = decodeURIComponent(response.randsk);
-                if (obj.share_pwd == sharePwd || obj.share_randsk == shareRandsk) {
+                if (obj.share_pwd == sharePwd) {
                     return;
                 }
 
                 var shareId = obj.getShareId();
                 var shareData = obj.getSharePwdLocal(shareId);
+                if (shareData instanceof Object && shareData.share_name) {
+                    if (shareData.share_pwd == sharePwd) {
+                        return;
+                    }
+                    else {
+                        delete shareData.share_name;
+                    }
+                }
                 shareData = Object.assign(shareData || {}, {
                     share_id: shareId,
                     share_pwd: sharePwd,
-                    share_randsk: shareRandsk
+                    share_randsk: decodeURIComponent(response.randsk)
                 });
                 shareData.origin_url || !document.referrer || document.referrer.includes(location.host) || (shareData.origin_url = decodeURIComponent(document.referrer));
                 obj.setSharePwdLocal(shareData);
@@ -2073,32 +2002,11 @@
                 id: ".f-ext span:eq(2) a",
                 href: "href",
             },
-            "pan.sov5.cn": {
-                id: ".super.special.button",
-                href: "href",
-            },
         } [location.host];
 
         var shareLink, sharePwd, b64Link = (/aHR0c.+/.exec($(staticClass.id).attr(staticClass.href)) || [])[0];
         console.log("b64Link：", b64Link);
         if (b64Link) {
-            if (location.host == "pan.sov5.cn") {
-                b64Link = b64Link.replace(/\/item_redirect\?q=/, "").replace(/!/g, "d"); //兼容https://www.sov5.cn/
-                sharePwd = (/密码: ([\w]{4})/.exec($(staticClass.id).parent().next().text()) || [])[1];
-                if (!sharePwd) {
-                    GM_xmlhttpRequest({
-                        method: "GET",
-                        url: location.href,
-                        headers: {
-                            Cookie: "traid=f90ba4dae1ce49e2a5d601220ae0d9c3"
-                        },
-                        onload: function(response) {
-                            sharePwd = (/密码: ([\w]{4})/.exec(response.responseText) || [])[1];
-                        }
-                    });
-                }
-            };
-
             shareLink = decodeURIComponent(b64Node.decodeUnicode(b64Link));
             if (shareLink) {
                 baidu.checkUrlValid(shareLink, sharePwd);
@@ -2116,7 +2024,6 @@
             "www.laisoyixia.com",
             "www.aiyoweia.com",
             "www.zhaoyunpan.cn",
-            "pan.sov5.cn",
         ];
 
         if (obj.isInArray(hosts)) {
@@ -2228,10 +2135,7 @@
     dialog_fileId.run = function() {
         var hosts = [
             "www.58wangpan.com",
-            "www.56wangpan.com",
             "www.soupan8.com",
-            "www.soupan.tv",
-            "www.rufengso.cc",
             "aizhaomu.com"
         ];
 
@@ -2252,29 +2156,9 @@
                 linkId: "#rel-url a",
                 passId: "",
             },
-            "www.qiaomi.cn": {
-                linkId: "#openid",
-                passId: "#btn2",
-            },
-            "www.lqkweb.com": {
-                linkId: ".btn.btn-primary:last",
-                passId: ".modal-footer span",
-            },
-            "www.panso.org": {
-                linkId: ".search-item p a:last",
-                passId: ".search-item span:last",
-            },
-            "www.h2ero.com": {
-                linkId: ".go-btn.btn.btn-success",
-                passId: ".topic-content.center",
-            },
             /*
             ↑以上破解扫码后跳转↑↓以下不用扫码直接跳转↓
             */
-            "baiduyun.6miu.com": {
-                linkId: ".downbutton.center a",
-                passId: "",
-            },
             "yun.java1234.com": {
                 linkId: "#bar a",
                 passId: "#bar font:eq(1)",
@@ -2316,11 +2200,6 @@
     node.run = function() {
         var hosts = [
             "www.xiaobaipan.com/file-",
-            "www.qiaomi.cn/b/",
-            "www.lqkweb.com/file/id=",
-            "www.panso.org/file/",
-            "www.h2ero.com/baiduwangpan/",
-            "baiduyun.6miu.com/show-",
             "yun.java1234.com/article/",
             "www.pantianxia.com",
         ];
