@@ -353,7 +353,6 @@
             contextmenu: [],
             theme: "#b7daff"
         };
-    console.log(options);
 
         var video_preview_play_info = play_info.video_preview_play_info || {};
         if (Array.isArray(video_preview_play_info.live_transcoding_task_list)) {
