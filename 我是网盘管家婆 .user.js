@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.4.0
+// @version      0.4.1
 // @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云】 功能概述：【[1]：网盘页面增加资源搜索快捷方式】【[2]：[资源站点]自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地缓存数据库搜索】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -61,7 +61,394 @@
         $("#smsspan").css({background: "rgba(255,0,0,.7)"});
     };
 
-    obj.searchList = function(source) {
+    obj.isInArray = function(arr) {
+        for (var i = 0; i < arr.length; i++) {
+            if (location.href.indexOf(arr[i]) >= 0) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    obj.getShareId = function (shareLink) {
+        shareLink = shareLink || location.href;
+        if (shareLink.indexOf("pan.baidu.com") > 0 || shareLink.indexOf("yun.baidu.com") > 0) {
+            return (/baidu.com\/(?:s\/1|(?:share|wap)\/init\?surl=)([\w-]{5,25})/.exec(shareLink) || [])[1];
+        }
+        else if (shareLink.indexOf("cloud.189.cn") > 0) {
+            return (/cloud\.189\.cn[a-z\d\/\?\.#]*(?:code=|\/t\/)([\w]{12})/.exec(shareLink) || [])[1];
+        }
+        else if (/[\w-]*\.?lanzou.?\.com/.test(shareLink)) {
+            return (/lanzou.?\.com\/[\w]+\/([\w]+)/.exec(shareLink) || /lanzou.?\.com\/([\w]+)/.exec(shareLink) || [])[1];
+        }
+        else if (shareLink.indexOf("pan.xunlei.com") > 0) {
+            return (/pan\.xunlei\.com\/s\/([\w-]+)/.exec(shareLink) || [])[1];
+        }
+        else if (shareLink.indexOf("aliyundrive.com") > 0) {
+            return (/aliyundrive\.com\/s\/([a-zA-Z\d]+)/.exec(shareLink) || [])[1];
+        }
+        else if (shareLink.indexOf("caiyun.139.com") > 0) {
+            return (/caiyun\.139\.com\/w\/[ri]\/([a-zA-Z\d]+)/.exec(shareLink) || [])[1];
+        }
+        else if (shareLink.indexOf("share.weiyun.com") > 0) {
+            return (/share\.weiyun\.com\/([a-zA-Z\d]+)/.exec(shareLink) || [])[1];
+        }
+        else {
+            return "";
+        }
+    };
+
+    obj.getSharePwdLocal = function(shareId) {
+        var shareList = GM_getValue("share_list") || {};
+        return shareList[shareId];
+    };
+
+    obj.setSharePwdLocal = function(shareData) {
+        if (shareData instanceof Object) {
+            var shareList = GM_getValue("share_list") || {};
+            var shareId = shareData.share_id;
+            shareList[shareId] = shareData;
+            GM_setValue("share_list", shareList);
+        }
+    };
+
+    obj.removeSharePwdLocal = function (shareId) {
+        var shareList = GM_getValue("share_list") || {};
+        if (shareList.hasOwnProperty(shareId)) {
+            delete shareList[shareId];
+            GM_setValue("share_list", shareList);
+        }
+    };
+
+    obj.ajax = function(option) {
+        var details = {
+            method: option.type || "get",
+            url: option.url,
+            responseType: option.dataType,
+            onload: function(result) {
+                if (!result.status || parseInt(result.status / 100) == 2) {
+                    var response = result.response;
+                    try {
+                        response = JSON.parse(response);
+                    } catch(a) {};
+                    option.success && option.success(response);
+                } else {
+                    console.error("http返回错误", result);
+                    option.error && option.error(result);
+                }
+            },
+            onerror: function(result) {
+                console.error("http请求失败", result);
+                option.error && option.error(result.error);
+            }
+        };
+
+        if (option.data instanceof Object) {
+            details.data = Object.keys(option.data).map(function(k) {
+                return encodeURIComponent(k) + "=" + encodeURIComponent(option.data[k]).replace("%20", "+");
+            }).join("&");
+        } else {
+            details.data = option.data
+        }
+
+        if (option.type.toUpperCase() == "GET" && details.data) {
+            details.url = option.url + "?" + details.data;
+            details.data = "";
+        }
+
+        if (option.headers) {
+            details.headers = option.headers;
+        }
+
+        if (option.timeout) {
+            details.timeout = option.timeout;
+        }
+
+        GM_xmlhttpRequest(details);
+    };
+
+    obj.storeSharePwd = function(shareData, callback) {
+        obj.ajax({
+            type: "post",
+            url: "https://fryaisjx.lc-cn-n1-shared.com/1.1/classes/".concat(shareData.share_source),
+            data: JSON.stringify(shareData),
+            headers: {
+                "Content-Type": "application/json;charset=UTF-8",
+                "X-LC-Id": "FrYaIsJxDFzqqgeaT6tHjAjo-gzGzoHsz",
+                "X-LC-Key": "exPA65fcqUGqfbuRFIJIwNUU"
+            },
+            success: function (response) {
+                callback && callback(response);
+            },
+            error: function () {
+                callback && callback("");
+            }
+        });
+    };
+
+    obj.querySharePwd = function(shareSource, shareId, callback) {
+        obj.ajax({
+            type: "get",
+            url: "https://fryaisjx.lc-cn-n1-shared.com/1.1/classes/".concat(shareSource, "?where=").concat(JSON.stringify({share_id: shareId})),
+            headers: {
+                "Content-Type": "application/json;charset=UTF-8",
+                "X-LC-Id": "FrYaIsJxDFzqqgeaT6tHjAjo-gzGzoHsz",
+                "X-LC-Key": "exPA65fcqUGqfbuRFIJIwNUU"
+            },
+            success: function (response) {
+                if (response instanceof Object && Array.isArray(response.results)) {
+                    var pwds = [], results = [];
+                    response.results.forEach(function(item) {
+                        var pwd = item.share_pwd || item.share_randsk;
+                        if (pwd && !pwds.includes(pwd)) {
+                            pwds.push(pwd);
+                            results.push(item);
+                        }
+                    });
+                    callback && callback(results.length ? results : "");
+                }
+                else {
+                    callback && callback("");
+                }
+            },
+            error: function () {
+                callback && callback("");
+            }
+        });
+    };
+
+    obj.queryShareRandsk = function (shareSource, shareId, callback) {
+        obj.ajax({
+            type: "get",
+            url: "https://api.kinh.cc/BaiDu/Share/Query.php?ShareUrl=1" + shareId + "&type=BaiduCloud",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
+            },
+            success: function (response) {
+                if (response instanceof Object && response.status == 0) {
+                    response = Object.assign({
+                        share_randsk: response.Randsk
+                    }, response);
+                    callback && callback(response);
+                }
+                else {
+                    callback && callback("");
+                }
+            },
+            error: function (error) {
+                callback && callback("");
+            }
+        });
+    };
+
+    obj.setCookie = function (e, o, t, i, c) {
+        var s = new Date , a = "" , r = "";
+        s.setDate(s.getDate() + t);
+        c && (a = ";domain=" + c);
+        i && (r = ";path=" + i);
+        document.cookie = e + "=" + encodeURIComponent(o) + (null == t ? "" : ";expires=" + s.toGMTString()) + r + a;
+    };
+
+    obj.randString = function(length) {
+        var possible = "abcdefghijklmnopqrstuvwxyz0123456789";
+        var text = "";
+        for (var i = 0; i < length; i++) {
+            text += possible.charAt(Math.floor(Math.random() * possible.length));
+        }
+        return text;
+    };
+
+    obj.getParam = function(e, t) {
+        var n = new RegExp("(?:^|\\?|#|&)" + e + "=([^&#]*)(?:$|&|#)", "i"),
+            i = n.exec(t || location.href);
+        return i ? i[1] : ""
+    };
+
+    obj.initDialog = function () {
+        obj.dialogCss();
+
+        obj.dialogNode();
+
+        obj.addWebItems();
+
+        obj.dialogEvent();
+    };
+
+    obj.dialogCss = function () {
+        var cssArr = [
+            ".dialog-dialog{z-index:999999;width:100%;height:100%;position:fixed;top:0;left:0;bottom:0;background-color:rgba(0,0,0,0.5);display:none;justify-content:center;align-items:center;box-shadow:0 0.5rem 1rem rgba(0,0,0,0.15) !important}",
+            ".dialog-dialog .dialog-body{width:888px;padding:10px 10px 10px 10px;background-color:#fff;border-radius:5px;margin-top:0px}",
+            ".dialog-dialog .dialog-extra{font-size:12px;color:#878c9c;line-height:18px;text-align:center;height:47 px;padding-top:15 px;background-color:#f5f6fa;border-top:1 px solid #f0f0f2}",
+            ".dialog-dialog .dialog-header{background-color:#fafdff;user-select:none;font-size:20px;font-weight:bold;border-bottom:1px solid #ddd;padding-bottom:10px}",
+            ".dialog-dialog .dialog-close{user-select:none;float:right;font-size:20px;cursor:pointer;padding-right:10px}",
+            ".dialog-dialog .dialog-close:hover{color:#e74c3c}",
+            ".dialog-dialog .dialog-menus{padding:1px;border-bottom:1px solid #ddd;border-style:ridge}",
+            ".dialog-dialog .dialog-menus p{line-height:30px;border-style:ridge}",
+            ".dialog-dialog button{width:20%;height:30px;background-color:#fafdff;color:#03081A;}",
+            ".dialog-dialog .btn-cache-search{margin:0 35px;}",
+            ".dialog-dialog .active{background-color:#06a7ff;color:#fff;}",
+            ".dialog-dialog .cache-count{width:18%;height:25px;color:green;font-weight:900;;font-size:20px;;text-align:center;}",
+            ".dialog-dialog .cache-clear{color:red;float:right}",
+            ".dialog-dialog .find-key{width:78%;height:25px;}",
+            ".dialog-dialog .find-share{color:green;float:right}",
+
+            ".dialog-dialog .web-items{width:100%;max-height:400px;overflow-y:auto;box-sizing:border-box;padding:1px;}",
+            ".dialog-dialog .web-items:hover::-webkit-scrollbar{width:5px}",
+            ".dialog-dialog .web-items::-webkit-scrollbar{width:0;height:0}",
+            ".dialog-dialog .web-items::-webkit-scrollbar-thumb{background-color:#95a5a6}",
+            ".dialog-dialog .web-items::-webkit-scrollbar-track{box-shadow:inset 0 0 5px rgba(0,0,0,0.2);background:#dddddd}",
+            ".dialog-dialog .web-items .item{border-bottom:1px solid #ddd;padding:5px;white-space:wrap;word-break:break-all;font-size:15px}",
+            ".dialog-dialog .cache-items span{font-size:15px;font-weight:600}",
+            ".dialog-dialog .web-items em{color:green;margin-right:0.2rem;font-style:normal}",
+
+            ".dialog-dialog .cache-items{width:100%;max-height:400px;overflow-y:auto;box-sizing:border-box;padding:1px 10px 1px 10px}",
+            ".dialog-dialog .cache-items:hover::-webkit-scrollbar{width:5px}",
+            ".dialog-dialog .cache-items::-webkit-scrollbar{width:0;height:0}",
+            ".dialog-dialog .cache-items::-webkit-scrollbar-thumb{background-color:#95a5a6}",
+            ".dialog-dialog .cache-items::-webkit-scrollbar-track{box-shadow:inset 0 0 5px rgba(0,0,0,0.2);background:#dddddd}",
+            ".dialog-dialog .cache-items .item{border-bottom:1px solid #ddd;padding:5px;white-space:wrap;word-break:break-all;font-size:15px}",
+            ".dialog-dialog .cache-items .item:last-child{border-bottom:none}",
+            ".dialog-dialog .cache-items .item a.cache-link{color:#2980b9;text-decoration:none}",
+            ".dialog-dialog .cache-items .item a.cache-link:hover{text-decoration:underline}",
+            ".dialog-dialog .cache-items .item .pwd{color:green;margin-left:1rem}",
+            ".dialog-dialog .cache-items em{color:green;margin-right:0.2rem;font-style:normal}",
+            ".dialog-dialog .cache-items span{font-size:15px;font-weight:600}",
+        ];
+        $("<style></style>").text(cssArr.join("\n")).appendTo(document.head || document.documentElement);
+    };
+
+    obj.dialogNode = function () {
+        if ($(".dialog-dialog").length == 0) {
+            var html = '<div class="dialog-dialog"><div class="dialog-body"><div class="dialog-header">资源搜索<span class="dialog-close">X</span></div><div class="dialog-menus"><p><button class="btn-web-search active">资源站点搜索</button><button class="btn-cache-search">本地缓存搜索</button>存储数量：<input type="text" readonly="readonly" value="0" class="cache-count"><button class="cache-clear">清空缓存</button></p><p><input type="text" class="find-key" placeholder="请输入搜索关键字（本地搜索支持：链接、提取码、文件名、等）"><button class="find-share">查找分享</button></p></div><div class="web-items"></div><div class="cache-items"></div></div></div>'
+            $(document.body).append(html);
+
+            var shareList = GM_getValue("share_list") || {};
+            $(".dialog-dialog .cache-count").val(Object.keys(shareList).length);
+        }
+    };
+
+    obj.dialogEvent = function () {
+        $(".dialog-dialog .dialog-close").click(function() {
+            $(".dialog-dialog .cache-share").empty();
+            $(".dialog-dialog").css({display: "none"});
+        });
+
+        $(".btn-web-search, .btn-cache-search").click(function() {
+            var innerText = this.innerText, $this = $(this);
+            if (innerText == "资源站点搜索") {
+                if ($this.hasClass("active") == false) {
+                    $this.addClass("active");
+                    $this.next().removeClass("active");
+                }
+                $(".dialog-dialog .cache-items").css({display: "none"});
+                $(".dialog-dialog .web-items").css({display: "block"});
+            }
+            else if (innerText == "本地缓存搜索") {
+                $this.toggleClass("active", true);
+                $this.prev().removeClass("active");
+                $(".dialog-dialog .cache-items").empty();
+                $(".dialog-dialog .web-items").css({display: "none"});
+                $(".dialog-dialog .cache-items").css({display: "block"});
+            }
+        });
+
+        $(".dialog-dialog .cache-clear").click(function() {
+            var shareList = GM_getValue("share_list") || {};
+            if (Object.keys(shareList).length > 0) {
+                if (window.confirm("确定清空本地缓存吗？")) {
+                    GM_deleteValue("share_list");
+                    shareList = GM_getValue("share_list") || {};
+                    $(".dialog-dialog .cache-count").val(Object.keys(shareList).length);
+                };
+            }
+        });
+
+        $(".dialog-dialog .find-share").click(function() {
+            var innerText = $(".dialog-dialog .dialog-menus .active").text();
+            if (innerText == "资源站点搜索") {
+                obj.addWebItems();
+
+                var $active = $(".dialog-dialog .web-items .active");
+                if ($active.length) {
+                    var dataSource = $active.attr("data-source");
+                    var dataIndex = $active.attr("data-index");
+                    var webValue = $(".dialog-dialog .find-key").val();
+                    var searchList = obj.searchList()[dataSource];
+                    var searchLink = searchList[dataIndex].link.replace("%s", webValue);
+                    if (searchLink) {
+                        setTimeout(function() { window.open(searchLink); }, 500);
+                    }
+                }
+                else {
+                    alert("请在下方选中一个资源搜索引擎");
+                }
+            }
+            else if (innerText == "本地缓存搜索") {
+                var cacheValue = $(".dialog-dialog .find-key").val();
+                if (!cacheValue) {
+                    alert("支持对任意字段搜索（例如：链接、提取码、文件名、等）");
+                    return;
+                }
+                $(".dialog-dialog .cache-items").empty();
+
+                var index = 0;
+                var shareList = GM_getValue("share_list") || {};
+                Object.keys(shareList).forEach(function(shareId) {
+                    var oneShare = shareList[shareId];
+                    var strShare = Object.values(oneShare).join(" ");
+                    if (strShare.indexOf(cacheValue) >= 0) {
+                        var source = {baidu: "百度", lanzous: "蓝奏", ty189: "天翼", xunlei: "迅雷", aliyundrive: "阿里", caiyun: "彩云", weiyun: "微云"}[oneShare.share_source];
+                        var html = '<div><em>['.concat(++index) + ']</em><span>'.concat('<em>[ ' + source + ' ]</em>').concat(oneShare.share_name || (oneShare.origin_title || "").split("-")[0] || "") + '</span></div>';
+                        html += '<div class="item">链接：<a class="cache-link" href="'.concat(oneShare.share_url, '" target="_blank">').concat(oneShare.share_url, '</a><span class="pwd">').concat(oneShare.share_pwd ? "提取码：" + oneShare.share_pwd : "", "</span></div>");
+                        $(".dialog-dialog .cache-items").append(html);
+                    }
+                });
+            }
+        });
+
+        $(".find-key").keydown(function(e) {
+            //输入框回车事件
+            if (e.keyCode == 13) {
+                $(".dialog-dialog .find-share").click();
+            }
+        });
+
+        $(".dialog-dialog .web-items button").click(function() {
+            var $this = $(this);
+            if ($this.hasClass("active")) {
+                $(".dialog-dialog .find-share").click();
+            }
+            else {
+                $this.siblings().removeClass("active");
+                $this.addClass("active");
+            }
+        });
+
+        $(".dialog-dialog").click(function (event) {
+            if ($(event.target).closest(".dialog-body").length == 0) {
+                $(".dialog-dialog .dialog-close").click();
+            }
+        });
+    };
+
+    obj.addWebItems = function () {
+        if ($(".dialog-dialog .web-items .item").length == 0) {
+            var searchList = obj.searchList();
+            Object.keys(searchList).forEach(function(shareSource) {
+                var sourceName = {baidu: "百度", lanzous: "蓝奏", ty189: "天翼", xunlei: "迅雷", aliyundrive: "阿里", caiyun: "彩云", weiyun: "微云"}[shareSource] + "资源搜索引擎";
+                $(".dialog-dialog .web-items").append('<span><em>[ ' + sourceName + ' ]</em></span><br/>');
+
+                searchList[shareSource].forEach(function(item, index) {
+                    var html = '<button class="item" data-source="' + shareSource + '" data-index="' + index + '">' + item.name + '</button>';
+                    $(".dialog-dialog .web-items").append(html);
+                });
+
+                $(".dialog-dialog .web-items").append('<div style="border-bottom-style:double;"></div><br/>');
+            });
+        }
+    };
+
+    obj.searchList = function() {
         //此列表不分先后，不定时更新
         return {
             "baidu": [
@@ -395,41 +782,61 @@
             "lanzous": [
                 {
                     name: "蓝瘦网页版",
-                    link: "https://www.sixyin.com/disk-search",
+                    link: "https://www.sixyin.com/disk-search?keyword=%s",
                     type: 1,
                 },
                 {
                     name: "异星软件空间",
-                    link: "https://www.yxssp.com/",
+                    link: "https://www.yxssp.com/?s=%s",
                     type: 1,
                 },
                 {
                     name: "乐享",
-                    link: "https://www.lxapk.com/",
+                    link: "https://www.lxapk.com/?s=%s",
                     type: 1,
                 },
             ],
             "ty189": [
                 {
                     name: "天翼小站",
-                    link: "https://yun.hei521.cn/",
+                    link: "https://yun.hei521.cn/index.php/search/%s/",
                     type: 1,
                 },
                 {
                     name: "奇它博客",
-                    link: "https://qitablog.com/circle/tianyiyun",
+                    link: "https://bbs.zhiqan.com/?s=%s",
                     type: 1,
                 },
             ],
             "aliyundrive": [
                 {
                     name: "阿里盘搜",
-                    link: "https://www.alipanso.com/",
+                    link: "https://www.alipanso.com/search.html?page=1&keyword=%s",
                     type: 1,
                 },
                 {
                     name: "阿里云盘小站",
-                    link: "https://aliyunshare.cn/",
+                    link: "https://aliyunshare.org/?q=%s",
+                    type: 1,
+                },
+                {
+                    name: "云盘资源网",
+                    link: "https://www.yunpanziyuan.com/fontsearch.htm?fontname=%s",
+                    type: 1,
+                },
+                {
+                    name: "奈斯搜索",
+                    link: "https://www.niceso.fun/search/?q=%s",
+                    type: 1,
+                },
+                {
+                    name: "阿里盘搜",
+                    link: "https://www.alipansou.com/search?k=%s",
+                    type: 1,
+                },
+                {
+                    name: "阿里大站",
+                    link: "https://pan.3636360.com/search?keyword=%s",
                     type: 1,
                 },
                 {
@@ -438,38 +845,18 @@
                     type: 1,
                 },
                 {
-                    name: "云盘资源网",
-                    link: "https://www.yunpanziyuan.com/",
-                    type: 1,
-                },
-                {
                     name: "阿里盘盘",
                     link: "https://www.panpanr.com/",
                     type: 1,
                 },
                 {
-                    name: "阿里云盘资源论坛",
+                    name: "阿里资源论坛",
                     link: "https://aliyunpanbbs.com/",
                     type: 1,
                 },
                 {
-                    name: "阿里云盘资源分享网",
+                    name: "阿里资源分享网",
                     link: "https://ypfx.club/",
-                    type: 1,
-                },
-                {
-                    name: "奈斯搜索",
-                    link: "https://www.niceso.fun/",
-                    type: 1,
-                },
-                {
-                    name: "阿里盘搜",
-                    link: "https://www.alipansou.com/",
-                    type: 1,
-                },
-                {
-                    name: "阿里大站",
-                    link: "https://pan.3636360.com/",
                     type: 1,
                 },
                 {
@@ -478,288 +865,7 @@
                     type: 1,
                 },
             ]
-        }[source];
-    };
-
-    obj.isInArray = function(arr) {
-        for (var i = 0; i < arr.length; i++) {
-            if (location.href.indexOf(arr[i]) >= 0) {
-                return true;
-            }
-        }
-        return false;
-    };
-
-    obj.getShareId = function (shareLink) {
-        shareLink = shareLink || location.href;
-        if (shareLink.indexOf("pan.baidu.com") > 0 || shareLink.indexOf("yun.baidu.com") > 0) {
-            return (/baidu.com\/(?:s\/1|(?:share|wap)\/init\?surl=)([\w-]{5,25})/.exec(shareLink) || [])[1];
-        }
-        else if (shareLink.indexOf("cloud.189.cn") > 0) {
-            return (/cloud\.189\.cn[a-z\d\/\?\.#]*(?:code=|\/t\/)([\w]{12})/.exec(shareLink) || [])[1];
-        }
-        else if (/[\w-]*\.?lanzou.?\.com/.test(shareLink)) {
-            return (/lanzou.?\.com\/[\w]+\/([\w]+)/.exec(shareLink) || /lanzou.?\.com\/([\w]+)/.exec(shareLink) || [])[1];
-        }
-        else if (shareLink.indexOf("pan.xunlei.com") > 0) {
-            return (/pan\.xunlei\.com\/s\/([\w-]+)/.exec(shareLink) || [])[1];
-        }
-        else if (shareLink.indexOf("aliyundrive.com") > 0) {
-            return (/aliyundrive\.com\/s\/([a-zA-Z\d]+)/.exec(shareLink) || [])[1];
-        }
-        else if (shareLink.indexOf("caiyun.139.com") > 0) {
-            return (/caiyun\.139\.com\/w\/[ri]\/([a-zA-Z\d]+)/.exec(shareLink) || [])[1];
-        }
-        else if (shareLink.indexOf("share.weiyun.com") > 0) {
-            return (/share\.weiyun\.com\/([a-zA-Z\d]+)/.exec(shareLink) || [])[1];
-        }
-        else {
-            return "";
-        }
-    };
-
-    obj.getSharePwdLocal = function(shareId) {
-        var shareList = GM_getValue("share_list") || {};
-        return shareList[shareId];
-    };
-
-    obj.setSharePwdLocal = function(shareData) {
-        if (shareData instanceof Object) {
-            var shareList = GM_getValue("share_list") || {};
-            var shareId = shareData.share_id;
-            shareList[shareId] = shareData;
-            GM_setValue("share_list", shareList);
-        }
-    };
-
-    obj.removeSharePwdLocal = function (shareId) {
-        var shareList = GM_getValue("share_list") || {};
-        if (shareList.hasOwnProperty(shareId)) {
-            delete shareList[shareId];
-            GM_setValue("share_list", shareList);
-        }
-    };
-
-    obj.ajax = function(option) {
-        var details = {
-            method: option.type || "get",
-            url: option.url,
-            responseType: option.dataType,
-            onload: function(result) {
-                if (!result.status || parseInt(result.status / 100) == 2) {
-                    var response = result.response;
-                    try {
-                        response = JSON.parse(response);
-                    } catch(a) {};
-                    option.success && option.success(response);
-                } else {
-                    console.error("http返回错误", result);
-                    option.error && option.error(result);
-                }
-            },
-            onerror: function(result) {
-                console.error("http请求失败", result);
-                option.error && option.error(result.error);
-            }
         };
-
-        if (option.data instanceof Object) {
-            details.data = Object.keys(option.data).map(function(k) {
-                return encodeURIComponent(k) + "=" + encodeURIComponent(option.data[k]).replace("%20", "+");
-            }).join("&");
-        } else {
-            details.data = option.data
-        }
-
-        if (option.type.toUpperCase() == "GET" && details.data) {
-            details.url = option.url + "?" + details.data;
-            details.data = "";
-        }
-
-        if (option.headers) {
-            details.headers = option.headers;
-        }
-
-        if (option.timeout) {
-            details.timeout = option.timeout;
-        }
-
-        GM_xmlhttpRequest(details);
-    };
-
-    obj.storeSharePwd = function(shareData, callback) {
-        obj.ajax({
-            type: "post",
-            url: "https://fryaisjx.lc-cn-n1-shared.com/1.1/classes/".concat(shareData.share_source),
-            data: JSON.stringify(shareData),
-            headers: {
-                "Content-Type": "application/json;charset=UTF-8",
-                "X-LC-Id": "FrYaIsJxDFzqqgeaT6tHjAjo-gzGzoHsz",
-                "X-LC-Key": "exPA65fcqUGqfbuRFIJIwNUU"
-            },
-            success: function (response) {
-                callback && callback(response);
-            },
-            error: function () {
-                callback && callback("");
-            }
-        });
-    };
-
-    obj.querySharePwd = function(shareSource, shareId, callback) {
-        obj.ajax({
-            type: "get",
-            url: "https://fryaisjx.lc-cn-n1-shared.com/1.1/classes/".concat(shareSource, "?where=").concat(JSON.stringify({share_id: shareId})),
-            headers: {
-                "Content-Type": "application/json;charset=UTF-8",
-                "X-LC-Id": "FrYaIsJxDFzqqgeaT6tHjAjo-gzGzoHsz",
-                "X-LC-Key": "exPA65fcqUGqfbuRFIJIwNUU"
-            },
-            success: function (response) {
-                if (response instanceof Object && Array.isArray(response.results)) {
-                    var pwds = [], results = [];
-                    response.results.forEach(function(item) {
-                        var pwd = item.share_pwd || item.share_randsk;
-                        if (pwd && !pwds.includes(pwd)) {
-                            pwds.push(pwd);
-                            results.push(item);
-                        }
-                    });
-                    callback && callback(results.length ? results : "");
-                }
-                else {
-                    callback && callback("");
-                }
-            },
-            error: function () {
-                callback && callback("");
-            }
-        });
-    };
-
-    obj.queryShareRandsk = function (shareSource, shareId, callback) {
-        obj.ajax({
-            type: "get",
-            url: "https://api.kinh.cc/BaiDu/Share/Query.php?ShareUrl=1" + shareId + "&type=BaiduCloud",
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
-            },
-            success: function (response) {
-                if (response instanceof Object && response.status == 0) {
-                    response = Object.assign({
-                        share_randsk: response.Randsk
-                    }, response);
-                    callback && callback(response);
-                }
-                else {
-                    callback && callback("");
-                }
-            },
-            error: function (error) {
-                callback && callback("");
-            }
-        });
-    };
-
-    obj.addCache = function() {
-        //缓存管理
-        if ($(".cache-wrapper").length) {
-            $(".cache-wrapper").css({display: "flex"});
-            return;
-        }
-
-        var cssArr = [
-            ".cache-wrapper{z-index:999999;width:100%;height:100%;position:fixed;top:0;left:0;bottom:0;background-color:rgba(0,0,0,0.5);display:none;justify-content:center;align-items:center;box-shadow:0 0.5rem 1rem rgba(0,0,0,0.15) !important}",
-            ".cache-wrapper .card{width:550px;padding:10px 10px 10px 10px;background-color:#fff;border-radius:5px;margin-top:0px}",
-            ".cache-wrapper .card .heading{user-select:none;font-size:20px;font-weight:bold;border-bottom:1px solid #ddd;padding-bottom:10px}",
-            ".cache-wrapper .card .heading .clear-close{user-select:none;float:right;font-size:25px;cursor:pointer;padding-right:10px}",
-            ".cache-wrapper .card .heading .clear-close:hover{color:#e74c3c}",
-            ".cache-wrapper .card .body{padding:1px;border-bottom:1px solid #ddd}",
-            ".cache-wrapper .card .body p{line-height:30px}",
-            ".cache-wrapper .card .body p .cache-count{color:green;font-weight:900;font-size:20px;}",
-            ".cache-wrapper .card .body p .clear-cache{width:20%;height:30px;color:red;float:right}",
-            ".cache-wrapper .card .body p .cache-key{width:78%;height:25px;}",
-            ".cache-wrapper .card .body p .cache-find{width:20%;height:30px;color:green;float:right}",
-
-            ".cache-wrapper .find-links{width:100%;max-height:400px;overflow-y:auto;box-sizing:border-box;padding:1px 10px 1px 10px}",
-            ".cache-wrapper .find-links:hover::-webkit-scrollbar{width:5px}",
-            ".cache-wrapper .find-links::-webkit-scrollbar{width:0;height:0}",
-            ".cache-wrapper .find-links::-webkit-scrollbar-thumb{background-color:#95a5a6}",
-            ".cache-wrapper .find-links::-webkit-scrollbar-track{box-shadow:inset 0 0 5px rgba(0,0,0,0.2);background:#dddddd}",
-            ".cache-wrapper .find-links .item{border-bottom:1px solid #ddd;padding:5px;white-space:wrap;word-break:break-all;font-size:15px}",
-            ".cache-wrapper .find-links .item:last-child{border-bottom:none}",
-            ".cache-wrapper .find-links .item a.cache-link{color:#2980b9;text-decoration:none}",
-            ".cache-wrapper .find-links .item a.cache-link:hover{text-decoration:underline}",
-            ".cache-wrapper .find-links .item .pwd{color:green;margin-left:1rem}",
-            ".cache-wrapper .find-links em{color:green;margin-right:0.2rem;font-style:normal}",
-            ".cache-wrapper .find-links span{font-size:15px;font-weight:600}",
-        ];
-        $("<style></style>").text(cssArr.join("\n")).appendTo(document.head || document.documentElement);
-
-        var html = '<div class="cache-wrapper" style="display: flex;"><div class="card"><div class="heading">本地存储管理<span class="clear-close">X</span></div><div class="body"><p>存储数量：<span class="cache-count">0</span><button class="clear-cache">清空缓存</button></p><p><input type="text" class="cache-key" placeholder="请输入搜索关键字（链接、提取码、文件名、等）"><button class="cache-find">查找分享</button></p></div><div class="find-links"></div></div></div>'
-        $(document.body).append(html);
-
-        var shareList = GM_getValue("share_list") || {};
-        $(".cache-wrapper .cache-count").text(Object.keys(shareList).length);
-
-        $(".cache-wrapper .clear-close").click(function() {
-            $(".cache-wrapper .find-links").empty();
-            $(".cache-wrapper").css({display: "none"});
-        });
-
-        $(".cache-wrapper .clear-cache").click(function() {
-            if (Object.keys(shareList).length > 0) {
-                if (window.confirm("确定清空本地缓存吗？")) {
-                    GM_deleteValue("share_list");
-                    shareList = GM_getValue("share_list") || {};
-                    $(".cache-wrapper .cache-count").text(Object.keys(shareList).length);
-                };
-            }
-        });
-
-        $(".cache-wrapper .cache-find").click(function() {
-            $(".cache-wrapper .find-links").empty();
-            var sValue = $(".cache-wrapper .cache-key").val();
-            if (!sValue) {
-                alert("支持对任意字段搜索（例如：链接、提取码、文件名、等）");
-                return;
-            }
-
-            var index = 0;
-            Object.keys(shareList).forEach(function(shareId) {
-                var oneShare = shareList[shareId];
-                var strShare = Object.values(oneShare).join(" ");
-                if (strShare.indexOf(sValue) >= 0) {
-                    var source = {baidu: "百度", lanzous: "蓝奏", ty189: "天翼", xunlei: "迅雷", aliyundrive: "阿里", caiyun: "彩云", weiyun: "微云"}[oneShare.share_source];
-                    var html = '<div><em>['.concat(++index) + ']</em><span>'.concat('<em>[ ' + source + ' ]</em>').concat(oneShare.share_name || (oneShare.origin_title || "").split("-")[0] || "") + '</span></div>';
-                    html += '<div class="item">链接：<a class="cache-link" href="'.concat(oneShare.share_url, '" target="_blank">').concat(oneShare.share_url, '</a><span class="pwd">').concat(oneShare.share_pwd ? "提取码：" + oneShare.share_pwd : "", "</span></div>");
-                    $(".cache-wrapper .find-links").append(html);
-                }
-            });
-        });
-    };
-
-    obj.setCookie = function (e, o, t, i, c) {
-        var s = new Date , a = "" , r = "";
-        s.setDate(s.getDate() + t);
-        c && (a = ";domain=" + c);
-        i && (r = ";path=" + i);
-        document.cookie = e + "=" + encodeURIComponent(o) + (null == t ? "" : ";expires=" + s.toGMTString()) + r + a;
-    };
-
-    obj.randString = function(length) {
-        var possible = "abcdefghijklmnopqrstuvwxyz0123456789";
-        var text = "";
-        for (var i = 0; i < length; i++) {
-            text += possible.charAt(Math.floor(Math.random() * possible.length));
-        }
-        return text;
-    };
-
-    obj.getParam = function(e, t) {
-        var n = new RegExp("(?:^|\\?|#|&)" + e + "=([^&#]*)(?:$|&|#)", "i"),
-            i = n.exec(t || location.href);
-        return i ? i[1] : ""
     };
 
     var baidu = {};
@@ -876,81 +982,6 @@
         }
     };
 
-    baidu.getRandomColor = function() {
-        return '#' + ('00000' + (Math.random() * 0x1000000 << 0).toString(16)).substr( - 6);
-    };
-
-    baidu.addSearch = function() {
-        var fatherHome = $(".nd-main-layout__body").get(0) || $(".frame-main").get(0);
-        if (!fatherHome) {
-            return;
-        }
-
-        $(fatherHome).toggleClass("bseg_f_home", true).prepend('<span class="bseg_s"></span>');
-        $(".bseg_s").append('<select class="bseg_select bseg_cursor_pointer"></select>');
-        $(".bseg_s").append('<input class="bseg_scont" id="scont" placeholder="请输入搜索关键字" autocomplete="off">');
-        $(".bseg_s").append('<div class="bseg_x_btnd bseg_cursor_pointer bseg_user_select">✖</div>');
-        $(".bseg_s").append('<button class="bseg_btn bseg_user_select bseg_cursor_pointer bseg_btn_bg_mouseleave">搜索</button>');
-        $(".bseg_s").append('<button class="bseg_btn_local bseg_user_select bseg_cursor_pointer bseg_btn_bg_mouseleave">本地存储</button>');
-
-        var searchList = obj.searchList("baidu");
-        console.log("searchList length", searchList.length);
-        searchList.forEach(function(value, index) {
-            $(".bseg_select").append('<option class="bseg_option bseg_option_' + value.type + ' bseg_cursor_pointer">' + value.name + '</option>');
-        });
-
-        var csss = [
-            ".bseg_cursor_pointer {cursor:pointer}",
-            ".bseg_user_select {-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none}",
-            ".bseg_s {font-family:Microsoft YaHei,arial,SimSun,宋体!important}",
-            ".bseg_select {margin:0 0 0 5px;width:100px;outline:0;border:1px solid #a9a9a9;border-radius:0;background-color:#fff;color:#000;font-size:15px}",
-            ".bseg_scont {box-sizing:content-box;margin:0;padding:2px;border-radius:0;font-family:Microsoft YaHei,arial,SimSun,宋体;cursor:text}",
-            ".bseg_scont,.bseg_x_btnd {display:inline-block;outline:0;border-top:1px solid #a9a9a9;border-right:0;border-bottom:1px solid #a9a9a9;border-left:0;background-color:#fff;color:#000;font-size:15px}",
-            ".bseg_x_btnd {padding:2px 0;width:20px;height:auto;text-align:center;line-height:24px}",
-            ".bseg_btn {padding:0;width:60px;height:30px;border:1px solid #09aaff;border-radius:0 17px 17px 0;color:#fff;font-size:15px}",
-            ".bseg_btn_bg_mouseleave {background-color:#06a7ff}",
-            ".bseg_f_home {margin-left:0!important}",
-            ".bseg_f_home>.bseg_s {margin:0 0 0 10px}",
-            ".bseg_f_home>.bseg_s>.bseg_select {height:30px}",
-            ".bseg_f_home>.bseg_s>.bseg_scont {width:264px;height:24px}",
-            ".bseg_option {background-color:#fff;text-align:center;text-align-last:center}",
-            ".bseg_btn_local {padding:0;width:100px;height:30px;border:1px solid #09aaff;border-radius:17px;color:#fff;font-size:15px;margin:0px 5px;}",
-        ];
-        for(var i = 1; i < 11; i++) {
-            csss.push(".bseg_option_" + i + " {background-color:" + baidu.getRandomColor() + ";color:#000000;font-weight:900}");
-        }
-        $("<style></style>").text(csss.join(" ")).appendTo(document.head || document.documentElement);
-
-        $("#scont").keydown(function(e) {
-            //输入框回车事件
-            if (e.keyCode == 13) {
-                $(".bseg_btn").click();
-            }
-        });
-
-        $(".bseg_x_btnd").click(function() {
-            //删除按钮点击事件
-            $("#scont").val("");
-        });
-
-        $(".bseg_btn").click(function() {
-            //搜索按钮点击事件
-            var optionIndex = $('.bseg_select').prop('selectedIndex');
-            var inputVal = $("#scont").val(); //获得输入框数据
-            if (!inputVal) {
-                obj.showTipError("请先输入搜索关键字");
-                return;
-            }
-            var searchList = obj.searchList("baidu");
-            var searchLink = searchList[optionIndex].link.replace("%s", inputVal);
-            if (searchLink) {
-                setTimeout(function() { window.open(searchLink); }, 500);
-            }
-        });
-
-        $(".bseg_btn_local").click(obj.addCache);
-    };
-
     baidu.updateShareStorage = function() {
         var shareId = obj.getShareId();
         if (shareId && /(.*)_/.test(document.title)) {
@@ -1048,7 +1079,6 @@
     };
 
     baidu.checkUrlValid = function(shareLink, sharePwd) {
-        //console.log("shareLink", shareLink);
         var surl = obj.getShareId(shareLink),
             shareid = obj.getParam("shareid", shareLink),
             uk = obj.getParam("uk", shareLink);
@@ -1098,7 +1128,6 @@
             },
             success: function(response) {
                 var shareLink, shareId, sharePwd = sharePwd || (/码.*?>([\w]{4})<\//.exec(response) || [])[1];
-                //console.log("sharePwd", sharePwd);
                 var surl = obj.getShareId(response),
                     shareid = obj.getParam("shareid", response),
                     uk = obj.getParam("uk", response);
@@ -1129,6 +1158,50 @@
         })
     };
 
+    baidu.initButtonShare = function () {
+        if ($(".x-button-box").length) {
+            if ($(".share-search").length == 0) {
+                var html = '<span class="g-dropdown-button share-search"><a class="g-button  g-button-blue" href="javascript:;" title="资源搜索"><span class="g-button-right"><em class="icon icon-search" title="资源搜索"></em><span class="text" style="width: 54px;">资源搜索</span></span></a></span>';
+                $(".x-button-box").append(html);
+                $(".share-search").click(function () {
+                    $(".dialog-dialog").css({display: "flex"});
+                });
+            }
+        }
+    };
+
+    baidu.initButtonOldHome = function () {
+        if ($(".frame-main .g-dropdown-button").length) {
+            if ($(".share-search").length == 0) {
+                var html = '<span class="g-dropdown-button share-search"><a class="g-button  g-button-blue" href="javascript:;" title="资源搜索"><span class="g-button-right"><em class="icon icon-search" title="资源搜索"></em><span class="text" style="width: 54px;">资源搜索</span></span></a></span>';
+                $(".frame-main .g-dropdown-button:first").after(html);
+                $(".share-search").click(function () {
+                    $(".dialog-dialog").css({display: "flex"});
+                });
+            }
+        }
+        else {
+            console.warn("wait initButtonOldHome...");
+            setTimeout(baidu.initButtonOldHome, 500);
+        }
+    };
+
+    baidu.initButtonNewHome = function () {
+        if ($(".nd-upload-button").length) {
+            if ($(".share-search").length == 0) {
+                var html = '<a class="nd-upload-button share-search"><button class="u-btn u-btn--small is-round"><i class="iconfont icon-search nd-file-list-toolbar__search-icon"></i><span>资源搜索</span></button></a>';
+                $(".nd-upload-button").after(html);
+                $(".share-search").click(function () {
+                    $(".dialog-dialog").css({display: "flex"});
+                });
+            }
+        }
+        else {
+            console.warn("wait initButtonNewHome ...");
+            setTimeout(baidu.initButtonNewHome, 500);
+        }
+    };
+
     baidu.run = function() {
         var hosts = ["pan.baidu.com", "yun.baidu.com"];
         if (obj.isInArray(hosts)) {
@@ -1136,15 +1209,21 @@
             if (url.indexOf(".baidu.com/share/init") > 0) {
                 baidu.autoPaddingPwd();
             }
-            else if (url.indexOf(".baidu.com/disk/") > 0) {
-                baidu.addSearch();
-            }
-            else if (url.indexOf(".baidu.com/wap/init") > 0) {
-            }
             else if (url.indexOf(".baidu.com/s/") > 0) {
                 baidu.reloadPage();
                 baidu.updateShareStorage();
-                return true;
+                baidu.initButtonShare();
+                obj.initDialog();
+            }
+            else if (url.indexOf(".baidu.com/disk/home") > 0) {
+                baidu.initButtonOldHome();
+                obj.initDialog();
+            }
+            else if (url.indexOf(".baidu.com/disk/main") > 0) {
+                baidu.initButtonNewHome();
+                obj.initDialog();
+            }
+            else if (url.indexOf(".baidu.com/wap/init") > 0) {
             }
             return true;
         }
@@ -1219,45 +1298,43 @@
         }
     };
 
-    lanzous.addSearchSharePage = function() {
-        var searchList = obj.searchList("lanzous");
-        if ($(".d").length) {
-            searchList.forEach(function(value, index) {
-                $(".d").prepend('<a href=' + value.link + ' target="_blank";><span class="txt" style="margin: 1px;">' + value.name + '</span></a>');
+    lanzous.initButtonShare = function() {
+        if ($(".share-search").length == 0) {
+            if ($(".d").length) {
+                $(".d").prepend('<a><span class="txt share-search" style="margin: 1px;">资源搜索</span></a>');
+            }
+            else if ($("body").children("#file").length) {
+                $("body").children("#file").find(".n_hd").prepend('<a class="n_login share-search"><span class="user-name">资源搜索</span></a>');
+            }
+            $(".share-search").click(function () {
+                $(".dialog-dialog").css({display: "flex"});
             });
-            $(".d").prepend('<a><span class="txt btn_local" style="margin: 1px;">本地存储</span></a>');
         }
-        else if ($("body").children("#file").length) {
-            var $n_hd = $("body").children("#file").find(".n_hd");
-            searchList.forEach(function(value, index) {
-                $n_hd.append('<a class="n_login" href=' + value.link + ' target="_blank"><span class="user-name">' + value.name + '</span></a>');
-            });
-            $n_hd.prepend('<a class="n_login btn_local"><span class="user-name">本地存储</span></a>');
-        }
-        $(".btn_local").click(obj.addCache);
     };
 
-    lanzous.addSearchHomePage = function() {
-        var $aside_nav = $(".mydisk_nav ul");
-        if ($aside_nav.length) {
-            var searchList = obj.searchList("lanzous");
-            searchList.forEach(function(value, index) {
-                $aside_nav.append('<li><a href=' + value.link + ' target="_blank" >' + value.name + '</a></li>');
-            });
+    lanzous.initButtonHome = function() {
+        if ($(".mydisk_nav ul").length) {
+            if ($(".share-search").length == 0) {
+                $(".mydisk_nav ul").append('<li><a class="share-search" href="javascript:;">资源搜索</a></li>');
+
+                $(".share-search").click(function () {
+                    $(".dialog-dialog").css({display: "flex"});
+                });
+            }
         }
-        $aside_nav.append('<li><a class="btn_local">本地存储</a></li>');
-        $(".btn_local").click(obj.addCache);
     };
 
     lanzous.run = function() {
         var url = location.href;
         if (/[\w-]*\.?lanzou.?\.com/.test(url)) {
             lanzous.autoPaddingPwd();
-            lanzous.addSearchSharePage();
+            lanzous.initButtonShare();
+            obj.initDialog();
             return true;
         }
         else if (/woozooo\.com/.test(url)) {
-            lanzous.addSearchHomePage();
+            lanzous.initButtonHome();
+            obj.initDialog();
             return true;
         }
 
@@ -1361,29 +1438,27 @@
         }
     };
 
-    ty189.addSearchSharePage = function() {
+    ty189.initButtonShare = function() {
         $(document).on("DOMNodeInserted", ".outlink-box-s, .file-info", function(event) {
-            if ($(".title-mysearch").length == 0) {
-                var searchList = obj.searchList("ty189");
-                searchList.forEach(function(value, index) {
-                    $(".file-info").prepend('<a data-v-7d1d0e5d="" href=' + value.link + ' target="_blank" class="btn btn-download title-mysearch" style="margin: 0px;">' + value.name + '</a>');
+            if ($(".share-search").length == 0) {
+                $(".file-operate").prepend('<div data-v-7d1d0e5d="" class="save-box share-search"><a data-v-7d1d0e5d="" href="javascript:;" class="btn btn-save-as">资源搜索</a></div>');
+                $(".save-box a").css({"margin-left": 0});
+                $(".share-search").click(function () {
+                    $(".dialog-dialog").css({display: "flex"});
                 });
-                $(".file-info").prepend('<a data-v-7d1d0e5d="" class="btn btn-download title-mysearch btn_local" style="margin: 0px;">本地存储</a>');
-                $(".btn_local").click(obj.addCache);
             }
+
             $(".tips-save-box").css("display", "none"); //消灭那朵乌云
         });
     };
 
-    ty189.addSearchHomePage = function() {
+    ty189.initButtonHome = function() {
         $(document).on("DOMNodeInserted", ".p-web", function(event) {
-            if ($(".title-mysearch").length == 0) {
-                var searchList = obj.searchList("ty189");
-                searchList.forEach(function(value, index) {
-                    $("ul.title").append('<li data-v-0cd17b3c="" class="title-link title-return title-mysearch"><a href=' + value.link + ' target="_blank"><i data-v-0cd17b3c=""></i><span data-v-0cd17b3c="" class="tab-icon img-myshare FileHead_icon-search-left_3z3Uw"></span><span data-v-0cd17b3c="" class="tab-name">' + value.name + '</span></a></li>');
+            if ($(".share-search").length == 0) {
+                $(".FileHead_file-head-left_3AuQ6").append('<div class="FileHead_file-head-upload_kgWbF share-search"><div>资源搜索</div></div>');
+                $(".share-search").click(function () {
+                    $(".dialog-dialog").css({display: "flex"});
                 });
-                $("ul.title").append('<li data-v-0cd17b3c="" class="title-link title-return title-mysearch btn_local"><a><i data-v-0cd17b3c=""></i><span data-v-0cd17b3c="" class="tab-icon img-myshare FileHead_icon-search-left_3z3Uw"></span><span data-v-0cd17b3c="" class="tab-name">本地存储</span></a></li>');
-                $(".btn_local").click(obj.addCache);
             }
         });
     };
@@ -1394,12 +1469,12 @@
             var url = window.location.href;
             if (url.indexOf("/web/share") > 0 || url.indexOf("/share.html") > 0) {
                 ty189.autoPaddingPwd();
-                ty189.addSearchSharePage();
-                return true;
+                ty189.initButtonShare();
+                obj.initDialog();
             }
             else if (url.indexOf("/web/main/") > 0) {
-                ty189.addSearchHomePage();
-                return true;
+                ty189.initButtonHome();
+                obj.initDialog();
             }
         }
 
@@ -1496,54 +1571,52 @@
         }
     };
 
-    aliyundrive.addSearchSharePage = function() {
-        $(document).one("DOMNodeInserted", ".page--3indT", function(event) {
-            var $banner = $(".content--1lEZP");
-            if ($banner.length) {
-                $banner.empty();
+    aliyundrive.initButtonShare = function() {
+        if ($("#root [class^=banner] [class^=right]").length) {
+            if ($(".share-search").length == 0) {
+                var html = '<button class="button--2Aa4u primary--3AJe5 small---B8mi share-search" style="margin-right: 28px;">资源搜索</button>';
+                $("#root [class^=banner] [class^=right]").prepend(html);
+                $(".share-search").click(function () {
+                    $(".dialog-dialog").css({display: "flex"});
+                });
             }
-            else {
-                $(this).prepend('<div class="banner--3e7DO banner--sfaVZ"><div class="container--1lEZP" style="justify-content: center;"></div></div>');
-                $banner = $(".container--1lEZP");
-            }
-            var searchList = obj.searchList("aliyundrive");
-            searchList.forEach(function(value, index) {
-                $banner.append('<span>&nbsp;🎉&nbsp;&nbsp;<a href=' + value.link + ' target="_blank" rel="noreferrer" style="color: rgb(0, 0, 255); font-weight: 500; text-decoration: underline;">' + value.name + '</a></span>');
-            });
-            $banner.append('<span>&nbsp;🎉&nbsp;&nbsp;<a class="btn_local" rel="noreferrer" style="color: rgb(0, 0, 255); font-weight: 500; text-decoration: underline;">本地存储</a></span>');
-            $(".btn_local").click(obj.addCache);
-        });
+        }
+        else {
+            console.warn("wait initButtonShare ...");
+            setTimeout(aliyundrive.initButtonShare, 500)
+        }
     };
 
-    aliyundrive.addSearchHomePage = function() {
-        $(document).one("DOMNodeInserted", ".body--1vs9o", function(event) {
-            var $banner = $(".container--CIvrv");
-            if ($banner.length) {
-                $banner.empty();
+    aliyundrive.initButtonHome = function() {
+        if ($("#root header").length) {
+            console.warn($("#root header"));
+            if ($(".share-search").length == 0) {
+                var html = '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi share-search">资源搜索</button>';
+                $("#root header:eq(0)").append(html);
+                $(".share-search").click(function () {
+                    $(".dialog-dialog").css({display: "flex"});
+                });
             }
-            else {
-                $(this).prepend('<div class="banner--3e7DO banner--sfaVZ"><div class="container--CIvrv" style="justify-content: center;"></div></div>');
-                $banner = $(".container--CIvrv");
-            }
-            var searchList = obj.searchList("aliyundrive");
-            searchList.forEach(function(value, index) {
-                $banner.append('<span>&nbsp;🎉&nbsp;&nbsp;<a href=' + value.link + ' target="_blank" rel="noreferrer" style="color: rgb(255, 255, 255); font-weight: 500; text-decoration: underline;">' + value.name + '</a></span>');
-            });
-            $banner.append('<span>&nbsp;🎉&nbsp;&nbsp;<a class="btn_local" rel="noreferrer" style="color: rgb(255, 255, 255); font-weight: 500; text-decoration: underline;">本地存储</a></span>');
-            $(".btn_local").click(obj.addCache);
-        });
+        }
+        else {
+            console.warn("wait initButtonHome ...");
+            setTimeout(aliyundrive.initButtonHome, 1000)
+        }
     };
 
     aliyundrive.run = function() {
         var url = location.href;
-        if (url.indexOf(".aliyundrive.com/s/") > 0) {
-            aliyundrive.storeSharePwd();
-            aliyundrive.autoPaddingPwd();
-            aliyundrive.addSearchSharePage();
-            return true;
-        }
-        else if (url.indexOf(".aliyundrive.com/drive") > 0) {
-            aliyundrive.addSearchHomePage();
+        if (url.indexOf(".aliyundrive.com/") > 0) {
+            if (url.indexOf(".aliyundrive.com/s/") > 0) {
+                aliyundrive.storeSharePwd();
+                aliyundrive.autoPaddingPwd();
+                aliyundrive.initButtonShare();
+                obj.initDialog();
+            }
+            else if (url.indexOf(".aliyundrive.com/drive") > 0) {
+                aliyundrive.initButtonHome();
+                obj.initDialog();
+            }
             return true;
         }
         return false;
@@ -1616,10 +1689,40 @@
         });
     };
 
+    xunlei.initButtonShare = function() {
+        $(document).on("DOMNodeInserted", ".shared-file-wrap", function(event) {
+            if ($(".share-search").length == 0) {
+                $(".file-features-btns-wrap").prepend('<button class="td-button share-search"><span class="text">资源搜索</span></button>');
+                $(".share-search").click(function () {
+                    $(".dialog-dialog").css({display: "flex"});
+                });
+            }
+        });
+    };
+
+    xunlei.initButtonHome = function() {
+        $(document).on("DOMNodeInserted", ".pan-list-menu__wrapper", function(event) {
+            if ($(".share-search").length == 0) {
+                $(".pan-list-menu").append('<a class="pan-list-menu-item pan-list-menu-item__active share-search"><span>资源搜索</span></a>');
+                $(".share-search").click(function () {
+                    $(".dialog-dialog").css({display: "flex"});
+                });
+            }
+        });
+    };
+
     xunlei.run = function() {
         var url = location.href;
-        if (url.indexOf("pan.xunlei.com/s/") > 0) {
-            xunlei.autoPaddingPwd();
+        if (url.indexOf("pan.xunlei.com/") > 0) {
+            if (url.indexOf("pan.xunlei.com/s/") > 0) {
+                xunlei.autoPaddingPwd();
+                xunlei.initButtonShare();
+                obj.initDialog();
+            }
+            else if (url.indexOf("pan.xunlei.com/?") > 0) {
+                xunlei.initButtonHome();
+                obj.initDialog();
+            }
             return true;
         }
         return false;
@@ -2005,7 +2108,6 @@
         } [location.host];
 
         var shareLink, sharePwd, b64Link = (/aHR0c.+/.exec($(staticClass.id).attr(staticClass.href)) || [])[0];
-        console.log("b64Link：", b64Link);
         if (b64Link) {
             shareLink = decodeURIComponent(b64Node.decodeUnicode(b64Link));
             if (shareLink) {
@@ -2063,7 +2165,6 @@
 
     funcNode.getShare = function(urlmd5) {
         $.get("http://share.panmeme.com/share/get", {urlmd5: urlmd5}, function(result) {
-            //console.log(".panmeme", urlmd5, result);
             if (result.code == 1) {
                 if (result.data.status == 1) {
                     if (result.data.unzippwd != null && result.data.unzippwd != "") {
@@ -2126,8 +2227,6 @@
         if (unsafeWindow.dialog_fileId) {
             var dialog_url = '/redirect/file?id=' + unsafeWindow.dialog_fileId;
             var jumpLink = location.origin + dialog_url;
-            console.log("jumpLink:" + jumpLink);
-
             baidu.jumpLinkToPanLink(jumpLink);
         }
     };
@@ -2170,11 +2269,8 @@
         } [location.host];
 
         var href = $(staticClass.linkId).attr("href");
-        console.log("href", href);
         if (href) {
             var sharePwd = (/[码|：: ]*([\w]{4})/.exec($(staticClass.passId || "").text()) || [])[1];
-            console.log("sharePwd", sharePwd);
-
             var surl = obj.getShareId(href),
                 shareid = obj.getParam("shareid", href),
                 uk = obj.getParam("uk", href);
@@ -2188,7 +2284,6 @@
             }
             else {
                 var jumpLink = href.indexOf(location.origin) >= 0 ? href: location.origin + href;
-                console.log("jumpLink", jumpLink);
                 baidu.jumpLinkToPanLink(jumpLink, sharePwd);
             }
         }
