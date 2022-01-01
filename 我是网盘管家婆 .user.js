@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.4.1
+// @version      0.4.2
 // @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云】 功能概述：【[1]：网盘页面增加资源搜索快捷方式】【[2]：[资源站点]自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地缓存数据库搜索】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -1441,7 +1441,7 @@
     ty189.initButtonShare = function() {
         $(document).on("DOMNodeInserted", ".outlink-box-s, .file-info", function(event) {
             if ($(".share-search").length == 0) {
-                $(".file-operate").prepend('<div data-v-7d1d0e5d="" class="save-box share-search"><a data-v-7d1d0e5d="" href="javascript:;" class="btn btn-save-as">资源搜索</a></div>');
+                $(".file-operate").prepend('<div data-v-a9c726de="" class="save-box share-search"><a data-v-a9c726de="" href="javascript:;" class="btn btn-save-as">资源搜索</a></div>');
                 $(".save-box a").css({"margin-left": 0});
                 $(".share-search").click(function () {
                     $(".dialog-dialog").css({display: "flex"});
@@ -1476,6 +1476,7 @@
                 ty189.initButtonHome();
                 obj.initDialog();
             }
+            return true;
         }
 
         return false;
@@ -2408,6 +2409,13 @@
     };
 
     obj.run = function () {
+        if ($("meta[name=script]").length) {
+            return;
+        }
+        else {
+            $('<meta name="script" content="run">').appendTo(document.head);
+        }
+
         console.log("管家婆 开始运行");
         var funcArr = [
             baidu.run,
