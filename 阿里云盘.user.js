@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.8.2
+// @version      1.8.3
 // @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕，支持弹幕），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -17,6 +17,8 @@
 
 (function() {
     'use strict';
+    unsafeWindow = unsafeWindow || window;
+
     var $ = $ || window.$;
     var obj = {
         file_page: {
@@ -44,21 +46,11 @@
     };
 
     obj.initVideoPage = function () {
-        var default_player = obj.getItem("default_player");
-        if (!default_player || default_player == "DPlayer") {
-            obj.initButtonVideoPage();
+        obj.initButtonVideoPage();
 
-            obj.initEventVideoPage();
+        obj.initEventVideoPage();
 
-            obj.dplayerSupport();
-        }
-        else if (default_player == "NativePlayer") {
-            obj.initButtonVideoPage();
-
-            obj.initEventVideoPage();
-
-            obj.onNativeVideoPageEvent();
-        }
+        obj.getItem("default_player") == "NativePlayer" && obj.onNativeVideoPageEvent();
     };
 
     obj.initButtonVideoPage = function () {
@@ -134,10 +126,9 @@
 
                 obj.offNativeVideoPageEvent();
 
-                obj.dplayerSupport();
-                setTimeout(function () {
-                    obj.dplayerStart();
-                }, 1000);
+                obj.dplayerSupport(function (result) {
+                    result && obj.dplayerStart();
+                });
             }
             else {
                 obj.setItem("default_player", "NativePlayer");
@@ -150,12 +141,11 @@
                     obj.video_page.dPlayer.destroy();
                     obj.video_page.dPlayer = null;
                 }
-                setTimeout(function () {
-                    $(".dplayer").parent().append(obj.video_page.elevideo);
-                    $(".dplayer").remove();
-                    $(".video-player--29_72").css({display: "block"});
-                    $(".video-player--29_72 .btn--1cZfA").click();
-                }, 1000);
+
+                $(".dplayer").parent().append(obj.video_page.elevideo);
+                $(".dplayer").remove();
+                $(".video-player--29_72").css({display: "block"});
+                $(".video-player--29_72 .btn--1cZfA").click();
             }
         });
     };
@@ -257,38 +247,62 @@
         $(document).off("mouseover mouseout mousedown", ".video-player--29_72");
     };
 
-    obj.dplayerSupport = function () {
+    obj.dplayerSupport = function (callback) {
         if (document.body) {
-            if (unsafeWindow.DPlayer) {
+            if (typeof unsafeWindow.DPlayer == "function" && typeof unsafeWindow.Hls == "function") {
+                sessionStorage.count = 0;
+                callback && callback(true);
                 return;
             }
 
-            function loadScript(src) {
-                var dom, extname = src.split(".").pop();
-                if (extname == "js") {
-                    dom = document.createElement("script");
-                    dom.src = src;
-                    dom.async = true;
+            if (!document.querySelector("head meta[name=newDPlayer]")) {
+                var meta = document.createElement("meta");
+                meta.name = "newDPlayer";
+                meta.content = true;
+                document.head.appendChild(meta);
+
+                function loadScript(src) {
+                    var dom, extname = src.split(".").pop();
+                    if (extname == "js") {
+                        dom = document.createElement("script");
+                        dom.src = src;
+                        dom.async = true;
+                    }
+                    else if (extname == "css") {
+                        dom = document.createElement("link");
+                        dom.rel = "stylesheet";
+                        dom.href = src;
+                    }
+                    document.body.appendChild(dom);
                 }
-                else if (extname == "css") {
-                    dom = document.createElement("link");
-                    dom.rel = "stylesheet";
-                    dom.href = src;
-                }
-                document.body.appendChild(dom);
+
+                loadScript("https://cdn.jsdelivr.net/npm/hls.js/dist/hls.min.js");
+                loadScript("https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.css");
+                loadScript("https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.js");
+
+                var css = document.createElement("style");
+                css.textContent = "body{display:block!important;} .dplayer {max-width:100%;height:100%;}";
+                document.head.appendChild(css);
             }
 
-            loadScript("https://cdn.jsdelivr.net/npm/hls.js/dist/hls.min.js");
-            loadScript("https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.css");
-            loadScript("https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.js");
+            setTimeout(function () {
+                sessionStorage.count || (sessionStorage.count = 0);
+                if(++sessionStorage.count >= 20){
+                    obj.showTipError("初始化DPlayer播放器失败");
+                    sessionStorage.count = 0;
 
-            var css = document.createElement("style");
-            css.textContent = "body{display:block!important;} .dplayer {max-width:100%;height:100%;}";
-            document.head.appendChild(css);
+                    obj.offNativeVideoPageEvent();
+                    obj.onNativeVideoPageEvent();
+
+                    callback && callback(false);
+                }
+                else{
+                    obj.dplayerSupport(callback);
+                }
+            }, 500);
         }
         else {
-            setTimeout(obj.dplayerSupport, 500);
-            return;
+            setTimeout(function () {obj.dplayerSupport(callback)}, 500);
         }
     };
 
@@ -300,10 +314,16 @@
 
         var dPlayerNode = document.getElementById("dplayer");
         if (!dPlayerNode) {
-            dPlayerNode = document.createElement("div");
-            dPlayerNode.setAttribute("id", "dplayer");
-            var videoParentNode = document.querySelector("video").parentNode.parentNode;
-            obj.video_page.elevideo = videoParentNode.parentNode.replaceChild(dPlayerNode, videoParentNode);
+            if (document.querySelector("video")) {
+                dPlayerNode = document.createElement("div");
+                dPlayerNode.setAttribute("id", "dplayer");
+                var videoParentNode = document.querySelector("video").parentNode.parentNode;
+                obj.video_page.elevideo = videoParentNode.parentNode.replaceChild(dPlayerNode, videoParentNode);
+            }
+            else {
+                setTimeout(obj.dplayerStart, 500);
+                return;
+            }
         }
 
         var dPlayer = obj.video_page.dPlayer, play_info = obj.video_page.play_info, file_id = play_info.file_id, content_hash = play_info.content_hash;
@@ -1470,7 +1490,9 @@
                                 obj.video_page.play_info = response;
                             }
 
-                            obj.getItem("default_player") != "NativePlayer" && obj.dplayerStart();
+                            obj.getItem("default_player") != "NativePlayer" && obj.dplayerSupport(function (result) {
+                                result && obj.dplayerStart();
+                            });
                         }
                     }
                 }
