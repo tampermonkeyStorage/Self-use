@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.8.3
+// @version      1.8.4
 // @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕，支持弹幕），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -127,7 +127,12 @@
                 obj.offNativeVideoPageEvent();
 
                 obj.dplayerSupport(function (result) {
-                    result && obj.dplayerStart();
+                    if (result) {
+                        obj.dplayerStart();
+                    }
+                    else {
+                        obj.onNativeVideoPageEvent();
+                    }
                 });
             }
             else {
@@ -291,7 +296,6 @@
                     obj.showTipError("初始化DPlayer播放器失败");
                     sessionStorage.count = 0;
 
-                    obj.offNativeVideoPageEvent();
                     obj.onNativeVideoPageEvent();
 
                     callback && callback(false);
@@ -413,12 +417,6 @@
                 dPlayer.speed(attributes.playbackRate);
                 dPlayer.video.muted = attributes.muted;
             }
-
-            dPlayer.danmaku.draw({
-                text: "阿里云盘 好棒棒！",
-                color: "#FFFF00",
-                type: "top"
-            });
         });
 
         obj.addDPlayerSubtitle();
@@ -909,7 +907,7 @@
                             });
                             responseText = JSON.stringify(responseJson);
                         }
-                        else if (xhr.responseURL.includes("/file/get_share_link_video_preview_play_info") && responseText && responseText.includes("preview_url")) {
+                        else if (responseURL.includes("/file/get_share_link_video_preview_play_info") && responseText && responseText.includes("preview_url")) {
                             responseJson = JSON.parse(responseText);
                             responseJson.video_preview_play_info.live_transcoding_task_list.forEach(function (item) {
                                 item.preview_url = item.url || item.preview_url;
@@ -944,39 +942,36 @@
 
         (function(send) {
             XMLHttpRequest.prototype.send = function() {
-                if (arguments[0] && arguments[0].includes("expiration")) {
+                if (arguments.length && typeof arguments[0] == "string" && arguments[0].includes("expiration")) {
                     var sharePwd = localStorage.getItem("share_pwd");
                     if (sharePwd) {
                         var body = JSON.parse(arguments[0]);
                         body.share_pwd = sharePwd;
                         arguments[0] = JSON.stringify(body);
-                    }
-                }
-                this.addEventListener("load", function() {
-                    if (this.readyState == 4 && this.status == 200) {
-                        var responseURL = this.responseURL;
-                        if (responseURL.includes("/share_link/create") || responseURL.includes("/share_link/update")) {
-                            var sharePwd = localStorage.getItem("share_pwd");
-                            if (sharePwd) {
-                                var response = JSON.parse(this.response);
-                                if (response.share_pwd = sharePwd) {
-                                    obj.showTipSuccess("自定义分享密码 成功");
-                                }
-                                else {
-                                    localStorage.removeItem("share_pwd");
-                                    obj.showTipError("自定义分享密码 失败，请修改分享密码后重试");
+
+                        this.addEventListener("load", function() {
+                            if (this.readyState == 4 && this.status == 200) {
+                                var url = this.responseURL;
+                                if (url.includes("/share_link/create") || url.includes("/share_link/update")) {
+                                    if (this.response.includes(sharePwd)) {
+                                        obj.showTipSuccess("自定义分享密码 成功");
+                                    }
+                                    else {
+                                        localStorage.removeItem("share_pwd");
+                                        obj.showTipError("自定义分享密码 失败，请修改分享密码后重试");
+                                    }
                                 }
                             }
-                        }
+                        }, false);
                     }
-                }, false);
+                }
                 send.apply(this, arguments);
             };
         })(XMLHttpRequest.prototype.send);
 
         $(document).on("change", ".input-share-pwd", function () {
             var value = this.value;
-            localStorage.setItem("share_pwd", value);
+            value && localStorage.setItem("share_pwd", value);
         });
     };
 
