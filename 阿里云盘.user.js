@@ -971,7 +971,7 @@
 
         $(document).on("change", ".input-share-pwd", function () {
             var value = this.value;
-            value && localStorage.setItem("share_pwd", value);
+            localStorage.setItem("share_pwd", value);
         });
     };
 
