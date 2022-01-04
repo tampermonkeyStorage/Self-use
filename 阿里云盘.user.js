@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.8.4
+// @version      1.8.5
 // @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕，支持弹幕），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -18,7 +18,6 @@
 (function() {
     'use strict';
     unsafeWindow = unsafeWindow || window;
-
     var $ = $ || window.$;
     var obj = {
         file_page: {
@@ -571,10 +570,12 @@
                         var subtitles = obj.parseTextToArray(fileInfo.file_extension, fileInfo.subtitleText);
                         if (subtitles.length) {
                             obj.showTipSuccess("网盘字幕添加成功");
-
                             callback && callback(subtitles);
-                            break;
                         }
+                        else {
+                            callback && callback([]);
+                        }
+                        break;
                     }
                 }
             }
@@ -588,7 +589,6 @@
                 var subtitles = obj.parseTextToArray(fileInfo.file_extension, fileInfo.subtitleText);
                 if (subtitles.length) {
                     obj.showTipSuccess("本地字幕添加成功");
-
                     callback && callback(subtitles);
                 }
             }
@@ -818,7 +818,7 @@
             ass: {
                 getItems(text) {
                     text = text.replace(/\r\n/g, "");
-                    var regex = /Dialogue: \d+,(\d+:\d{2}:\d{2}\.\d{2}),(\d+:\d{2}:\d{2}\.\d{2}),.*?,,\d+,\d+,\d+,,/g;
+                    var regex = /Dialogue: \d+,(\d+:\d{2}:\d{2}\.\d{2}),(\d+:\d{2}:\d{2}\.\d{2}),.*?,\d+,\d+,\d+,,/g;
                     var data = text.split(regex);
                     data.shift();
                     return data;
