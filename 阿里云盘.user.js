@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.8.6
+// @version      1.8.7
 // @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕，支持弹幕），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -140,6 +140,7 @@
                 $(container).parent().append(obj.video_page.elevideo);
                 $(container).remove();
 
+                obj.video_page.dPlayer = null;
                 obj.onNativeVideoPageEvent();
 
                 $(".video-player--29_72").css({display: "block"});
@@ -392,23 +393,16 @@
                 bottom: "8%",
                 color: "#b7daff",
             },
-            danmaku: {
-                id: content_hash || file_id,
-                api: "https://dplayer.moerats.com/",
-                maximum: 1000,
-                addition: [],
-                bottom: '15%',
-                unlimited: true,
-            },
             autoplay: true,
             screenshot: true,
-            hotkey: true,
+            hotkey: false,
             airplay: true,
             volume: 1.0,
             playbackSpeed: [0.5, 0.75, 1, 1.25, 1.5, 2],
             contextmenu: [],
             theme: "#b7daff"
         };
+
         var video_preview_play_info = play_info.video_preview_play_info || {};
         if (Array.isArray(video_preview_play_info.live_transcoding_task_list)) {
             var task_list = video_preview_play_info.live_transcoding_task_list;
@@ -449,11 +443,57 @@
             }
 
             player.on("loadedmetadata", function () {
+                options.hotkey || obj.dPlayerHotkey();
                 obj.addCueVideoSubtitle();
             });
         } catch (error) {
             console.log("播放器创建失败", error);
         }
+    };
+
+    obj.dPlayerHotkey = function () {
+        if (!window.dPlayerHotkey) {
+            window.dPlayerHotkey = true;
+        }
+        else {
+            return;
+        }
+
+        document.addEventListener("keydown", (function(e) {
+            var t = obj.video_page.dPlayer;
+            if (t && t.focus) {
+                var a = document.activeElement.tagName.toUpperCase()
+                , n = document.activeElement.getAttribute("contenteditable");
+                if ("INPUT" !== a && "TEXTAREA" !== a && "" !== n && "true" !== n) {
+                    var o, r = e || window.event;
+                    switch (r.keyCode) {
+                        case 32:
+                            r.preventDefault();
+                            t.toggle();
+                            break;
+                        case 37:
+                            r.preventDefault();
+                            t.seek(t.video.currentTime - 5);
+                            t.controller.setAutoHide();
+                            break;
+                        case 39:
+                            r.preventDefault();
+                            t.seek(t.video.currentTime + 5);
+                            t.controller.setAutoHide();
+                            break;
+                        case 38:
+                            r.preventDefault();
+                            o = t.volume() + .1;
+                            t.volume(o);
+                            break;
+                        case 40:
+                            r.preventDefault();
+                            o = t.volume() - .1;
+                            t.volume(o);
+                    }
+                }
+            }
+        }));
     };
 
     obj.getVideoPreviewPlayInfo = function () {
