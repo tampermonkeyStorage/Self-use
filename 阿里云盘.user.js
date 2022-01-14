@@ -870,33 +870,6 @@
         return timeSec + parseFloat(_timeArr[1] || 0) / 1000;
     };
 
-    obj.getSubtitleFrag = function (currentTime, subtitles) {
-        var currentSubtitle = obj.video_page.subtitleFrag, nextSubtitle = subtitles[currentSubtitle.index];
-        if (currentTime > currentSubtitle.startTime && nextSubtitle && currentTime < nextSubtitle.startTime) {
-            return currentSubtitle;
-        }
-        else if (nextSubtitle && currentTime >= nextSubtitle.startTime && currentTime <= nextSubtitle.endTime) {
-            obj.video_page.subtitleFrag = nextSubtitle;
-            return nextSubtitle;
-        }
-
-        var mid, low = 0, high = subtitles.length - 1;
-        while (low <= high) {
-            mid = parseInt((low + high) / 2);
-            if(subtitles[mid].startTime <= currentTime && subtitles[mid].endTime >= currentTime){
-                currentSubtitle = obj.video_page.subtitleFrag = subtitles[mid];
-                break;
-            }
-            if(subtitles[mid].startTime > currentTime){
-                high = mid - 1;
-            }
-            else if(subtitles[mid].endTime < currentTime){
-                low = mid + 1;
-            }
-        }
-        return currentSubtitle;
-    };
-
     obj.unlockPageFileLimit = function () {
         (function(open) {
             XMLHttpRequest.prototype.open = function() {
