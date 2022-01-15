@@ -461,7 +461,7 @@
 
         document.addEventListener("keydown", (function(e) {
             var t = obj.video_page.dPlayer;
-            if (t && t.focus) {
+            if (t && document.getElementById("dplayer")) {
                 var a = document.activeElement.tagName.toUpperCase()
                 , n = document.activeElement.getAttribute("contenteditable");
                 if ("INPUT" !== a && "TEXTAREA" !== a && "" !== n && "true" !== n) {
