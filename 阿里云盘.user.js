@@ -859,7 +859,7 @@
             srt: {
                 getItems(text) {
                     text = text.replace(/\r/g, "");
-                    var regex = /(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})/g;
+                    var regex = /(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) -?-> (\d{2}:\d{2}:\d{2},\d{3})/g;
                     var data = text.split(regex);
                     data.shift();
                     return data;
