@@ -146,7 +146,7 @@
                 $(".video-player--29_72").css({display: "block"});
                 $(".video-player--29_72 .btn--1cZfA").click();
             }
-            else if (currentPlayer == "NativePlayer") {
+            else {
                 obj.offNativeVideoPageEvent();
             }
 
