@@ -1543,6 +1543,8 @@
                                 else if (url.indexOf(".aliyundrive.com/drive") > 0) {
                                     obj.initDownloadHomePage();
                                 }
+                                // 切换视图为列表模式
+                                document.querySelector("[data-icon-type=PDSDrag]") && document.querySelector("[data-icon-type=PDSDrag]").click();
                             }
                         }
                     }
