@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.8.7
+// @version      1.8.8
 // @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕，不支持弹幕），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -461,7 +461,7 @@
 
         document.addEventListener("keydown", (function(e) {
             var t = obj.video_page.dPlayer;
-            if (t && t.focus) {
+            if (t && document.getElementById("dplayer")) {
                 var a = document.activeElement.tagName.toUpperCase()
                 , n = document.activeElement.getAttribute("contenteditable");
                 if ("INPUT" !== a && "TEXTAREA" !== a && "" !== n && "true" !== n) {
@@ -1490,6 +1490,19 @@
     obj.addPageFileList = function () {
         var send = XMLHttpRequest.prototype.send;
         XMLHttpRequest.prototype.send = function(data) {
+            if (arguments.length && typeof arguments[0] == "string") {
+                if (arguments[0].includes("order_direction")) {
+                    // 按【<名称><升序>】排列
+                    var source = JSON.parse(arguments[0]);
+                    if (window.parent_file_id != source.parent_file_id) {
+                        window.parent_file_id = source.parent_file_id;
+                        source.order_by = "name";
+                        source.order_direction = "ASC";
+                        arguments[0] = JSON.stringify(source);
+                    }
+                }
+            }
+
             this.addEventListener("load", function(event) {
                 if (this.readyState == 4 && this.status == 200) {
                     var response, responseURL = this.responseURL;
@@ -1501,6 +1514,7 @@
 
                         response = JSON.parse(this.response);
                         if (response instanceof Object && response.items) {
+                            data = JSON.parse(data);
                             var parent_file_id = ((location.href.match(/\/folder\/(\w+)/) || [])[1]) || "root";
                             if (parent_file_id != obj.file_page.parent_file_id) {
                                 //变换页面
@@ -1511,7 +1525,6 @@
                                 obj.file_page.items = [];
                             }
 
-                            data = JSON.parse(data);
                             if (data.order_by != obj.file_page.order_by || data.order_direction != obj.file_page.order_direction) {
                                 //排序改变
                                 obj.file_page.order_by = data.order_by;
@@ -1543,6 +1556,8 @@
                                 else if (url.indexOf(".aliyundrive.com/drive") > 0) {
                                     obj.initDownloadHomePage();
                                 }
+                                // 切换视图为列表模式
+                                document.querySelector("[data-icon-type=PDSDrag]") && document.querySelector("[data-icon-type=PDSDrag]").click();
                             }
                         }
                     }
