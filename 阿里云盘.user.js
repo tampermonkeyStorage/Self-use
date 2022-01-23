@@ -490,6 +490,17 @@
                             r.preventDefault();
                             o = t.volume() - .1;
                             t.volume(o);
+                            break;
+                        case 36:
+                            r.preventDefault();
+                            o = document.querySelector("[data-icon-type=PDSChevronLeft]");
+                            o && o.click();
+                            break;
+                        case 35:
+                            r.preventDefault();
+                            o = document.querySelector("[data-icon-type=PDSChevronRight]");
+                            o && o.click();
+                            break;
                     }
                 }
             }
