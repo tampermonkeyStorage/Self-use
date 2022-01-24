@@ -384,7 +384,7 @@
             subtitle: {
                 url: "",
                 type: "webvtt",
-                fontSize: "30px",
+                fontSize: "25px",
                 bottom: "8%",
                 color: "#b7daff",
             },
@@ -1503,7 +1503,7 @@
         XMLHttpRequest.prototype.send = function(data) {
             if (arguments.length && typeof arguments[0] == "string") {
                 if (arguments[0].includes("order_direction")) {
-                    // 按【<名称><升序>】排列
+                    // 排序默认 √名称√升序
                     var source = JSON.parse(arguments[0]);
                     if (window.parent_file_id != source.parent_file_id) {
                         window.parent_file_id = source.parent_file_id;
@@ -1525,7 +1525,8 @@
 
                         response = JSON.parse(this.response);
                         if (response instanceof Object && response.items) {
-                            data = JSON.parse(data);
+                            try { data = JSON.parse(data) } catch (error) { data = {} };
+                            
                             var parent_file_id = ((location.href.match(/\/folder\/(\w+)/) || [])[1]) || "root";
                             if (parent_file_id != obj.file_page.parent_file_id) {
                                 //变换页面
