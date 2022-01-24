@@ -384,7 +384,7 @@
             subtitle: {
                 url: "",
                 type: "webvtt",
-                fontSize: "25px",
+                fontSize: "4vh",
                 bottom: "8%",
                 color: "#b7daff",
             },
