@@ -903,7 +903,7 @@
                             index: items.length,
                             startTime: obj.toSeconds(data[i]),
                             endTime: obj.toSeconds(data[i + 1]),
-                            text: data[i + 2].trim().replace("\\N", "\n").replace(/{.*?}/g, "")
+                            text: data[i + 2].trim().replace(/\\N/g, "\n").replace(/{.*?}/g, "")
                         });
                     }
                     return items;
