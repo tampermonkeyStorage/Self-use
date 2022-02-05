@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.8.7
-// @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕，不支持弹幕），...
+// @version      1.8.8
+// @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
 // @match        https://www.aliyundrive.com/drive*
@@ -320,12 +320,6 @@
 
                 Promise.all(promises).then(function(results) {
                     if (results.length == arr.length) {
-                        if (!window.DPlayerCss) {
-                            window.DPlayerCss = {};
-                            var textContent = "body{display:block!important;} .dplayer{max-width:100%;height:100%;}";
-                            obj.styleTextContent(textContent);
-                        }
-
                         setTimeout(function () {
                             callback && callback(unsafeWindow.DPlayer);
                         }, 100);
@@ -352,6 +346,7 @@
             if (!dPlayerNode) {
                 dPlayerNode = document.createElement("div");
                 dPlayerNode.setAttribute("id", "dplayer");
+                dPlayerNode.setAttribute("style", "width: 100%; height: 100%;");
                 var videoParentNode = videoNode.parentNode.parentNode;
                 obj.video_page.elevideo = videoParentNode.parentNode.replaceChild(dPlayerNode, videoParentNode);
             }
@@ -389,7 +384,7 @@
             subtitle: {
                 url: "",
                 type: "webvtt",
-                fontSize: "30px",
+                fontSize: "4vh",
                 bottom: "8%",
                 color: "#b7daff",
             },
@@ -399,7 +394,12 @@
             airplay: true,
             volume: 1.0,
             playbackSpeed: [0.5, 0.75, 1, 1.25, 1.5, 2],
-            contextmenu: [],
+            contextmenu: [
+                {
+                    text: "阿里云盘脚本",
+                    link: "https://github.com/tampermonkeyStorage/Self-use/blob/main/阿里云盘.user.js",
+                },
+            ],
             theme: "#b7daff"
         };
 
@@ -490,6 +490,17 @@
                             r.preventDefault();
                             o = t.volume() - .1;
                             t.volume(o);
+                            break;
+                        case 36:
+                            r.preventDefault();
+                            o = document.querySelector("[data-icon-type=PDSChevronLeft]");
+                            o && o.click();
+                            break;
+                        case 35:
+                            r.preventDefault();
+                            o = document.querySelector("[data-icon-type=PDSChevronRight]");
+                            o && o.click();
+                            break;
                     }
                 }
             }
@@ -892,7 +903,7 @@
                             index: items.length,
                             startTime: obj.toSeconds(data[i]),
                             endTime: obj.toSeconds(data[i + 1]),
-                            text: data[i + 2].trim().replace("\\N", "\n").replace(/{.*?}/g, "")
+                            text: data[i + 2].trim().replace(/\\N/g, "\n").replace(/{.*?}/g, "")
                         });
                     }
                     return items;
@@ -1490,6 +1501,19 @@
     obj.addPageFileList = function () {
         var send = XMLHttpRequest.prototype.send;
         XMLHttpRequest.prototype.send = function(data) {
+            if (arguments.length && typeof arguments[0] == "string") {
+                if (arguments[0].includes("order_direction")) {
+                    // 排序默认 √名称√升序
+                    var source = JSON.parse(arguments[0]);
+                    if (window.parent_file_id != source.parent_file_id) {
+                        window.parent_file_id = source.parent_file_id;
+                        source.order_by = "name";
+                        source.order_direction = "ASC";
+                        arguments[0] = JSON.stringify(source);
+                    }
+                }
+            }
+
             this.addEventListener("load", function(event) {
                 if (this.readyState == 4 && this.status == 200) {
                     var response, responseURL = this.responseURL;
@@ -1501,6 +1525,8 @@
 
                         response = JSON.parse(this.response);
                         if (response instanceof Object && response.items) {
+                            try { data = JSON.parse(data) } catch (error) { data = {} };
+                            
                             var parent_file_id = ((location.href.match(/\/folder\/(\w+)/) || [])[1]) || "root";
                             if (parent_file_id != obj.file_page.parent_file_id) {
                                 //变换页面
@@ -1511,7 +1537,6 @@
                                 obj.file_page.items = [];
                             }
 
-                            data = JSON.parse(data);
                             if (data.order_by != obj.file_page.order_by || data.order_direction != obj.file_page.order_direction) {
                                 //排序改变
                                 obj.file_page.order_by = data.order_by;
