@@ -1548,22 +1548,17 @@
                             obj.showTipSuccess("文件列表获取完成 共：" + obj.file_page.items.length + "项");
 
                             if (obj.file_page.items.length) {
-                                var url = location.href;
-                                if (url.indexOf(".aliyundrive.com/s/") > 0) {
-                                    obj.initDownloadSharePage();
-                                }
-                                else if (url.indexOf(".aliyundrive.com/drive") > 0) {
-                                    obj.initDownloadHomePage();
-                                }
-
                                 // 切换视图为列表模式
                                 var PDSDrag = document.querySelector("[data-icon-type=PDSDrag]");
                                 PDSDrag && PDSDrag.click();
 
                                 // 排序（暂默认 √名称√升序，只对分享页有效，算了以后再说吧）
                                 if (obj.isHomePage()) {
+                                    obj.initDownloadHomePage();
                                 }
                                 else {
+                                    obj.initDownloadSharePage();
+
                                     var PDSArrowDown = document.querySelector("[data-icon-type=PDSArrowDown]");
                                     PDSArrowDown && PDSArrowDown.click();
                                 }
