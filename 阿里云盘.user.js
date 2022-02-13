@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.8.8
+// @version      1.9.0
 // @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -1051,7 +1051,7 @@
 
     obj.showDownloadSharePage = function () {
         var token = obj.getItem("token");
-        if (token && token.access_token) {
+        if (token && token.access_token && obj.isLogin()) {
             obj.showTipLoading("正在获取链接...");
         }
         else {
@@ -1406,11 +1406,27 @@
         return window.instances[href];
     };
 
-    obj.styleTextContent = function (textContent) {
-        var style = document.createElement("style");
-        style.type = "text/css";
-        style.textContent = textContent;
-        document.head.appendChild(style);
+    obj.switchViewArrow = function () {
+        var listViewType = obj.getItem("listViewType");
+        if (listViewType) {
+            var iconDom = listViewType == "PDSDrag" ? document.querySelector("[data-icon-type=PDSDrag]") : document.querySelector("[data-icon-type=PDSSquareGrid]");
+            iconDom && iconDom.click();
+        }
+
+        var parent_file_id = ((location.href.match(/\/folder\/(\w+)/) || [])[1]) || "root";
+        if (window.parent_file_id != parent_file_id) {
+            window.parent_file_id = parent_file_id;
+            var arrowDown = document.querySelector("[data-icon-type=PDSArrowDown]");
+            arrowDown && arrowDown.click();
+        }
+
+        $(document).off("click", "[class^=switch-wrapper]").on("click", "[class^=switch-wrapper]", function() {
+            var iconType = this.firstChild.getAttribute("data-icon-type");
+            if (iconType) {
+                obj.setItem("listViewType", iconType);
+                obj.showTipSuccess("切换默认视图为：" + {PDSDrag: "列表模式", PDSSquareGrid: "图标模式"}[iconType], 5000);
+            }
+        });
     };
 
     obj.getShareId = function () {
@@ -1427,6 +1443,10 @@
         else {
             return false;
         }
+    };
+
+    obj.isLogin = function () {
+        return !document.querySelector("[class^=login]");
     };
 
     obj.getItem = function(n) {
@@ -1501,19 +1521,6 @@
     obj.addPageFileList = function () {
         var send = XMLHttpRequest.prototype.send;
         XMLHttpRequest.prototype.send = function(data) {
-            if (arguments.length && typeof arguments[0] == "string") {
-                if (arguments[0].includes("order_direction")) {
-                    // 排序默认 √名称√升序
-                    var source = JSON.parse(arguments[0]);
-                    if (window.parent_file_id != source.parent_file_id) {
-                        window.parent_file_id = source.parent_file_id;
-                        source.order_by = "name";
-                        source.order_direction = "ASC";
-                        arguments[0] = JSON.stringify(source);
-                    }
-                }
-            }
-
             this.addEventListener("load", function(event) {
                 if (this.readyState == 4 && this.status == 200) {
                     var response, responseURL = this.responseURL;
@@ -1526,18 +1533,17 @@
                         response = JSON.parse(this.response);
                         if (response instanceof Object && response.items) {
                             try { data = JSON.parse(data) } catch (error) { data = {} };
-                            
-                            var parent_file_id = ((location.href.match(/\/folder\/(\w+)/) || [])[1]) || "root";
-                            if (parent_file_id != obj.file_page.parent_file_id) {
+
+                            if (obj.file_page.parent_file_id != data.parent_file_id) {
                                 //变换页面
-                                obj.file_page.parent_file_id = parent_file_id;
+                                obj.file_page.parent_file_id = data.parent_file_id;
                                 obj.file_page.order_by = data.order_by;
                                 obj.file_page.order_direction = data.order_direction;
                                 obj.file_page.next_marker_list = [];
                                 obj.file_page.items = [];
                             }
 
-                            if (data.order_by != obj.file_page.order_by || data.order_direction != obj.file_page.order_direction) {
+                            if (obj.file_page.order_by != data.order_by || obj.file_page.order_direction != data.order_direction) {
                                 //排序改变
                                 obj.file_page.order_by = data.order_by;
                                 obj.file_page.order_direction = data.order_direction;
@@ -1561,15 +1567,14 @@
                             obj.showTipSuccess("文件列表获取完成 共：" + obj.file_page.items.length + "项");
 
                             if (obj.file_page.items.length) {
-                                var url = location.href;
-                                if (url.indexOf(".aliyundrive.com/s/") > 0) {
-                                    obj.initDownloadSharePage();
-                                }
-                                else if (url.indexOf(".aliyundrive.com/drive") > 0) {
+                                if (obj.isHomePage()) {
                                     obj.initDownloadHomePage();
                                 }
-                                // 切换视图为列表模式
-                                document.querySelector("[data-icon-type=PDSDrag]") && document.querySelector("[data-icon-type=PDSDrag]").click();
+                                else {
+                                    obj.initDownloadSharePage();
+                                }
+
+                                obj.switchViewArrow();
                             }
                         }
                     }
@@ -1603,6 +1608,7 @@
                     }
                 }
             }, false);
+
             send.apply(this, arguments);
         };
     };
