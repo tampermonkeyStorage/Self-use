@@ -293,15 +293,15 @@
                 "https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.css",
             ],
             [
-                "https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.1.3-0.canary.8101/hls.min.js",
-                "https://cdnjs.cloudflare.com/ajax/libs/dplayer/1.26.0/DPlayer.min.js",
-                "https://cdnjs.cloudflare.com/ajax/libs/dplayer/1.25.0/DPlayer.min.css",
+                "https://cdn.staticfile.org/hls.js/1.1.4/hls.min.js",
+                "https://cdn.staticfile.org/dplayer/1.26.0/DPlayer.min.js",
+                "https://cdn.staticfile.org/dplayer/1.25.0/DPlayer.min.css",
             ],
             [
-                "https://cdn.bootcss.com/hls.js/8.0.0-beta.3/hls.min.js",
-                "https://cdn.bootcss.com/dplayer/1.26.0/DPlayer.min.js",
-                "https://cdn.bootcss.com/dplayer/1.25.0/DPlayer.min.css",
-            ]
+                "https://cdn.bootcdn.net/ajax/libs/hls.js/1.1.4/hls.min.js",
+                "https://cdn.bootcdn.net/ajax/libs/dplayer/1.26.0/DPlayer.min.js",
+                "https://cdn.bootcdn.net/ajax/libs/dplayer/1.25.0/DPlayer.min.css",
+            ],
         ];
 
         (function laodcdn(urlArr, index = 0) {
@@ -396,9 +396,13 @@
             playbackSpeed: [0.5, 0.75, 1, 1.25, 1.5, 2],
             contextmenu: [
                 {
+                    text: "支持作者",
+                    link: "https://cdn.jsdelivr.net/gh/tampermonkeyStorage/Self-use@main/appreciation.png",
+                },
+                {
                     text: "阿里云盘脚本",
                     link: "https://github.com/tampermonkeyStorage/Self-use/blob/main/阿里云盘.user.js",
-                },
+                }
             ],
             theme: "#b7daff"
         };
@@ -561,7 +565,7 @@
                 else {
                     console.error("get_share_link_video_preview_play_info 错误", error);
                     if (error.responseJSON.code == "InvalidParameterNotMatch.ShareId") {
-                        obj.showTipError("错误：参数不匹配，此错误可能是打开了另一个分享页面导致，请刷新", 10000);
+                        obj.showTipError("错误：参数不匹配，此错误可能是打开了另一个分享链接导致，请刷新", 10000);
                     }
                     callback && callback("");
                 }
@@ -1407,17 +1411,19 @@
     };
 
     obj.switchViewArrow = function () {
+        var parent_file_id = ((location.href.match(/\/folder\/(\w+)/) || [])[1]) || "root";
+        if (window.parent_file_id != parent_file_id) {
+            window.parent_file_id = parent_file_id;
+            var dragDom = document.querySelector("[data-icon-type=PDSDrag]");
+            dragDom && dragDom.click();
+            var arrowDown = document.querySelector("[data-icon-type=PDSArrowDown]");
+            arrowDown && arrowDown.click();
+        }
+
         var listViewType = obj.getItem("listViewType");
         if (listViewType) {
             var iconDom = listViewType == "PDSDrag" ? document.querySelector("[data-icon-type=PDSDrag]") : document.querySelector("[data-icon-type=PDSSquareGrid]");
             iconDom && iconDom.click();
-        }
-
-        var parent_file_id = ((location.href.match(/\/folder\/(\w+)/) || [])[1]) || "root";
-        if (window.parent_file_id != parent_file_id) {
-            window.parent_file_id = parent_file_id;
-            var arrowDown = document.querySelector("[data-icon-type=PDSArrowDown]");
-            arrowDown && arrowDown.click();
         }
 
         $(document).off("click", "[class^=switch-wrapper]").on("click", "[class^=switch-wrapper]", function() {
@@ -1572,9 +1578,9 @@
                                 }
                                 else {
                                     obj.initDownloadSharePage();
-                                }
 
-                                obj.switchViewArrow();
+                                    obj.switchViewArrow();
+                                }
                             }
                         }
                     }
@@ -1608,7 +1614,6 @@
                     }
                 }
             }, false);
-
             send.apply(this, arguments);
         };
     };
