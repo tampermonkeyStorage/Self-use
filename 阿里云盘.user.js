@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.9.0
+// @version      1.9.1
 // @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -384,9 +384,9 @@
             subtitle: {
                 url: "",
                 type: "webvtt",
-                fontSize: "4vh",
-                bottom: "8%",
-                color: "#b7daff",
+                fontSize: "5vh", //字幕大小 可修改为["4vh", "4.5vh", "5vh", 等]
+                bottom: "10%", //字幕相对底部的位置 可修改为["5%", "10%", "15%", 等]
+                color: "white", //字幕颜色 可修改为["#b7daff", "white", red orange yellow green blue indigo purple, 等]
             },
             autoplay: true,
             screenshot: true,
@@ -446,7 +446,7 @@
                 player.video.muted = attributes.muted;
             }
 
-            player.on("loadedmetadata", function () {
+            player.on("play", function () {
                 options.hotkey || obj.dPlayerHotkey();
                 obj.addCueVideoSubtitle();
             });
@@ -626,9 +626,13 @@
                     if (textTrackList.length == 0) {
                         video.addTextTrack("subtitles", "", "");
                     }
-                    var textTrack = textTrackList[0];
-                    textTrack.mode == "hidden" || (textTrack.mode = "hidden");
 
+                    var textTrack = textTrackList[0];
+                    if (textTrack.cues && textTrack.cues.length) {
+                        textTrack.mode == "showing" || (textTrack.mode = "showing");
+                        return;
+                    }
+                    textTrack.mode == "hidden" || (textTrack.mode = "hidden");
                     subtitles.forEach(function (item, index) {
                         textTrackCue = new VTTCue(item.startTime, item.endTime, item.text);
                         textTrackCue.id = item.index;
