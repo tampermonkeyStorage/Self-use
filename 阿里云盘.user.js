@@ -481,6 +481,10 @@
                 if ("INPUT" !== a && "TEXTAREA" !== a && "" !== n && "true" !== n) {
                     var o, r = e || window.event;
                     switch (r.keyCode) {
+                        case 13:
+                            r.preventDefault();
+                            t.fullScreen.toggle("web");
+                            break;
                         case 32:
                             r.preventDefault();
                             t.toggle();
