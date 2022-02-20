@@ -41,6 +41,7 @@
             },
             file_id: "",
             elevideo: "",
+            elequality: "",
             dPlayer: null,
             attributes: {},
             media_num: 0
@@ -163,7 +164,7 @@
             }
 
             if ($("#addsubtitle").length == 0) {
-                $("body").append('<input id="addsubtitle" type="file" accept=".srt,.ass" style="display: none;">');
+                $("body").append('<input id="addsubtitle" type="file" accept=".srt,.ass,.ssa" style="display: none;">');
             }
 
             $("#addsubtitle").click();
@@ -340,9 +341,9 @@
     };
 
     obj.dPlayerStart = function () {
-        var videoNode = document.querySelector("video");
+        var dPlayerNode, videoNode = document.querySelector("video");
         if (videoNode) {
-            var dPlayerNode = document.getElementById("dplayer");
+            dPlayerNode = document.getElementById("dplayer");
             if (!dPlayerNode) {
                 dPlayerNode = document.createElement("div");
                 dPlayerNode.setAttribute("id", "dplayer");
@@ -356,9 +357,39 @@
             return;
         }
 
-        var play_info = obj.video_page.play_info, file_id = play_info.file_id, content_hash = play_info.content_hash;
-        if (obj.video_page.file_id == file_id) {
-            if (obj.video_page.dPlayer && obj.video_page.dPlayer.video) {
+        var quality = [], defaultQuality = 0;
+        var play_info = obj.video_page.play_info || {};
+        var video_preview_play_info = play_info.video_preview_play_info || {};
+        var task_list = video_preview_play_info.live_transcoding_task_list;
+        if (Array.isArray(task_list)) {
+            var pds = {
+                FHD: "1080 全高清",
+                HD: "720 高清",
+                SD: "540 标清",
+                LD: "360 流畅"
+            };
+            task_list.forEach(function (item) {
+                quality.push({
+                    name: pds[item.template_id],
+                    url: item.url,
+                    type: "hls"
+                });
+            });
+            defaultQuality = task_list.length - 1;
+        }
+        else {
+            if (play_info.file_id) {
+                console.warn("尝试重复获取播放链接");
+                setTimeout(obj.getVideoPreviewPlayInfo, 500);
+            }
+            else {
+                obj.showTipError("获取播放信息失败：请刷新网页重试");
+            }
+            return;
+        }
+
+        if (obj.video_page.file_id == play_info.file_id) {
+            if (obj.video_page.dPlayer && obj.video_page.dPlayer.destroy) {
                 var video = obj.video_page.dPlayer.video;
                 obj.video_page.attributes = {
                     currentTime: video.currentTime,
@@ -371,15 +402,15 @@
             }
         }
         else {
-            obj.video_page.file_id = file_id;
+            obj.video_page.file_id = play_info.file_id;
             obj.video_page.attributes = {};
         }
 
         var options = {
-            container: document.getElementById("dplayer"),
+            container: dPlayerNode,
             video: {
-                quality: [],
-                defaultQuality: 0
+                quality: quality,
+                defaultQuality: defaultQuality
             },
             subtitle: {
                 url: "",
@@ -407,35 +438,6 @@
             theme: "#b7daff"
         };
 
-        var video_preview_play_info = play_info.video_preview_play_info || {};
-        if (Array.isArray(video_preview_play_info.live_transcoding_task_list)) {
-            var task_list = video_preview_play_info.live_transcoding_task_list;
-            var pds = {
-                FHD: "1080 全高清",
-                HD: "720 高清",
-                SD: "540 标清",
-                LD: "360 流畅"
-            };
-            task_list.forEach(function (item) {
-                options.video.quality.push({
-                    name: pds[item.template_id],
-                    url: item.url,
-                    type: "hls"
-                });
-            });
-
-            options.video.defaultQuality = task_list.length - 1;
-        }
-        else {
-            if (play_info.file_id) {
-                obj.getVideoPreviewPlayInfo();
-            }
-            else {
-                obj.showTipError("获取播放信息失败：请刷新网页重试");
-            }
-            return;
-        }
-
         try{
             var player = obj.video_page.dPlayer = new unsafeWindow.DPlayer(options);
 
@@ -452,12 +454,12 @@
             });
 
             document.querySelector(".dplayer-controller .dplayer-icons .dplayer-icon.dplayer-quality-icon").onclick = function () {
-                var maskNode = document.querySelector(".dplayer-controller .dplayer-icons .dplayer-quality .dplayer-quality-mask");
-                if (maskNode) {
-                    obj.video_page.elemask = this.parentNode.removeChild(maskNode);
+                var qualityNode = document.querySelector(".dplayer-controller .dplayer-icons .dplayer-quality .dplayer-quality-mask");
+                if (qualityNode) {
+                    obj.video_page.elequality = this.parentNode.removeChild(qualityNode);
                 }
                 else {
-                    this.parentNode.appendChild(obj.video_page.elemask);
+                    this.parentNode.appendChild(obj.video_page.elequality);
                 }
             };
         } catch (error) {
@@ -663,20 +665,27 @@
     };
 
     obj.getSubtitles = function (callback) {
+        var play_info = obj.video_page.play_info;
+        if (play_info.subtitleText) {
+            var subtitles = obj.parseTextToArray(play_info.subtitle_extension, play_info.subtitleText);
+            if (subtitles.length) {
+                callback && callback(subtitles);
+                return;
+            }
+        }
+
         obj.getFilesSubtitleText(function (fileList) {
             if (fileList.length) {
-                var subtitles = [];
                 for (var i = 0; i < fileList.length; i++) {
                     var fileInfo = fileList[i];
                     if (fileInfo.subtitleText) {
-                        var strToArr = obj.parseTextToArray(fileInfo.file_extension, fileInfo.subtitleText);
-                        if (strToArr.length) {
-                            subtitles = strToArr;
-                            break;
+                        var subtitles = obj.parseTextToArray(fileInfo.file_extension, fileInfo.subtitleText);
+                        if (subtitles.length) {
+                            callback && callback(subtitles);
+                            return;
                         }
                     }
                 }
-                callback && callback(subtitles);
             }
             else {
                 callback && callback([]);
@@ -687,6 +696,15 @@
             if (fileInfo.subtitleText) {
                 var subtitles = obj.parseTextToArray(fileInfo.file_extension, fileInfo.subtitleText);
                 if (subtitles.length) {
+                    var fileList = obj.file_page.items;
+                    var file_id = obj.video_page.play_info.file_id;
+                    for (var i = 0; i < fileList.length; i++) {
+                        if (fileList[i].file_id == file_id) {
+                            obj.file_page.items[i].subtitleText = fileInfo.subtitleText;
+                            obj.file_page.items[i].subtitle_extension = fileInfo.file_extension;
+                            break;
+                        }
+                    }
                     callback && callback(subtitles);
                 }
             }
@@ -848,7 +866,7 @@
             },
             responseType: "blob",
             onload: function(result){
-                if (!result.status || result.status == 200) {
+                if (result.status == 200) {
                     var blob = result.response;
                     var reader = new FileReader();
                     reader.readAsText(blob, 'UTF-8');
@@ -911,6 +929,27 @@
                 }
             },
             ass: {
+                getItems(text) {
+                    text = text.replace(/\r\n/g, "");
+                    var regex = /Dialogue: \d+,(\d+:\d{2}:\d{2}\.\d{2}),(\d+:\d{2}:\d{2}\.\d{2}),.*?,\d+,\d+,\d+,,/g;
+                    var data = text.split(regex);
+                    data.shift();
+                    return data;
+                },
+                getInfo(data) {
+                    var items = [];
+                    for (var i = 0; i < data.length; i += 3) {
+                        items.push({
+                            index: items.length,
+                            startTime: obj.toSeconds(data[i]),
+                            endTime: obj.toSeconds(data[i + 1]),
+                            text: data[i + 2].trim().replace(/\\N/g, "\n").replace(/{.*?}/g, "")
+                        });
+                    }
+                    return items;
+                }
+            },
+            ssa: {
                 getItems(text) {
                     text = text.replace(/\r\n/g, "");
                     var regex = /Dialogue: \d+,(\d+:\d{2}:\d{2}\.\d{2}),(\d+:\d{2}:\d{2}\.\d{2}),.*?,\d+,\d+,\d+,,/g;
@@ -1621,13 +1660,11 @@
                     }
                 }
                 else if (this.readyState == 4 && this.status == 403) {
-                    if (obj.expires(this.responseURL)) {
-                        if (obj.video_page.dPlayer) {
-                            var media_num = (this.responseURL.match(/media-(\d+)\.ts/) || [])[1] || 0;
-                            if (media_num > 0 && obj.video_page.media_num != media_num) {
-                                obj.video_page.media_num = media_num;
-                                obj.getVideoPreviewPlayInfo();
-                            }
+                    if (obj.video_page.dPlayer && obj.expires(this.responseURL)) {
+                        var media_num = (this.responseURL.match(/media-(\d+)\.ts/) || [])[1] || 0;
+                        if (media_num > 0 && obj.video_page.media_num != media_num) {
+                            obj.video_page.media_num = media_num;
+                            obj.getVideoPreviewPlayInfo();
                         }
                     }
                 }
