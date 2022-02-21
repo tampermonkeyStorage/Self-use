@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.9.1
+// @version      1.9.2
 // @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -41,6 +41,7 @@
             },
             file_id: "",
             elevideo: "",
+            elequality: "",
             dPlayer: null,
             attributes: {},
             media_num: 0
@@ -163,7 +164,7 @@
             }
 
             if ($("#addsubtitle").length == 0) {
-                $("body").append('<input id="addsubtitle" type="file" accept=".srt,.ass" style="display: none;">');
+                $("body").append('<input id="addsubtitle" type="file" accept=".srt,.ass,.ssa" style="display: none;">');
             }
 
             $("#addsubtitle").click();
@@ -269,9 +270,21 @@
     };
 
     obj.useNativePlayer = function () {
+        /*
         if (!unsafeWindow.NativePlayer) {
             unsafeWindow.NativePlayer = {};
+            var style = document.createElement("style");
+            style.type = "text/css";
+            style.textContent = "::cue {color: #b7daff; background-color: rgba(0, 0, 0, 0.0); font-size:4.5vh;}";
+            document.head.appendChild(style);
         }
+        var video = document.querySelector("video");
+        if (video) {
+            video.onloadedmetadata = function () {
+                obj.addCueVideoSubtitle();
+            };
+        }
+        */
     };
 
     obj.useDPlayer = function () {
@@ -340,9 +353,9 @@
     };
 
     obj.dPlayerStart = function () {
-        var videoNode = document.querySelector("video");
+        var dPlayerNode, videoNode = document.querySelector("video");
         if (videoNode) {
-            var dPlayerNode = document.getElementById("dplayer");
+            dPlayerNode = document.getElementById("dplayer");
             if (!dPlayerNode) {
                 dPlayerNode = document.createElement("div");
                 dPlayerNode.setAttribute("id", "dplayer");
@@ -356,9 +369,39 @@
             return;
         }
 
-        var play_info = obj.video_page.play_info, file_id = play_info.file_id, content_hash = play_info.content_hash;
-        if (obj.video_page.file_id == file_id) {
-            if (obj.video_page.dPlayer && obj.video_page.dPlayer.video) {
+        var quality = [], defaultQuality = 0;
+        var play_info = obj.video_page.play_info || {};
+        var video_preview_play_info = play_info.video_preview_play_info || {};
+        var task_list = video_preview_play_info.live_transcoding_task_list;
+        if (Array.isArray(task_list)) {
+            var pds = {
+                FHD: "1080 全高清",
+                HD: "720 高清",
+                SD: "540 标清",
+                LD: "360 流畅"
+            };
+            task_list.forEach(function (item) {
+                quality.push({
+                    name: pds[item.template_id],
+                    url: item.url,
+                    type: "hls"
+                });
+            });
+            defaultQuality = task_list.length - 1;
+        }
+        else {
+            if (play_info.file_id) {
+                console.warn("尝试重复获取播放链接");
+                setTimeout(obj.getVideoPreviewPlayInfo, 500);
+            }
+            else {
+                obj.showTipError("获取播放信息失败：请刷新网页重试");
+            }
+            return;
+        }
+
+        if (obj.video_page.file_id == play_info.file_id) {
+            if (obj.video_page.dPlayer && obj.video_page.dPlayer.destroy) {
                 var video = obj.video_page.dPlayer.video;
                 obj.video_page.attributes = {
                     currentTime: video.currentTime,
@@ -371,15 +414,15 @@
             }
         }
         else {
-            obj.video_page.file_id = file_id;
+            obj.video_page.file_id = play_info.file_id;
             obj.video_page.attributes = {};
         }
 
         var options = {
-            container: document.getElementById("dplayer"),
+            container: dPlayerNode,
             video: {
-                quality: [],
-                defaultQuality: 0
+                quality: quality,
+                defaultQuality: defaultQuality
             },
             subtitle: {
                 url: "",
@@ -407,35 +450,6 @@
             theme: "#b7daff"
         };
 
-        var video_preview_play_info = play_info.video_preview_play_info || {};
-        if (Array.isArray(video_preview_play_info.live_transcoding_task_list)) {
-            var task_list = video_preview_play_info.live_transcoding_task_list;
-            var pds = {
-                FHD: "1080 全高清",
-                HD: "720 高清",
-                SD: "540 标清",
-                LD: "360 流畅"
-            };
-            task_list.forEach(function (item) {
-                options.video.quality.push({
-                    name: pds[item.template_id],
-                    url: item.url,
-                    type: "hls"
-                });
-            });
-
-            options.video.defaultQuality = task_list.length - 1;
-        }
-        else {
-            if (play_info.file_id) {
-                obj.getVideoPreviewPlayInfo();
-            }
-            else {
-                obj.showTipError("获取播放信息失败：请刷新网页重试");
-            }
-            return;
-        }
-
         try{
             var player = obj.video_page.dPlayer = new unsafeWindow.DPlayer(options);
 
@@ -450,6 +464,16 @@
                 options.hotkey || obj.dPlayerHotkey();
                 obj.addCueVideoSubtitle();
             });
+
+            document.querySelector(".dplayer-controller .dplayer-quality-icon").onclick = function () {
+                var qualityNode = document.querySelector(".dplayer-controller .dplayer-quality-mask");
+                if (qualityNode) {
+                    obj.video_page.elequality = this.parentNode.removeChild(qualityNode);
+                }
+                else {
+                    this.parentNode.appendChild(obj.video_page.elequality);
+                }
+            };
         } catch (error) {
             console.log("播放器创建失败", error);
         }
@@ -471,6 +495,10 @@
                 if ("INPUT" !== a && "TEXTAREA" !== a && "" !== n && "true" !== n) {
                     var o, r = e || window.event;
                     switch (r.keyCode) {
+                        case 13:
+                            r.preventDefault();
+                            t.fullScreen.toggle("web");
+                            break;
                         case 32:
                             r.preventDefault();
                             t.toggle();
@@ -649,20 +677,27 @@
     };
 
     obj.getSubtitles = function (callback) {
+        var play_info = obj.video_page.play_info;
+        if (play_info.subtitleText) {
+            var subtitles = obj.parseTextToArray(play_info.subtitle_extension, play_info.subtitleText);
+            if (subtitles.length) {
+                callback && callback(subtitles);
+                return;
+            }
+        }
+
         obj.getFilesSubtitleText(function (fileList) {
             if (fileList.length) {
-                var subtitles = [];
                 for (var i = 0; i < fileList.length; i++) {
                     var fileInfo = fileList[i];
                     if (fileInfo.subtitleText) {
-                        var strToArr = obj.parseTextToArray(fileInfo.file_extension, fileInfo.subtitleText);
-                        if (strToArr.length) {
-                            subtitles = strToArr;
-                            break;
+                        var subtitles = obj.parseTextToArray(fileInfo.file_extension, fileInfo.subtitleText);
+                        if (subtitles.length) {
+                            callback && callback(subtitles);
+                            return;
                         }
                     }
                 }
-                callback && callback(subtitles);
             }
             else {
                 callback && callback([]);
@@ -673,6 +708,15 @@
             if (fileInfo.subtitleText) {
                 var subtitles = obj.parseTextToArray(fileInfo.file_extension, fileInfo.subtitleText);
                 if (subtitles.length) {
+                    var fileList = obj.file_page.items;
+                    var file_id = obj.video_page.play_info.file_id;
+                    for (var i = 0; i < fileList.length; i++) {
+                        if (fileList[i].file_id == file_id) {
+                            obj.file_page.items[i].subtitleText = fileInfo.subtitleText;
+                            obj.file_page.items[i].subtitle_extension = fileInfo.file_extension;
+                            break;
+                        }
+                    }
                     callback && callback(subtitles);
                 }
             }
@@ -834,7 +878,7 @@
             },
             responseType: "blob",
             onload: function(result){
-                if (!result.status || result.status == 200) {
+                if (result.status == 200) {
                     var blob = result.response;
                     var reader = new FileReader();
                     reader.readAsText(blob, 'UTF-8');
@@ -897,6 +941,27 @@
                 }
             },
             ass: {
+                getItems(text) {
+                    text = text.replace(/\r\n/g, "");
+                    var regex = /Dialogue: \d+,(\d+:\d{2}:\d{2}\.\d{2}),(\d+:\d{2}:\d{2}\.\d{2}),.*?,\d+,\d+,\d+,,/g;
+                    var data = text.split(regex);
+                    data.shift();
+                    return data;
+                },
+                getInfo(data) {
+                    var items = [];
+                    for (var i = 0; i < data.length; i += 3) {
+                        items.push({
+                            index: items.length,
+                            startTime: obj.toSeconds(data[i]),
+                            endTime: obj.toSeconds(data[i + 1]),
+                            text: data[i + 2].trim().replace(/\\N/g, "\n").replace(/{.*?}/g, "")
+                        });
+                    }
+                    return items;
+                }
+            },
+            ssa: {
                 getItems(text) {
                     text = text.replace(/\r\n/g, "");
                     var regex = /Dialogue: \d+,(\d+:\d{2}:\d{2}\.\d{2}),(\d+:\d{2}:\d{2}\.\d{2}),.*?,\d+,\d+,\d+,,/g;
@@ -1177,10 +1242,19 @@
     obj.showBox = function (body) {
         var template = '<div class="ant-modal-root ant-modal-my"><div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap" role="dialog"><div role="document" class="ant-modal modal-wrapper--2yJKO" style="width: 666px;"><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle1">文件下载</div></div><div class="ant-modal-body"><div class="icon-wrapper--3dbbo"><span data-role="icon" data-render-as="svg" data-icon-type="PDSClose" class="close-icon--33bP0 icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSClose"></use></svg></span></div>';
         template += body;
-        template += '</div><div class="ant-modal-footer"></div></div></div></div></div>';
+        template += '</div><div class="ant-modal-footer"><div class="footer--1r-ur"><div class="buttons--nBPeo"><button class="button--2Aa4u primary--3AJe5 small---B8mi">IDM 导出文件</button></div></div></div></div></div></div></div>';
         $("body").append(template);
+
         $(".icon-wrapper--3dbbo").one("click", function () {
             $(".ant-modal-my").remove();
+        });
+
+        $(".ant-modal-my button").off("click").on("click", function () {
+            var content = "", referer = "https://www.aliyundrive.com/", userAgent = navigator.userAgent;
+            $(".item-list a").each(function (index, value) {
+                content += ["<", this.title, "referer: " + referer, "User-Agent: " + userAgent, ">"].join("\r\n") + "\r\n";
+            });
+            obj.downloadFile(content, "IDM 导出文件.ef2")
         });
 
         //$(".ant-modal.modal-wrapper--2yJKO").css({width: "666px"}); //调整宽度（"666px" 改成 "777px"  "888px"  "999px" ...）
@@ -1190,6 +1264,16 @@
                 $(".ant-modal-my").remove();
             }
         });
+    };
+
+    obj.downloadFile = function(content, filename) {
+        var a = document.createElement("a");
+        var blob = new Blob([content]);
+        var url = window.URL.createObjectURL(blob);
+        a.href = url;
+        a.download = filename;
+        a.click();
+        window.URL.revokeObjectURL(url);
     };
 
     obj.getSelectedFileList = function () {
@@ -1607,13 +1691,11 @@
                     }
                 }
                 else if (this.readyState == 4 && this.status == 403) {
-                    if (obj.expires(this.responseURL)) {
-                        if (obj.video_page.dPlayer) {
-                            var media_num = (this.responseURL.match(/media-(\d+)\.ts/) || [])[1] || 0;
-                            if (media_num > 0 && obj.video_page.media_num != media_num) {
-                                obj.video_page.media_num = media_num;
-                                obj.getVideoPreviewPlayInfo();
-                            }
+                    if (obj.video_page.dPlayer && obj.expires(this.responseURL)) {
+                        var media_num = (this.responseURL.match(/media-(\d+)\.ts/) || [])[1] || 0;
+                        if (media_num > 0 && obj.video_page.media_num != media_num) {
+                            obj.video_page.media_num = media_num;
+                            obj.getVideoPreviewPlayInfo();
                         }
                     }
                 }
