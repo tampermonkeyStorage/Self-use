@@ -270,9 +270,21 @@
     };
 
     obj.useNativePlayer = function () {
+        /*
         if (!unsafeWindow.NativePlayer) {
             unsafeWindow.NativePlayer = {};
+            var style = document.createElement("style");
+            style.type = "text/css";
+            style.textContent = "::cue {color: #b7daff; background-color: rgba(0, 0, 0, 0.0); font-size:4.5vh;}";
+            document.head.appendChild(style);
         }
+        var video = document.querySelector("video");
+        if (video) {
+            video.onloadedmetadata = function () {
+                obj.addCueVideoSubtitle();
+            };
+        }
+        */
     };
 
     obj.useDPlayer = function () {
@@ -453,8 +465,8 @@
                 obj.addCueVideoSubtitle();
             });
 
-            document.querySelector(".dplayer-controller .dplayer-icons .dplayer-icon.dplayer-quality-icon").onclick = function () {
-                var qualityNode = document.querySelector(".dplayer-controller .dplayer-icons .dplayer-quality .dplayer-quality-mask");
+            document.querySelector(".dplayer-controller .dplayer-quality-icon").onclick = function () {
+                var qualityNode = document.querySelector(".dplayer-controller .dplayer-quality-mask");
                 if (qualityNode) {
                     obj.video_page.elequality = this.parentNode.removeChild(qualityNode);
                 }
@@ -1230,10 +1242,19 @@
     obj.showBox = function (body) {
         var template = '<div class="ant-modal-root ant-modal-my"><div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap" role="dialog"><div role="document" class="ant-modal modal-wrapper--2yJKO" style="width: 666px;"><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle1">文件下载</div></div><div class="ant-modal-body"><div class="icon-wrapper--3dbbo"><span data-role="icon" data-render-as="svg" data-icon-type="PDSClose" class="close-icon--33bP0 icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSClose"></use></svg></span></div>';
         template += body;
-        template += '</div><div class="ant-modal-footer"></div></div></div></div></div>';
+        template += '</div><div class="ant-modal-footer"><div class="footer--1r-ur"><div class="buttons--nBPeo"><button class="button--2Aa4u primary--3AJe5 small---B8mi">IDM 导出文件</button></div></div></div></div></div></div></div>';
         $("body").append(template);
+
         $(".icon-wrapper--3dbbo").one("click", function () {
             $(".ant-modal-my").remove();
+        });
+
+        $(".ant-modal-my button").off("click").on("click", function () {
+            var content = "", referer = "https://www.aliyundrive.com/", userAgent = navigator.userAgent;
+            $(".item-list a").each(function (index, value) {
+                content += ["<", this.title, "referer: " + referer, "User-Agent: " + userAgent, ">"].join("\r\n") + "\r\n";
+            });
+            obj.downloadFile(content, "IDM 导出文件.ef2")
         });
 
         //$(".ant-modal.modal-wrapper--2yJKO").css({width: "666px"}); //调整宽度（"666px" 改成 "777px"  "888px"  "999px" ...）
@@ -1243,6 +1264,16 @@
                 $(".ant-modal-my").remove();
             }
         });
+    };
+
+    obj.downloadFile = function(content, filename) {
+        var a = document.createElement("a");
+        var blob = new Blob([content]);
+        var url = window.URL.createObjectURL(blob);
+        a.href = url;
+        a.download = filename;
+        a.click();
+        window.URL.revokeObjectURL(url);
     };
 
     obj.getSelectedFileList = function () {
