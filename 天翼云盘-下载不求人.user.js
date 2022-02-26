@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         天翼云盘-下载不求人
 // @namespace    http://tampermonkey.net/
-// @version      0.5.3
+// @version      0.5.4
 // @description  让下载成为一件愉快的事情
 // @author       You
 // @match        https://cloud.189.cn/web/*
 // @icon         https://cloud.189.cn/web/logo.ico
 // @require      https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js
-// @grant        none
+// @grant        GM_setClipboard
 // ==/UserScript==
 
 (function() {
@@ -62,7 +62,7 @@
     obj.getDownloadUrl = function (fileId, shareId) {
         return new Promise(function (resolve) {
             $.ajax({
-                url: "https://cloud.189.cn/api/open/file/getFileDownloadUrl.action?noCache=".concat(Math.random(), "&fileId=").concat(fileId, "&dt=1").concat(shareId ? "&shareId=" + shareId : ""),
+                url: "https://cloud.189.cn/api/open/file/getFileDownloadUrl.action?noCache=".concat(Math.random(), "&fileId=").concat(fileId, shareId ? "&dt=1&shareId=" + shareId : ""),
                 headers: {
                     accept: "application/json;charset=UTF-8"
                 },
@@ -114,10 +114,14 @@
     };
 
     obj.showBox = function (body) {
-        var template = '<div data-v-8956c4ce="" class="share-content"><div data-v-8956c4ce="" class="share-content-head"><span data-v-8956c4ce="" class="share-content-head-span">文件下载</span><span data-v-8956c4ce="" class="share-content-head-close">×</span></div><div data-v-8956c4ce="" class="share-detail" style="height: 450px;"></div>';
         if ($(".c-share").length == 0) {
-            $("body").append('<section data-v-8956c4ce="" class="c-share" style="display: none;"></section>');
+            var style = document.createElement("style");
+            style.textContent = ".c-share[data-v-66e962d0]{position:fixed;left:0;right:0;bottom:0;top:0;background:rgba(0,0,0,.2);display:-webkit-box;display:-ms-flexbox;display:flex;-webkit-box-pack:center;-ms-flex-pack:center;justify-content:center;-webkit-box-align:center;-ms-flex-align:center;align-items:center;z-index:5999}";
+            document.head.appendChild(style);
+            $("body").append('<section data-v-66e962d0 class="c-share" style="display: none;"></section>');
         }
+        var attrName = document.querySelector(".c-share").getAttributeNames()[0];
+        var template = '<div ' + attrName + ' class="share-content"><div ' + attrName + ' class="share-content-head"><span ' + attrName + ' class="share-content-head-span">文件下载</span><span ' + attrName + ' class="share-content-head-close">×</span></div><div ' + attrName + ' class="share-detail" style="height: 450px;"></div>';
 
         $(".c-share").append(template);
         $(".c-share .share-detail").append(body);
@@ -149,7 +153,6 @@
         var shareId = location.href.match("/web/main/") ? null : obj.file_page.shareId;
         var retCount = 0;
         fileList.forEach(function (item, index) {
-            console.log(item);
             if (item.isFolder) {
                 html += '<p>' + (++index) + '：' + (item.fileName ? item.fileName : item.fileId) + ' || <font color="green">请进入文件夹下载</font></p>';
                 html += '<p style="' + rowStyle + '"></p>';
@@ -157,14 +160,14 @@
             }
             else {
                 if (item.downloadUrl) {
-                    html += '<p>' + (++index) + '：' + (item.fileName ? item.fileName : item.fileId) + ' || <font color="green">' + item.fileSize + '</font></p>';
+                    html += '<p>' + (++index) + '：' + (item.fileName ? item.fileName : item.fileId) + '</p>';
                     html += '<p style="' + rowStyle + '"><a title="' + item.downloadUrl + '" href="' + item.downloadUrl + '" style="color: blue;">' + item.downloadUrl + '</a></p>';
                     retCount++;
                 }
                 else {
                     obj.getDownloadUrl(item.fileId, shareId).then(function (downloadUrl) {
                         item.downloadUrl = downloadUrl;
-                        html += '<p>' + (++index) + '：' + (item.fileName ? item.fileName : item.fileId) + ' || <font color="green">' + item.fileSize + '</font></p>';
+                        html += '<p>' + (++index) + '：' + (item.fileName ? item.fileName : item.fileId) + '</p>';
                         html += '<p style="' + rowStyle + '"><a title="' + item.downloadUrl + '" href="' + item.downloadUrl + '" style="color: blue;">' + item.downloadUrl + '</a></p>';
                         retCount++;
                     });
@@ -178,7 +181,7 @@
                 obj.hideNotify();
                 clearInterval(waitId);
             }
-        }, 500);
+        }, 200);
     };
 
     obj.initDownloadPage = function () {
@@ -186,7 +189,8 @@
             return;
         }
         if ($(".file-operate").length) {
-            $(".file-operate").append('<a data-v-7d1d0e5d class="btn btn-show-link" style="background: #2b89ea; position: relative">显示链接</a>');
+            var node = document.querySelector(".file-operate a"), attrName = node ? node.getAttributeNames()[0] : "";
+            $(".file-operate").append('<a ' + attrName + ' class="btn btn-show-link" style="margin-left: 60px;background: #2b89ea; position: relative">显示链接</a>');
             $(".btn").css({"margin-left": "5px", "margin-right": "5px"});
             $(".tips-save-box").css("display", "none");
             $(".btn-show-link").on("click", obj.showDownload);
