@@ -80,7 +80,7 @@
     };
 
     obj.getFileDownloadUrl = function (fileId, shareId) {
-        var accessToken = localStorage.getItem("accessToken").replace(/[\"\\]/g, "") + 1
+        var accessToken = localStorage.getItem("accessToken").replace(/[\"\\]/g, "")
         , timestamp = Date.now()
         , data = Object.assign({
             AccessToken: accessToken,
