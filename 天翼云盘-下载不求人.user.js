@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name         天翼云盘-下载不求人
 // @namespace    http://tampermonkey.net/
-// @version      0.5.4
+// @version      0.6.0
 // @description  让下载成为一件愉快的事情
 // @author       You
 // @match        https://cloud.189.cn/web/*
+// @connect      189.cn
 // @icon         https://cloud.189.cn/web/logo.ico
-// @require      https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js
-// @grant        GM_setClipboard
+// @require      https://code.jquery.com/jquery-3.6.0.min.js
+// @require      https://cdn.staticfile.org/blueimp-md5/2.19.0/js/md5.min.js
+// @grant        GM_xmlhttpRequest
 // ==/UserScript==
 
 (function() {
@@ -59,12 +61,43 @@
         $Vue.$loading.hide();
     };
 
-    obj.getDownloadUrl = function (fileId, shareId) {
+    obj.getSignature = function (e) {
+        for (var t = 1; t < arguments.length; t++) {
+            var n = arguments[t];
+            for (var r in n) {
+                Object.prototype.hasOwnProperty.call(n, r) && (e[r] = n[r])
+            }
+        }
+        var i = []
+        for (var s in e){
+            i.push(s + "=" + e[s]);
+        }
+        i.sort(function(e, t) {
+            return e > t ? 1 : e < t ? -1 : 0
+        })
+        e = i.join("&");
+        return window.md5(e);
+    };
+
+    obj.getFileDownloadUrl = function (fileId, shareId) {
+        var accessToken = localStorage.getItem("accessToken").replace(/[\"\\]/g, "") + 1
+        , timestamp = Date.now()
+        , data = Object.assign({
+            AccessToken: accessToken,
+            Timestamp: timestamp,
+            fileId: fileId
+        }, shareId ? {dt: 1, shareId: shareId} : {})
+        , signature = obj.getSignature(data);
+
         return new Promise(function (resolve) {
             $.ajax({
-                url: "https://cloud.189.cn/api/open/file/getFileDownloadUrl.action?noCache=".concat(Math.random(), "&fileId=").concat(fileId, shareId ? "&dt=1&shareId=" + shareId : ""),
+                url: "https://api.cloud.189.cn/open/file/getFileDownloadUrl.action?fileId=" + fileId + (shareId ? "&dt=1&shareId=" + shareId : ""),
                 headers: {
-                    accept: "application/json;charset=UTF-8"
+                    Accept: "application/json;charset=UTF-8",
+                    AccessToken: accessToken,
+                    Signature: signature,
+                    "Sign-Type": 1,
+                    Timestamp: timestamp
                 },
                 async: true,
                 success: function (t) {
@@ -82,9 +115,64 @@
                 },
                 error: function () {
                     obj.showTipError("网络错误，刷新重试");
+                    localStorage.removeItem("accessToken");
                     resolve("");
                 }
             });
+        });
+    };
+
+    obj.getFinalUrl = function (url) {
+        return new Promise(function (resolve) {
+            const xhr = GM_xmlhttpRequest({
+                url: url,
+                method: "get",
+                onreadystatechange: function(response) {
+                    if (response.readyState === 4 || response.finalUrl !== url) {
+                        xhr.abort();
+                        if (!xhr.mark) {
+                            xhr.mark = true;
+                            resolve(response.finalUrl);
+                        }
+                    }
+                },
+                onerror: function (error) {
+                    resolve("");
+                }
+            });
+        });
+    };
+
+    obj.getAccessToken = function () {
+        return new Promise(function (resolve) {
+            var accessToken = localStorage.getItem("accessToken");
+            if (accessToken) {
+                resolve(accessToken);
+                return;
+            }
+            obj.getFinalUrl("https://api.cloud.189.cn/open/oauth2/ssoH5.action").then(function (location) {
+                if (location) {
+                    var accessToken = (/accessToken=(.+)/.exec(location) || [])[1];
+                    accessToken && localStorage.setItem("accessToken", accessToken);
+                    resolve(accessToken);
+                }
+                else {
+                    resolve("");
+                }
+            });
+        });
+    };
+
+    obj.getDownloadUrl = function (fileId, shareId) {
+        return obj.getAccessToken().then(function (accessToken) {
+            if (accessToken) {
+                return obj.getFileDownloadUrl(fileId, shareId);
+            }
+            else {
+                return new Promise(function (resolve) {
+                    resolve("");
+                });
+            }
         });
     };
 
