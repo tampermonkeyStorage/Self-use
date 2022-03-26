@@ -48,6 +48,11 @@
         }
     };
 
+    // 播放速度按钮点击事件,点击保存当前选择的速度
+    $(document).on("click", ".dplayer-setting-speed-item", function() {
+        localStorage['dplayer-speed'] = $(this).attr('data-speed');
+    });
+
     obj.initVideoPage = function () {
         obj.initButtonVideoPage();
 
@@ -452,6 +457,13 @@
 
         try{
             var player = obj.video_page.dPlayer = new unsafeWindow.DPlayer(options);
+            
+            // 使用当前选择的速度进行播放,如果没有设置过则为1
+            var dsp = localStorage['dplayer-speed'];
+            if(dsp==undefined){
+              dsp=1;
+            }
+            player.speed(dsp);
 
             var attributes = obj.video_page.attributes;
             if (Object.keys(attributes).length) {
