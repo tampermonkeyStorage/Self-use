@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.9.2
+// @version      1.9.5
 // @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -47,11 +47,6 @@
             media_num: 0
         }
     };
-
-    // 播放速度按钮点击事件,点击保存当前选择的速度
-    $(document).on("click", ".dplayer-setting-speed-item", function() {
-        localStorage['dplayer-speed'] = $(this).attr('data-speed');
-    });
 
     obj.initVideoPage = function () {
         obj.initButtonVideoPage();
@@ -388,20 +383,14 @@
             task_list.forEach(function (item) {
                 quality.push({
                     name: pds[item.template_id],
-                    url: item.url,
+                    url: item.url || item.preview_url,
                     type: "hls"
                 });
             });
             defaultQuality = task_list.length - 1;
         }
         else {
-            if (play_info.file_id) {
-                console.warn("尝试重复获取播放链接");
-                setTimeout(obj.getVideoPreviewPlayInfo, 500);
-            }
-            else {
-                obj.showTipError("获取播放信息失败：请刷新网页重试");
-            }
+            obj.showTipError("获取播放信息失败：请刷新网页重试");
             return;
         }
 
@@ -410,7 +399,6 @@
                 var video = obj.video_page.dPlayer.video;
                 obj.video_page.attributes = {
                     currentTime: video.currentTime,
-                    playbackRate: video.playbackRate,
                     muted: video.muted
                 };
 
@@ -457,24 +445,21 @@
 
         try{
             var player = obj.video_page.dPlayer = new unsafeWindow.DPlayer(options);
-            
-            // 使用当前选择的速度进行播放,如果没有设置过则为1
-            var dsp = localStorage['dplayer-speed'];
-            if(dsp==undefined){
-              dsp=1;
-            }
-            player.speed(dsp);
 
             var attributes = obj.video_page.attributes;
             if (Object.keys(attributes).length) {
                 player.seek(attributes.currentTime - 1);
-                player.speed(attributes.playbackRate);
                 player.video.muted = attributes.muted;
             }
-
             player.on("play", function () {
                 options.hotkey || obj.dPlayerHotkey();
                 obj.addCueVideoSubtitle();
+            });
+
+            player.speed(localStorage['dplayer-speed'] || 1); // 使用当前选择的速度进行播放
+            $(document).off("click", ".dplayer-setting-speed-item").on("click", ".dplayer-setting-speed-item", function() {
+                // 播放速度按钮点击事件,点击保存当前选择的速度
+                localStorage['dplayer-speed'] = $(this).attr('data-speed');
             });
 
             document.querySelector(".dplayer-controller .dplayer-quality-icon").onclick = function () {
@@ -549,15 +534,6 @@
                 }
             }
         }));
-    };
-
-    obj.getVideoPreviewPlayInfo = function () {
-        if (location.href.includes("aliyundrive.com/s/")) {
-            obj.get_share_link_video_preview_play_info();
-        }
-        else {
-            obj.get_video_preview_play_info();
-        }
     };
 
     obj.get_share_link_video_preview_play_info = function (callback) {
@@ -761,8 +737,8 @@
             if (fileInfo.hasOwnProperty("subtitleText")) {
                 callback && callback(fileInfo);
             }
-            else if (fileInfo.hasOwnProperty("download_url")) {
-                obj.getSubtitleText(fileInfo.download_url, function (subtitleText) {
+            else if (fileInfo.hasOwnProperty("download_url") || fileInfo.hasOwnProperty("url")) {
+                obj.getSubtitleText(fileInfo.download_url || fileInfo.url, function (subtitleText) {
                     if (subtitleText) {
                         fileInfo.subtitleText = subtitleText;
                     }
@@ -770,7 +746,19 @@
                 });
             }
             else {
-                obj.getShareLinkDownloadUrl(fileInfo.file_id, obj.getShareId(), function (download_url) {
+                obj.getShareId() ? obj.getShareLinkDownloadUrl(fileInfo.file_id, obj.getShareId(), function (download_url) {
+                    if (download_url) {
+                        obj.getSubtitleText(download_url, function (subtitleText) {
+                            if (subtitleText) {
+                                fileInfo.subtitleText = subtitleText;
+                            }
+                            callback && callback(fileInfo);
+                        });
+                    }
+                    else {
+                        callback && callback(fileInfo);
+                    }
+                }) : obj.getHomeLinkDownloadUrl(fileInfo.file_id, fileInfo.drive_id, function (download_url) {
                     if (download_url) {
                         obj.getSubtitleText(download_url, function (subtitleText) {
                             if (subtitleText) {
@@ -955,7 +943,7 @@
             ass: {
                 getItems(text) {
                     text = text.replace(/\r\n/g, "");
-                    var regex = /Dialogue: \d+,(\d+:\d{2}:\d{2}\.\d{2}),(\d+:\d{2}:\d{2}\.\d{2}),.*?,\d+,\d+,\d+,,/g;
+                    var regex = /Dialogue: \d+,(\d+:\d{2}:\d{2}\.\d{2}),(\d+:\d{2}:\d{2}\.\d{2}),.*?,\d+,\d+,\d+,.*?,/g;
                     var data = text.split(regex);
                     data.shift();
                     return data;
@@ -976,7 +964,7 @@
             ssa: {
                 getItems(text) {
                     text = text.replace(/\r\n/g, "");
-                    var regex = /Dialogue: \d+,(\d+:\d{2}:\d{2}\.\d{2}),(\d+:\d{2}:\d{2}\.\d{2}),.*?,\d+,\d+,\d+,,/g;
+                    var regex = /Dialogue: \d+,(\d+:\d{2}:\d{2}\.\d{2}),(\d+:\d{2}:\d{2}\.\d{2}),.*?,\d+,\d+,\d+,.*?,/g;
                     var data = text.split(regex);
                     data.shift();
                     return data;
@@ -1004,57 +992,6 @@
             timeSec += 60 ** (timeArr.length - i - 1) * parseFloat(timeArr[i]);
         }
         return timeSec + parseFloat(_timeArr[1] || 0) / 1000;
-    };
-
-    obj.unlockPageFileLimit = function () {
-        (function(open) {
-            XMLHttpRequest.prototype.open = function() {
-                if (!this._hooked) {
-                    this._hooked = true;
-                    setupHook(this);
-                }
-                open.apply(this, arguments);
-            }
-        })(XMLHttpRequest.prototype.open);
-
-        function setupHook(xhr) {
-            function setup() {
-                Object.defineProperty(xhr, "responseText", {
-                    get: function() {
-                        delete xhr.responseText;
-                        var responseJson, responseURL = xhr.responseURL, responseText = xhr.responseText;
-                        if (responseURL.includes("/file/list") && responseText.includes("items")) {
-                            responseJson = JSON.parse(responseText);
-                            responseJson.items.forEach(function (item) {
-                                if (item.category && item.category == "video") {
-                                    if (["ts"].includes(item.file_extension)) {
-                                        item.file_extension = "mp4";
-                                    }
-                                }
-
-                                if (item.punish_flag && item.punish_flag != 0) {
-                                    item.punish_flag = 0;
-                                }
-                            });
-                            responseText = JSON.stringify(responseJson);
-                        }
-                        else if (responseURL.includes("/file/get_share_link_video_preview_play_info") && responseText && responseText.includes("preview_url")) {
-                            responseJson = JSON.parse(responseText);
-                            responseJson.video_preview_play_info.live_transcoding_task_list.forEach(function (item) {
-                                item.preview_url = item.url || item.preview_url;
-                            });
-                            responseText = JSON.stringify(responseJson);
-                        }
-
-                        setup();
-                        return responseText;
-                    },
-                    configurable: true
-                });
-            }
-
-            setup();
-        }
     };
 
     obj.customSharePwd = function () {
@@ -1629,7 +1566,7 @@
         XMLHttpRequest.prototype.send = function(data) {
             this.addEventListener("load", function(event) {
                 if (this.readyState == 4 && this.status == 200) {
-                    var response, responseURL = this.responseURL;
+                    var fileList, response, responseURL = this.responseURL;
                     if (responseURL.indexOf("/file/list") > 0) {
                         if (document.querySelector(".ant-modal-mask")) {
                             //排除【保存 移动 等行为触发】
@@ -1684,19 +1621,40 @@
                             }
                         }
                     }
-                    else if ((responseURL.indexOf("/file/get_share_link_video_preview_play_info") > 0 || responseURL.indexOf("/file/get_video_preview_play_info") > 0)) {
+                    else if (responseURL.indexOf("/file/get_share_link_video_preview_play_info") > 0) {
                         response = JSON.parse(this.response);
                         if (response instanceof Object && response.file_id) {
-                            var fileList = obj.file_page.items;
+                            fileList = obj.file_page.items;
                             if (fileList.length) {
-                                for (var i = 0; i < fileList.length; i++) {
+                                for (let i = 0; i < fileList.length; i++) {
                                     if (fileList[i].file_id == response.file_id) {
                                         obj.video_page.play_info = Object.assign(fileList[i], response);
                                         break;
                                     }
                                 }
                             }
-                            obj.video_page.play_info.name || (obj.video_page.play_info = response);
+
+                            obj.autoPlayer();
+                        }
+                    }
+                    else if (responseURL.indexOf("/file/get_video_preview_play_info") > 0) {
+                        response = JSON.parse(this.response);
+                        if (response instanceof Object && response.file_id) {
+                            fileList = obj.file_page.items;
+                            if (fileList.length) {
+                                for (let i = 0; i < fileList.length; i++) {
+                                    if (fileList[i].file_id == response.file_id) {
+                                        obj.video_page.play_info = Object.assign(fileList[i], response);
+                                        break;
+                                    }
+                                }
+                            }
+
+                            var info = response.video_preview_play_info, list = info.live_transcoding_task_list;
+                            if (list[0].hasOwnProperty("preview_url") && obj.getItem("default_player") != "NativePlayer") {
+                                obj.get_share_link_video_preview_play_info();
+                                return;
+                            }
 
                             obj.autoPlayer();
                         }
@@ -1707,7 +1665,14 @@
                         var media_num = (this.responseURL.match(/media-(\d+)\.ts/) || [])[1] || 0;
                         if (media_num > 0 && obj.video_page.media_num != media_num) {
                             obj.video_page.media_num = media_num;
-                            obj.getVideoPreviewPlayInfo();
+                            if (obj.getItem("default_player") != "NativePlayer") {
+                                if (obj.getShareId()) {
+                                    obj.get_share_link_video_preview_play_info();
+                                }
+                                else {
+                                    obj.get_video_preview_play_info();
+                                }
+                            }
                         }
                     }
                 }
@@ -1720,14 +1685,10 @@
     if (url.indexOf(".aliyundrive.com/s/") > 0) {
         obj.addPageFileList();
 
-        obj.unlockPageFileLimit();
-
         obj.initVideoPage();
     }
     else if (url.indexOf(".aliyundrive.com/drive") > 0) {
         obj.addPageFileList();
-
-        obj.unlockPageFileLimit();
 
         obj.initVideoPage();
 
