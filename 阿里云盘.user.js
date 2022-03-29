@@ -546,7 +546,8 @@
                 file_id: file_id,
                 get_preview_url: true,
                 share_id: share_id,
-                template_id: ""
+                template_id: "",
+                get_subtitle_info: !0
             }),
             headers: {
                 "authorization": "".concat(token.token_type || "", " ").concat(token.access_token || ""),
@@ -598,7 +599,8 @@
                 category: "live_transcoding",
                 drive_id: token.default_drive_id,
                 file_id: file_id,
-                template_id: ""
+                template_id: "",
+                get_subtitle_info: !0
             }),
             headers: {
                 "authorization": "".concat(token.token_type || "", " ").concat(token.access_token || ""),
@@ -1786,38 +1788,27 @@
                         }
                     }
                     else if (responseURL.indexOf("/file/get_share_link_video_preview_play_info") > 0) {
-                        response = JSON.parse(this.response);
-                        if (response instanceof Object && response.file_id) {
-                            fileList = obj.file_page.items;
-                            if (fileList.length) {
-                                for (let i = 0; i < fileList.length; i++) {
-                                    if (fileList[i].file_id == response.file_id) {
-                                        obj.video_page.play_info = Object.assign(fileList[i], response);
-                                        break;
-                                    }
-                                }
-                            }
+                        try { response = JSON.parse(this.response) } catch (error) { response = this.response };
+                        if (response instanceof Object) {
+                            obj.video_page.play_info = Object.assign(obj.video_page.play_info, response);
 
                             obj.autoPlayer();
                         }
                     }
                     else if (responseURL.indexOf("/file/get_video_preview_play_info") > 0) {
-                        response = JSON.parse(this.response);
-                        if (response instanceof Object && response.file_id) {
-                            fileList = obj.file_page.items;
-                            if (fileList.length) {
-                                for (let i = 0; i < fileList.length; i++) {
-                                    if (fileList[i].file_id == response.file_id) {
-                                        obj.video_page.play_info = Object.assign(fileList[i], response);
-                                        break;
-                                    }
-                                }
-                            }
+                        try { response = JSON.parse(this.response) } catch (error) { response = this.response };
+                        if (response instanceof Object) {
+                            obj.video_page.play_info = Object.assign(obj.video_page.play_info, response);
 
-                            var info = response.video_preview_play_info, list = info.live_transcoding_task_list;
-                            if (list[0].hasOwnProperty("preview_url") && obj.getItem("default_player") != "NativePlayer") {
-                                obj.get_share_link_video_preview_play_info();
-                                return;
+                            var info = response.video_preview_play_info
+                            , list = info.live_transcoding_task_list;
+                            if (list[0].hasOwnProperty("preview_url")) {
+                                if (obj.getItem("default_player") != "NativePlayer") {
+                                    obj.get_share_link_video_preview_play_info(function (response) {
+                                        response || obj.showTipError("get_share_link_video_preview_play_info 失败", 10000);
+                                    });
+                                    return;
+                                }
                             }
 
                             obj.autoPlayer();
@@ -1825,17 +1816,15 @@
                     }
                 }
                 else if (this.readyState == 4 && this.status == 403) {
-                    if (obj.video_page.dPlayer && obj.expires(this.responseURL)) {
+                    if (obj.expires(this.responseURL) && obj.getItem("default_player") != "NativePlayer") {
                         var media_num = (this.responseURL.match(/media-(\d+)\.ts/) || [])[1] || 0;
                         if (media_num > 0 && obj.video_page.media_num != media_num) {
                             obj.video_page.media_num = media_num;
-                            if (obj.getItem("default_player") != "NativePlayer") {
-                                if (obj.getShareId()) {
-                                    obj.get_share_link_video_preview_play_info();
-                                }
-                                else {
-                                    obj.get_video_preview_play_info();
-                                }
+                            if (obj.getShareId()) {
+                                obj.get_share_link_video_preview_play_info();
+                            }
+                            else {
+                                obj.get_video_preview_play_info();
                             }
                         }
                     }
