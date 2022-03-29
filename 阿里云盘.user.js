@@ -11,6 +11,7 @@
 // @run-at       document-body
 // @connect      aliyundrive.com
 // @connect      alicloudccp.com
+// @connect      aliyuncs.com
 // @grant        unsafeWindow
 // @grant        GM_xmlhttpRequest
 // ==/UserScript==
