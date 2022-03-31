@@ -861,7 +861,7 @@
 
     obj.getFilesSubtitleArray = function (callback) {
         var subtitleFiles = obj.findSubtitleFiles();
-        if (subtitleFiles.length) {
+        if (subtitleFiles && subtitleFiles.length) {
             var subtitleFileList = [];
             subtitleFiles.forEach(function (item, index) {
                 obj.toFileInfoSubtitleArray(item, function (fileInfo) {
@@ -884,21 +884,21 @@
             return [];
         }
 
-        var play_info = obj.video_page.play_info;
-        if (!video_name) {
+        if (video_name) {
+            video_name = video_name.toLowerCase();
+        }
+        else {
+            var play_info = obj.video_page.play_info;
             for (let i = 0; i < fileList.length; i++) {
                 if (fileList[i].file_id == play_info.file_id) {
                     video_name = fileList[i].name.replace("." + fileList[i].file_extension, "");
                     break;
                 }
             }
-        }
-        if (video_name) {
-            video_name = video_name.toLowerCase();
-        }
-        else {
-            console.error("致命错误：寻找视频名称失败");
-            return [];
+            if (!video_name) {
+                console.error("致命错误：寻找视频名称失败");
+                return [];
+            }
         }
 
         var subtitleFileList = [], subtitleFileLists = [], videoFileList = [];
@@ -930,9 +930,9 @@
             if (videoFileList.length == 1) {
                 return subtitleFileLists;
             }
-            var nameSplit = name.split(".");
+            var nameSplit = video_name.split(".");
+            nameSplit.pop();
             if (nameSplit.length) {
-                nameSplit.pop();
                 video_name = nameSplit.join(".");
                 obj.findSubtitleFiles(video_name);
             }
