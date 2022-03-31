@@ -801,75 +801,74 @@
             }
         });
     };
-
-    obj.findSubtitleFiles = function (video_name) {
+ 
+    obj.findSubtitleFiles = function () {
         var fileList = obj.file_page.items;
         if (fileList.length == 0) {
             console.error("致命错误：劫持文件列表失败");
             return [];
         }
-
-        if (video_name) {
-            video_name = video_name.toLowerCase();
-        }
-        else {
-            var play_info = obj.video_page.play_info;
-            for (let i = 0; i < fileList.length; i++) {
-                if (fileList[i].file_id == play_info.file_id) {
-                    video_name = fileList[i].name.replace("." + fileList[i].file_extension, "");
-                    break;
+        var play_info = obj.video_page.play_info, video_file_id = play_info.file_id, video_name = "";
+        if (video_file_id) {
+            if (play_info.name) {
+                video_name = play_info.name.replace("." + play_info.file_extension, "");
+            }
+            else {
+                for (var i = 0; i < fileList.length; i++) {
+                    if (fileList[i].file_id == video_file_id) {
+                        obj.video_page.play_info = Object.assign(fileList[i], obj.video_page.play_info);
+                        video_name = fileList[i].name.replace("." + fileList[i].file_extension, "");
+                        break;
+                    }
                 }
             }
-            if (!video_name) {
+ 
+            video_name = (/.+\.s\d+e\d+/i.exec(video_name) || [])[0] || video_name;
+            if (video_name) {
+                video_name = video_name.toLowerCase();
+            }
+            else {
                 console.error("致命错误：寻找视频名称失败");
                 return [];
             }
         }
-
-        var subtitleFileList = [], subtitleFileLists = [], videoFileList = [];
+        else {
+            console.error("致命错误：劫持视频信息失败");
+            return [];
+        }
+ 
+        var subtitleFileList = [], exactlySubtitleFileList = [], videoFileList = [];
         var subtitle_extension = Object.keys(obj.subtitleParser());
-        var file_extension, file_name, item;
-        for (let i = 0; i < fileList.length; i++) {
-            item = fileList[i];
+        var file_extension, file_name;
+        fileList.forEach(function (item, index) {
             if (item.type == "file") {
                 file_extension = item.file_extension.toLowerCase();
                 if (subtitle_extension.includes(file_extension)) {
                     file_name = item.name.replace("." + item.file_extension, "").toLowerCase();
                     if (file_name.includes(video_name) || video_name.includes(file_name)) {
-                        subtitleFileList.push(item);
+                        exactlySubtitleFileList.push(item);
                     }
                     else {
-                        subtitleFileLists.push(item);
+                        subtitleFileList.push(item);
                     }
                 }
                 else if (item.category == "video") {
                     videoFileList.push(item);
                 }
             }
+        });
+ 
+        if (exactlySubtitleFileList.length) {
+            return exactlySubtitleFileList;
         }
-
-        if (subtitleFileList.length) {
+        else if (subtitleFileList.length == 1 || videoFileList.length == 1) {
             return subtitleFileList;
-        }
-        else if (subtitleFileLists.length) {
-            if (videoFileList.length == 1) {
-                return subtitleFileLists;
-            }
-            var nameSplit = video_name.split(".");
-            nameSplit.pop();
-            if (nameSplit.length) {
-                video_name = nameSplit.join(".");
-                obj.findSubtitleFiles(video_name);
-            }
-            else {
-                return [];
-            }
         }
         else {
             return [];
         }
     };
-
+ 
     obj.getSubtitleText = function (url, callback) {
         GM_xmlhttpRequest({
             method: "get",
