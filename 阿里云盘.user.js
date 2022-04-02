@@ -2,7 +2,7 @@
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
 // @version      1.9.5
-// @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕），...
+// @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕，支持内置字幕），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
 // @match        https://www.aliyundrive.com/drive*
@@ -30,6 +30,7 @@
         },
         video_page: {
             play_info: {},
+            subtitle_list: [],
             playerObject: {
                 NativePlayer : {
                     name: "原生播放器",
@@ -646,20 +647,19 @@
                         textTrackList[i].mode = "hidden" || (textTrackList[i].mode = "hidden");
                     }
 
-                    subtitleList = obj.subtitleListTidy(subtitleList);
+                    subtitleList = obj.sortSubtitleList(subtitleList);
                     subtitleList.forEach(function (item, index) {
                         if (item.subtitleArray) {
                             var label = {
                                 chi: "中文字幕",
                                 eng: "英文字幕",
                                 jpn: "日文字幕",
-                                two: "双语字幕",
-                                unk: "外语字幕",
-                                multi: "多语字幕"
+                                unk: "外语字幕"
                             }[item.language] || "未知字幕";
                             textTrackList[index] || video.addTextTrack("subtitles", label, item.language);
 
                             item.subtitleArray.forEach(function (item) {
+                                /<b>*<\/b>/.test(item.text) || (item.text = item.text.split(/\r?\n/).map((item) => `<b>${item}</b>`).join("\n"));
                                 var textTrackCue = new VTTCue(item.startTime, item.endTime, item.text);
                                 textTrackCue.id = item.index;
                                 textTrackList[index] && textTrackList[index].addCue(textTrackCue);
@@ -682,19 +682,29 @@
                 }
             }
             else {
-                console.log("未匹配到字幕");
                 callback && callback("");
             }
         });
     };
 
     obj.getSubtitles = function (callback) {
-        obj.getDriveSubtitles(function (subtitleList) {
+        if (obj.video_page.subtitle_list.length) {
+            return callback && callback(obj.video_page.subtitle_list);
+        }
+
+        obj.getInternalSubtitles(function (subtitleList) {
+            var ischi = false;
             if (subtitleList.length && !!subtitleList[0]) {
-                callback && callback(subtitleList);
+                for (var i = 0; i < subtitleList.length; i++) {
+                    if (subtitleList[i].language == "chi") {
+                        ischi = true;
+                        callback && callback(subtitleList);
+                        break;
+                    }
+                }
             }
-            else {
-                obj.getInternalSubtitles(function (subtitleList) {
+            if (ischi == false) {
+                obj.getDriveSubtitles(function (subtitleList) {
                     if (subtitleList.length && !!subtitleList[0]) {
                         callback && callback(subtitleList);
                     }
@@ -704,24 +714,8 @@
                 });
             }
         });
-        obj.getLocalSubtitles(callback);
-    };
 
-    obj.getDriveSubtitles = function (callback) {
-        obj.getFilesSubtitleArray(function (fileList) {
-            if (fileList.length) {
-                var subtitleList = [];
-                fileList.forEach(function (item) {
-                    if (item.subtitleArray) {
-                        subtitleList.push(item.subtitleArray);
-                    }
-                });
-                callback && callback(subtitleList);
-            }
-            else {
-                callback && callback([]);
-            }
-        });
+        obj.getLocalSubtitles(callback);
     };
 
     obj.getInternalSubtitles = function (callback) {
@@ -731,8 +725,9 @@
             var listLen = subtitle_task_list.length;
             subtitle_task_list.forEach(function (item, index) {
                 if (item.subtitleArray) {
+                    obj.video_page.subtitle_list.push(item);
                     if (--listLen == 0) {
-                        callback && callback(subtitle_task_list);
+                        callback && callback(obj.video_page.subtitle_list);
                     }
                 }
                 else {
@@ -743,10 +738,11 @@
                             var subtitles = obj.parseTextToArray(play_info.subtitle_extension, play_info.subtitleText);
                             if (subtitles.length) {
                                 item.subtitleArray = subtitles;
+                                obj.video_page.subtitle_list.push(item);
                             }
                         }
                         if (--listLen == 0) {
-                            callback && callback(subtitle_task_list);
+                            callback && callback(obj.video_page.subtitle_list);
                         }
                     });
                 }
@@ -757,27 +753,82 @@
         }
     };
 
-    obj.getLocalSubtitles = function (callback) {
-        var play_info = obj.video_page.play_info;
-        if (play_info.subtitleArray) {
-            return callback && callback([play_info.subtitleArray]);
-        }
-
-        obj.localFilesSubtitleText(function (fileInfo) {
-            if (fileInfo.subtitleText) {
-                var subtitles = obj.parseTextToArray(fileInfo.file_extension, fileInfo.subtitleText);
-                if (subtitles.length) {
-                    var fileList = obj.file_page.items;
-                    if (fileList.length) {
-                        var file_id = obj.video_page.play_info.file_id;
-                        for (var i = 0; i < fileList.length; i++) {
-                            if (fileList[i].file_id == file_id) {
-                                obj.file_page.items[i].subtitleArray = subtitles;
-                                break;
+    obj.getDriveSubtitles = function (callback) {
+        var subtitleFiles = obj.findSubtitleFiles();
+        if (subtitleFiles && subtitleFiles.length) {
+            var subtitleFileList = [];
+            subtitleFiles.forEach(function (item, index) {
+                obj.toFileInfoSubtitleArray(item, function (fileInfo) {
+                    if (!fileInfo.language) {
+                        var text = fileInfo.subtitleArray[parseInt(fileInfo.subtitleArray.length / 2)].text;
+                        var textSplit = text.split(/\n/);
+                        if (textSplit.length == 1) {
+                            if (escape(textSplit[0]).indexOf( "%u" ) != -1 && /[\u4E00-\u9FA5]/.test(textSplit[0])) {
+                                fileInfo.language = "chi";
+                            }
+                            else if (/\w/.test(textSplit[0])) {
+                                fileInfo.language = "eng";
+                            }
+                            else {
+                                fileInfo.language = "unk";
                             }
                         }
+                        else if (textSplit.length == 2) {
+                            if (escape(textSplit[0]).indexOf( "%u" ) != -1 && /[\u4E00-\u9FA5]/.test(textSplit[0])) {
+                                fileInfo.language = "chi";
+                            }
+                            else {
+                                fileInfo.language = "unk";
+                            }
+                        }
+                        else {
+                            fileInfo.language = "unk";
+                        }
                     }
-                    callback && callback([subtitles]);
+
+                    obj.video_page.subtitle_list.push(fileInfo);
+                    if (++index == subtitleFiles.length) {
+                        callback && callback(obj.video_page.subtitle_list);
+                    }
+                });
+            });
+        }
+        else {
+            callback && callback([]);
+        }
+    };
+
+    obj.getLocalSubtitles = function (callback) {
+        obj.localFilesSubtitleText(function (fileInfo) {
+            if (fileInfo.subtitleText) {
+                fileInfo.subtitleArray = obj.parseTextToArray(fileInfo.file_extension, fileInfo.subtitleText);
+                if (fileInfo.subtitleArray.length) {
+                    var text = fileInfo.subtitleArray[parseInt(fileInfo.subtitleArray.length / 2)].text;
+                    var textSplit = text.split(/\n/);
+                    if (textSplit.length == 1) {
+                        if (escape(textSplit[0]).indexOf( "%u" ) != -1 && /[\u4E00-\u9FA5]/.test(textSplit[0])) {
+                            fileInfo.language = "chi";
+                        }
+                        else if (/\w/.test(textSplit[0])) {
+                            fileInfo.language = "eng";
+                        }
+                        else {
+                            fileInfo.language = "unk";
+                        }
+                    }
+                    else if (textSplit.length == 2) {
+                        if (escape(textSplit[0]).indexOf( "%u" ) != -1 && /[\u4E00-\u9FA5]/.test(textSplit[0])) {
+                            fileInfo.language = "chi";
+                        }
+                        else {
+                            fileInfo.language = "unk";
+                        }
+                    }
+                    else {
+                        fileInfo.language = "unk";
+                    }
+
+                    callback && callback([fileInfo]);
                 }
                 else {
                     callback && callback([]);
@@ -790,7 +841,7 @@
         });
     };
 
-    obj.subtitleListTidy = function (subtitleList) {
+    obj.sortSubtitleList = function (subtitleList) {
         var newSubtitleList = [];
         if (subtitleList[0] && subtitleList[0].subtitleArray) {
             subtitleList.forEach(function (item, index) {
@@ -802,79 +853,7 @@
                 }
             });
         }
-        else if (Array.isArray(subtitleList[0])) {
-            subtitleList.forEach(function (subtitleArray, index) {
-                var text = subtitleArray[parseInt(subtitleArray.length / 2)].text;
-                var textSplit = text.split(/\n/);
-                if (textSplit.length == 1) {
-                    if (escape(textSplit[0]).indexOf( "%u" ) != -1 && /[\u4E00-\u9FA5]/.test(textSplit[0])) {
-                        newSubtitleList.unshift({
-                            language: "chi",
-                            subtitleArray: subtitleArray
-                        });
-                    }
-                    else if (/\w/.test(textSplit[0])) {
-                        newSubtitleList.push({
-                            language: "eng",
-                            subtitleArray: subtitleArray
-                        });
-                    }
-                    else {
-                        newSubtitleList.push({
-                            language: "unk",
-                            subtitleArray: subtitleArray
-                        });
-                    }
-                }
-                else if (textSplit.length == 2) {
-                    var _1 = escape(textSplit[0]).indexOf( "%u" ) != -1 && /[\u4E00-\u9FA5]/.test(textSplit[0]);
-                    var _2 = escape(textSplit[1]).indexOf( "%u" ) != -1 && /[\u4E00-\u9FA5]/.test(textSplit[1]);
-                    if (_1 && _2) {
-                        newSubtitleList.unshift({
-                            language: "chi",
-                            subtitleArray: subtitleArray
-                        });
-                    }
-                    else {
-                        newSubtitleList.unshift({
-                            language: "two",
-                            subtitleArray: subtitleArray
-                        });
-                    }
-                }
-                else if (textSplit.length > 2) {
-                    newSubtitleList.unshift({
-                        language: "multi",
-                        subtitleArray: subtitleArray
-                    });
-                }
-                else {
-                    newSubtitleList.push({
-                        language: "unk",
-                        subtitleArray: subtitleArray
-                    });
-                }
-            });
-        }
         return newSubtitleList;
-    };
-
-    obj.getFilesSubtitleArray = function (callback) {
-        var subtitleFiles = obj.findSubtitleFiles();
-        if (subtitleFiles && subtitleFiles.length) {
-            var subtitleFileList = [];
-            subtitleFiles.forEach(function (item, index) {
-                obj.toFileInfoSubtitleArray(item, function (fileInfo) {
-                    subtitleFileList.push(fileInfo);
-                    if (++index == subtitleFiles.length) {
-                        callback && callback(subtitleFileList);
-                    }
-                });
-            });
-        }
-        else {
-            callback && callback([]);
-        }
     };
 
     obj.findSubtitleFiles = function (video_name) {
@@ -996,8 +975,7 @@
                 reader.readAsText(file, 'UTF-8');
                 reader.onload = function(event) {
                     var result = reader.result;
-                    if (result.indexOf("�") > -1 && !reader.mark) {
-                        reader.mark = true;
+                    if (result.indexOf("�") > -1) {
                         return reader.readAsText(file, "GBK");
                     }
                     callback && callback({file_extension: file_extension, subtitleText: result});
@@ -1091,7 +1069,6 @@
                     text = text.replace(/\r/g, "");
                     var regex = /(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) -?-> (\d{2}:\d{2}:\d{2},\d{3})/g;
                     var data = text.split(regex);
-                    //console.log("=== text.split ===", data);
                     data.shift();
                     return data;
                 },
@@ -1298,7 +1275,7 @@
         var fileList = obj.getSelectedFileList();
         if (fileList.length == 0) {
             console.error("致命错误：获取个人文件列表失败");
-            obj.showTipError("致命错误：获取个人文件列表失败");
+            obj.showTipError("致命错误：获取主页文件列表失败");
             return;
         }
 
@@ -1733,7 +1710,7 @@
         XMLHttpRequest.prototype.send = function(data) {
             this.addEventListener("load", function(event) {
                 if (this.readyState == 4 && this.status == 200) {
-                    var fileList, response, responseURL = this.responseURL;
+                    var response, responseURL = this.responseURL;
                     if (responseURL.indexOf("/file/list") > 0) {
                         if (document.querySelector(".ant-modal-mask")) {
                             //排除【保存 移动 等行为触发】
@@ -1791,7 +1768,8 @@
                     else if (responseURL.indexOf("/file/get_share_link_video_preview_play_info") > 0) {
                         try { response = JSON.parse(this.response) } catch (error) { response = this.response };
                         if (response instanceof Object) {
-                            obj.video_page.play_info = Object.assign(obj.video_page.play_info, response);
+                            obj.video_page.play_info.file_id == response.file_id || (obj.video_page.subtitle_list = []);
+                            obj.video_page.play_info = response;
 
                             obj.autoPlayer();
                         }
@@ -1799,14 +1777,15 @@
                     else if (responseURL.indexOf("/file/get_video_preview_play_info") > 0) {
                         try { response = JSON.parse(this.response) } catch (error) { response = this.response };
                         if (response instanceof Object) {
-                            obj.video_page.play_info = Object.assign(obj.video_page.play_info, response);
+                            obj.video_page.play_info.file_id == response.file_id || (obj.video_page.subtitle_list = []);
+                            obj.video_page.play_info = response;
 
                             var info = response.video_preview_play_info
                             , list = info.live_transcoding_task_list;
                             if (list[0].hasOwnProperty("preview_url")) {
                                 if (obj.getItem("default_player") != "NativePlayer") {
                                     obj.get_share_link_video_preview_play_info(function (response) {
-                                        response || obj.showTipError("get_share_link_video_preview_play_info 失败", 10000);
+                                        response || obj.showTipError("播放信息获取失败 请刷新重试", 10000);
                                     });
                                     return;
                                 }
