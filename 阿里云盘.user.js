@@ -754,48 +754,26 @@
     };
 
     obj.getDriveSubtitles = function (callback) {
-        var subtitleFiles = obj.findSubtitleFiles();
-        if (subtitleFiles && subtitleFiles.length) {
-            var subtitleFileList = [];
-            subtitleFiles.forEach(function (item, index) {
-                obj.toFileInfoSubtitleArray(item, function (fileInfo) {
-                    if (!fileInfo.language) {
-                        var text = fileInfo.subtitleArray[parseInt(fileInfo.subtitleArray.length / 2)].text;
-                        var textSplit = text.split(/\n/);
-                        if (textSplit.length == 1) {
-                            if (escape(textSplit[0]).indexOf( "%u" ) != -1 && /[\u4E00-\u9FA5]/.test(textSplit[0])) {
-                                fileInfo.language = "chi";
-                            }
-                            else if (/\w/.test(textSplit[0])) {
-                                fileInfo.language = "eng";
-                            }
-                            else {
-                                fileInfo.language = "unk";
-                            }
+        obj.findSubtitleFiles("", function (subtitleFiles) {
+            if (subtitleFiles && subtitleFiles.length) {
+                var subtitleFileList = [];
+                subtitleFiles.forEach(function (item, index) {
+                    obj.toFileInfoSubtitleArray(item, function (fileInfo) {
+                        if (!fileInfo.language) {
+                            fileInfo.language = obj.langdetect(fileInfo.subtitleArray);
                         }
-                        else if (textSplit.length == 2) {
-                            if (escape(textSplit[0]).indexOf( "%u" ) != -1 && /[\u4E00-\u9FA5]/.test(textSplit[0])) {
-                                fileInfo.language = "chi";
-                            }
-                            else {
-                                fileInfo.language = "unk";
-                            }
-                        }
-                        else {
-                            fileInfo.language = "unk";
-                        }
-                    }
 
-                    obj.video_page.subtitle_list.push(fileInfo);
-                    if (++index == subtitleFiles.length) {
-                        callback && callback(obj.video_page.subtitle_list);
-                    }
+                        obj.video_page.subtitle_list.push(fileInfo);
+                        if (++index == subtitleFiles.length) {
+                            callback && callback(obj.video_page.subtitle_list);
+                        }
+                    });
                 });
-            });
-        }
-        else {
-            callback && callback([]);
-        }
+            }
+            else {
+                callback && callback([]);
+            }
+        });
     };
 
     obj.getLocalSubtitles = function (callback) {
@@ -803,31 +781,7 @@
             if (fileInfo.subtitleText) {
                 fileInfo.subtitleArray = obj.parseTextToArray(fileInfo.file_extension, fileInfo.subtitleText);
                 if (fileInfo.subtitleArray.length) {
-                    var text = fileInfo.subtitleArray[parseInt(fileInfo.subtitleArray.length / 2)].text;
-                    var textSplit = text.split(/\n/);
-                    if (textSplit.length == 1) {
-                        if (escape(textSplit[0]).indexOf( "%u" ) != -1 && /[\u4E00-\u9FA5]/.test(textSplit[0])) {
-                            fileInfo.language = "chi";
-                        }
-                        else if (/\w/.test(textSplit[0])) {
-                            fileInfo.language = "eng";
-                        }
-                        else {
-                            fileInfo.language = "unk";
-                        }
-                    }
-                    else if (textSplit.length == 2) {
-                        if (escape(textSplit[0]).indexOf( "%u" ) != -1 && /[\u4E00-\u9FA5]/.test(textSplit[0])) {
-                            fileInfo.language = "chi";
-                        }
-                        else {
-                            fileInfo.language = "unk";
-                        }
-                    }
-                    else {
-                        fileInfo.language = "unk";
-                    }
-
+                    fileInfo.language = obj.langdetect(fileInfo.subtitleArray);
                     callback && callback([fileInfo]);
                 }
                 else {
@@ -856,7 +810,34 @@
         return newSubtitleList;
     };
 
-    obj.findSubtitleFiles = function (video_name) {
+    obj.langdetect = function (subtitleArray) {
+        var text = subtitleArray[parseInt(subtitleArray.length / 2)].text;
+        var textSplit = text.split(/\n/);
+        if (textSplit.length == 1) {
+            if (escape(textSplit[0]).indexOf( "%u" ) != -1 && /[\u4E00-\u9FA5]/.test(textSplit[0])) {
+                return "chi";
+            }
+            else if (/\w/.test(textSplit[0])) {
+                return "eng";
+            }
+            else {
+                return "unk";
+            }
+        }
+        else if (textSplit.length == 2) {
+            if (escape(textSplit[0]).indexOf( "%u" ) != -1 && /[\u4E00-\u9FA5]/.test(textSplit[0])) {
+                return "chi";
+            }
+            else {
+                return "unk";
+            }
+        }
+        else {
+            return "unk";
+        }
+    };
+
+    obj.findSubtitleFiles = function (video_name, callback) {
         var fileList = obj.file_page.items;
         if (fileList.length == 0) {
             console.error("致命错误：劫持文件列表失败");
@@ -876,7 +857,7 @@
             }
             if (!video_name) {
                 console.error("致命错误：寻找视频名称失败");
-                return [];
+                return callback && callback([]);
             }
         }
 
@@ -903,24 +884,26 @@
         }
 
         if (subtitleFileList.length) {
-            return subtitleFileList;
+            callback && callback(subtitleFileList);
         }
         else if (subtitleFileLists.length) {
             if (videoFileList.length == 1) {
-                return subtitleFileLists;
-            }
-            var nameSplit = video_name.split(".");
-            nameSplit.pop();
-            if (nameSplit.length) {
-                video_name = nameSplit.join(".");
-                obj.findSubtitleFiles(video_name);
+                callback && callback(subtitleFileLists);
             }
             else {
-                return [];
+                var nameSplit = video_name.split(".");
+                nameSplit.pop();
+                if (nameSplit.length) {
+                    video_name = nameSplit.join(".");
+                    obj.findSubtitleFiles(video_name, callback);
+                }
+                else {
+                    callback && callback([]);
+                }
             }
         }
         else {
-            return [];
+            callback && callback([]);
         }
     };
 
