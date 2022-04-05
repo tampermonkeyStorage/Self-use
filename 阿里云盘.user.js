@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.9.5
+// @version      1.9.6
 // @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕，支持内置字幕），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -273,21 +273,6 @@
     };
 
     obj.useNativePlayer = function () {
-        /*
-        if (!unsafeWindow.NativePlayer) {
-            unsafeWindow.NativePlayer = {};
-            var style = document.createElement("style");
-            style.type = "text/css";
-            style.textContent = "::cue {color: #b7daff; background-color: rgba(0, 0, 0, 0.0); font-size:4.5vh;}";
-            document.head.appendChild(style);
-        }
-        var video = document.querySelector("video");
-        if (video) {
-            video.onloadedmetadata = function () {
-                obj.addCueVideoSubtitle();
-            };
-        }
-        */
     };
 
     obj.useDPlayer = function () {
@@ -454,10 +439,14 @@
                 player.seek(attributes.currentTime - 1);
                 player.video.muted = attributes.muted;
             }
-            player.on("play", function () {
+            player.on("loadedmetadata", function () {
                 options.hotkey || obj.dPlayerHotkey();
                 obj.addCueVideoSubtitle();
             });
+            player.on("quality_end", function () {
+                obj.addCueVideoSubtitle();
+            });
+
 
             player.speed(localStorage['dplayer-speed'] || 1);
             $(document).off("click", ".dplayer-setting-speed-item").on("click", ".dplayer-setting-speed-item", function() {
@@ -724,6 +713,7 @@
         if (subtitle_task_list) {
             var listLen = subtitle_task_list.length;
             subtitle_task_list.forEach(function (item, index) {
+                item.language || (item.language = "chi");
                 if (item.subtitleArray) {
                     obj.video_page.subtitle_list.push(item);
                     if (--listLen == 0) {
@@ -826,7 +816,12 @@
         }
         else if (textSplit.length == 2) {
             if (escape(textSplit[0]).indexOf( "%u" ) != -1 && /[\u4E00-\u9FA5]/.test(textSplit[0])) {
-                return "chi";
+                if (escape(textSplit[1]).indexOf( "%u" ) != -1 && /[\u4E00-\u9FA5]/.test(textSplit[1])) {
+                    return "chi";
+                }
+                else {
+                    return "adj";
+                }
             }
             else {
                 return "unk";
