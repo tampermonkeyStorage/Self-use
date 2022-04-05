@@ -643,6 +643,7 @@
                                 chi: "中文字幕",
                                 eng: "英文字幕",
                                 jpn: "日文字幕",
+                                adj: "双语字幕",
                                 unk: "外语字幕"
                             }[item.language] || "未知字幕";
                             textTrackList[index] || video.addTextTrack("subtitles", label, item.language);
@@ -698,7 +699,7 @@
                         callback && callback(subtitleList);
                     }
                     else {
-                        callback && callback([]);
+                        callback && callback(obj.video_page.subtitle_list);
                     }
                 });
             }
@@ -789,7 +790,7 @@
         var newSubtitleList = [];
         if (subtitleList[0] && subtitleList[0].subtitleArray) {
             subtitleList.forEach(function (item, index) {
-                if (item.language == "chi") {
+                if (item.language == "chi" || item.language == "adj") {
                     newSubtitleList.unshift(item);
                 }
                 else {
