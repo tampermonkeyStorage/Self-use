@@ -287,7 +287,7 @@
             dPlayer.on("error", function () {
                 setTimeout(function () {
                     if (isNaN(dPlayer.video.duration)) {
-                        unsafeWindow.locals.product == "share" && obj.playVideoSharePage();
+                        location.reload();
                     }
                 }, 1000);
             });
