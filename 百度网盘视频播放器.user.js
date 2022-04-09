@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.1.5
+// @version      0.1.6
 // @description  播放器替换为DPlayer
 // @author       You
 // @match        https://pan.baidu.com/play/video
@@ -178,7 +178,6 @@
                             (playerInstance.player.pause || !playerInstance.player.paused()) && playerInstance.player.pause();
                             "function" == typeof(playerInstance.onBeforeDestroy) && playerInstance.onBeforeDestroy();
                             playerInstance.container.html("");
-                            playerInstance.player = !1;
                             obj.jQuery()(unsafeWindow).unbind("keydown");
                         }
                     }, 500);
@@ -227,9 +226,7 @@
                 });
                 Promise.all(promises).then(function(results) {
                     if (results.length == arr.length) {
-                        setTimeout(function () {
-                            callback && callback(unsafeWindow.DPlayer);
-                        }, 100);
+                        callback && callback(unsafeWindow.DPlayer);
                     }
                     else {
                         console.error("laodcdn 发生错误！", index, results);
@@ -287,9 +284,16 @@
 
         try{
             var dPlayer = obj.video_page.dPlayer = new unsafeWindow.DPlayer(options);
-            obj.msg("DPlayer 播放器创建成功");
+            dPlayer.on("error", function () {
+                setTimeout(function () {
+                    if (isNaN(dPlayer.video.duration)) {
+                        unsafeWindow.locals.product == "share" && obj.playVideoSharePage();
+                    }
+                }, 1000);
+            });
             obj.jQuery()(dPlayerNode).nextAll().remove();
             obj.resetPlayer();
+            obj.msg("DPlayer 播放器创建成功");
         } catch (error) {
             obj.msg("播放器创建失败", "failure");
         }
