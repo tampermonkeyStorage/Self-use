@@ -174,12 +174,10 @@
                     var waitId2 = setInterval(function() {
                         if (playerInstance.player) {
                             clearInterval(waitId2);
-                            context.message.trigger("player-pause");
-                            (playerInstance.player.pause || !playerInstance.player.paused()) && playerInstance.player.pause();
-                            "function" == typeof(playerInstance.onBeforeDestroy) && playerInstance.onBeforeDestroy();
-                            playerInstance.container.html("");
-                            obj.jQuery()(unsafeWindow).unbind("keydown");
-                            playerInstance.player.on("play", obj.resetPlayer);
+                            playerInstance.player.on("play", function() {
+                                context.message.trigger("player-pause");
+                                (playerInstance.player.pause || !playerInstance.player.paused()) && playerInstance.player.pause();
+                            });
                         }
                     }, 500);
                 }
