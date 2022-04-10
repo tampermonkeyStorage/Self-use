@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.1.6
+// @version      0.1.7
 // @description  播放器替换为DPlayer
 // @author       You
 // @match        https://pan.baidu.com/play/video
@@ -179,6 +179,7 @@
                             "function" == typeof(playerInstance.onBeforeDestroy) && playerInstance.onBeforeDestroy();
                             playerInstance.container.html("");
                             obj.jQuery()(unsafeWindow).unbind("keydown");
+                            playerInstance.player.on("play", obj.resetPlayer);
                         }
                     }, 500);
                 }
