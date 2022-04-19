@@ -169,7 +169,6 @@
                     clearInterval(waitId);
                     context.message.trigger("player-pause");
                     obj.jQuery()(unsafeWindow).unbind("keydown");
-                    playerInstance.getDuration() && playerInstance.setCurrentTime(playerInstance.getDuration());
                     playerInstance.onPlay = function() {
                         context.message.trigger("player-pause");
                         obj.jQuery()(unsafeWindow).unbind("keydown");
