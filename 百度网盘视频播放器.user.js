@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.1.7
+// @version      0.1.8
 // @description  播放器替换为DPlayer
 // @author       You
 // @match        https://pan.baidu.com/play/video
@@ -164,19 +164,19 @@
     obj.resetPlayer = function () {
         obj.async("file-widget-1:videoPlay/context.js", function(c) {
             var waitId = setInterval(function() {
-                var context = c.getContext(), playerInstance = (context || {}).playerInstance;
+                var context = c.getContext(), playerInstance = context.playerInstance;
                 if (playerInstance) {
                     clearInterval(waitId);
                     playerInstance.onPlay = function() {
                         context.message.trigger("player-pause");
                         obj.jQuery()(unsafeWindow).unbind("keydown");
+                        playerInstance.getDuration() && playerInstance.setCurrentTime(playerInstance.getDuration());
                     };
                     var waitId2 = setInterval(function() {
                         if (playerInstance.player) {
                             clearInterval(waitId2);
                             playerInstance.player.on("play", function() {
-                                context.message.trigger("player-pause");
-                                (playerInstance.player.pause || !playerInstance.player.paused()) && playerInstance.player.pause();
+                                playerInstance.player.duration() && playerInstance.player.currentTime(playerInstance.player.duration());
                             });
                         }
                     }, 500);
@@ -290,6 +290,13 @@
                     }
                 }, 1000);
             });
+
+            dPlayer.speed(localStorage.getItem("dplayer-speed") || 1);
+            dPlayer.on("ratechange", function () {
+                dPlayer.notice("播放速度：" + dPlayer.video.playbackRate);
+                localStorage.getItem("dplayer-speed") == dPlayer.video.playbackRate || localStorage.setItem("dplayer-speed", dPlayer.video.playbackRate);
+            });
+
             obj.jQuery()(dPlayerNode).nextAll().remove();
             obj.resetPlayer();
             obj.msg("DPlayer 播放器创建成功");
