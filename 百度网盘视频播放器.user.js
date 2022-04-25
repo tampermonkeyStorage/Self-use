@@ -165,25 +165,9 @@
         obj.async("file-widget-1:videoPlay/context.js", function(c) {
             var waitId = setInterval(function() {
                 var context = c.getContext(), playerInstance = context.playerInstance;
-                if (playerInstance) {
+                if (playerInstance && playerInstance.player) {
                     clearInterval(waitId);
-                    context.message.trigger("player-pause");
-                    obj.jQuery()(unsafeWindow).unbind("keydown");
-                    playerInstance.onPlay = function() {
-                        context.message.trigger("player-pause");
-                        obj.jQuery()(unsafeWindow).unbind("keydown");
-                        playerInstance.getDuration() && playerInstance.setCurrentTime(playerInstance.getDuration());
-                    };
-                    var waitId2 = setInterval(function() {
-                        if (playerInstance.player) {
-                            clearInterval(waitId2);
-                            playerInstance.player.volume(0);
-                            playerInstance.player.on("play", function() {
-                                playerInstance.player.duration() && playerInstance.player.currentTime(playerInstance.player.duration());
-                                playerInstance.player.pause();
-                            });
-                        }
-                    }, 500);
+                    playerInstance.player.dispose();
                 }
             }, 500);
         });
