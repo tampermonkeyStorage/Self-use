@@ -180,6 +180,7 @@
                             playerInstance.player.volume(0);
                             playerInstance.player.on("play", function() {
                                 playerInstance.player.duration() && playerInstance.player.currentTime(playerInstance.player.duration());
+                                playerInstance.player.pause();
                             });
                         }
                     }, 500);
