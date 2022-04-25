@@ -177,6 +177,7 @@
                     var waitId2 = setInterval(function() {
                         if (playerInstance.player) {
                             clearInterval(waitId2);
+                            playerInstance.player.volume(0);
                             playerInstance.player.on("play", function() {
                                 playerInstance.player.duration() && playerInstance.player.currentTime(playerInstance.player.duration());
                             });
