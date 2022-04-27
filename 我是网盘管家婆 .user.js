@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.4.5
+// @version      0.4.6
 // @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云】 功能概述：【[1]：网盘页面增加资源搜索快捷方式】【[2]：[资源站点]自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地缓存数据库搜索】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
-// @include      *://*/*
+// @match        *://*/*
 // @icon         https://scpic.chinaz.net/Files/pic/icons128/7231/o4.png
 // @connect      baidu.com
 // @connect      fryaisjx.lc-cn-n1-shared.com
@@ -100,7 +100,7 @@
 
     obj.getSharePwdLocal = function(shareId) {
         var shareList = GM_getValue("share_list") || {};
-        return shareList[shareId];
+        return shareList[shareId] || obj.getParam("pwd");
     };
 
     obj.setSharePwdLocal = function(shareData) {
@@ -455,11 +455,6 @@
                     type: 2,
                 },
                 {
-                    name: "哎呦喂啊",
-                    link: "http://www.aiyoweia.com/search/%s",
-                    type: 2,
-                },
-                {
                     name: "找云盘",
                     link: "http://www.zhaoyunpan.cn/share_search.php?key=%s&type=ALL",
                     type: 2,
@@ -594,30 +589,14 @@
                     type: 7,
                 },
                 {
-                    name: "小小汁源库",
-                    link: "http://xxdyk.cn/?s=%s",
-                    type: 7,
-                },
-                {
                     name: "橘子盘搜",
                     link: "https://www.nmme.cc/s/1/%s",
                     type: 7,
                 },
                 // 《8》不用扫码
                 {
-                    name: "搜索盘",
-                    link: "https://www.sosuopan.cn/search?q=%s",
-                    type: 8,
-                },
-                {
                     name: "51网盘搜索",
                     link: "https://m.51caichang.com/so?keyword=%s&page=1&url_path=so",
-                    type: 8,
-                },
-
-                {
-                    name: "盘搜大师",
-                    link: "http://chawangpan.com/paymentList.html?field=%s&pgtype=search&pg=1&type=1&btn=1&flag=1&ctype=1",
                     type: 8,
                 },
                 {
@@ -633,11 +612,6 @@
                 {
                     name: "网盘007",
                     link: "https://wp7.net/share/kw%s",
-                    type: 8,
-                },
-                {
-                    name: "度度搜",
-                    link: "http://www.lzyongda.cn/plus/search.php?q=%s",
                     type: 8,
                 },
                 {
@@ -660,11 +634,6 @@
                 {
                     name: "云盘狗",
                     link: "http://www.yunpangou.com",
-                    type: 8,
-                },
-                {
-                    name: "盘满满",
-                    link: "https://www.panmanman.com/article/list/1",
                     type: 8,
                 },
                 // 《9》需要扫码
@@ -712,11 +681,6 @@
                     name: "盘他一下",
                     link: "https://www.panother.com/search?query=%s",
                     type: 9,
-                },
-                {
-                    name: "云盘搜",
-                    link: "https://www.ypso.cc/#/result?keyword=%s",
-                    type: 10,
                 },
                 {
                     name: "飞鱼盘搜",
@@ -775,6 +739,11 @@
                     link: "https://polished-sea-d9de.xfyz.workers.dev/",
                     type: 10,
                 },
+                {
+                    name: "哎呦喂啊",
+                    link: "http://www.aiyoweia.com/search/%s",
+                    type: 10,
+                },
             ],
             "lanzous": [
                 {
@@ -801,7 +770,7 @@
                 },
                 {
                     name: "奇它博客",
-                    link: "https://bbs.zhiqan.com/?s=%s",
+                    link: "https://www.qitabbs.com/?s=%s",
                     type: 1,
                 },
             ],
@@ -817,8 +786,8 @@
                     type: 1,
                 },
                 {
-                    name: "阿里云盘小站",
-                    link: "https://aliyunshare.org/?q=%s",
+                    name: "大盘搜",
+                    link: "https://aliyunso.cn/search?keyword=%s",
                     type: 1,
                 },
                 {
@@ -832,8 +801,8 @@
                     type: 1,
                 },
                 {
-                    name: "阿里大站",
-                    link: "https://pan.3636360.com/search?keyword=%s",
+                    name: "AliYunPanSo",
+                    link: "https://aliyunpanso.cn/?s=%s",
                     type: 1,
                 },
                 {
@@ -1488,41 +1457,48 @@
     };
 
     aliyundrive.storeSharePwd = function () {
-        var open = XMLHttpRequest.prototype.open;
-        XMLHttpRequest.prototype.open = function() {
-            this.addEventListener("load", function() {
-                if (!(this.readyState == 4 && this.status == 200)) {
-                    return;
-                }
-                var responseURL = this.responseURL;
-                if (responseURL.indexOf("/share_link/get_share_by_anonymous") > 0 || responseURL.indexOf("/share_link/get_share_token") > 0) {
-                    var response = JSON.parse(this.response);
-                    if (response.share_name && response.file_infos.length == 0) {
-                        aliyundrive.share_name = response.share_name;
-                        return;
+        var send = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.send = function(sendParams) {
+            this.addEventListener("load", function(event) {
+                if (this.readyState == 4 && this.status == 200) {
+                    var response, responseURL = this.responseURL;
+                    if (responseURL.indexOf("/share_link/get_share_by_anonymous") > 0) {
+                        response = JSON.parse(this.response);
+                        if (response.share_name) {
+                            aliyundrive.share_name = response.share_name;
+                        }
                     }
+                    else if (responseURL.indexOf("/share_link/get_share_token") > 0) {
+                        sendParams = JSON.parse(sendParams);
+                        aliyundrive.share_id = sendParams.share_id;
+                        aliyundrive.share_pwd = sendParams.share_pwd;
+                    }
+                    else if (responseURL.indexOf("/file/list") > 0) {
+                        response = JSON.parse(this.response);
+                        sendParams = JSON.parse(sendParams);
+                        if (sendParams.share_id == aliyundrive.share_id) {
+                            var shareData = obj.getSharePwdLocal(aliyundrive.share_id) || {};
+                            if (!shareData.share_name || shareData.share_pwd != aliyundrive.share_pwd) {
+                                shareData = Object.assign(shareData || {}, {
+                                    share_source: "aliyundrive",
+                                    share_id: aliyundrive.share_id,
+                                    share_url: decodeURIComponent(location.href),
+                                    share_name: aliyundrive.share_name || response.items[0].name
+                                });
+                                shareData.origin_url || !document.referrer || document.referrer.includes(location.host) || (shareData.origin_url = decodeURIComponent(document.referrer));
 
-                    var shareId = obj.getShareId();
-                    var shareData = obj.getSharePwdLocal(shareId);
-                    if (typeof shareData == "object" && shareData.share_name) {
-                        return;
+                                if (aliyundrive.share_pwd) {
+                                    shareData.share_pwd = aliyundrive.share_pwd;
+                                    obj.share_pwd == aliyundrive.share_pwd || obj.storeSharePwd(shareData);
+                                }
+                                obj.setSharePwdLocal(shareData);
+                            }
+                            aliyundrive.share_id = null;
+                        }
                     }
-                    shareData = Object.assign(shareData || {}, {
-                        share_source: "aliyundrive",
-                        share_id: shareId,
-                        share_url: decodeURIComponent(location.href),
-                        share_name:response.share_name || aliyundrive.share_name
-                    });
-                    shareData.origin_url || !document.referrer || document.referrer.includes(location.host) || (shareData.origin_url = decodeURIComponent(document.referrer));
-                    if (this.sendParams) {
-                        var sendParam = JSON.parse(this.sendParams[0]) || {}, sharePwd = sendParam.share_pwd || null;
-                        shareData.share_pwd = sharePwd;
-                        obj.share_pwd == sharePwd || obj.storeSharePwd(shareData);
-                    }
-                    obj.setSharePwdLocal(shareData);
                 }
             });
-            open.apply(this, arguments);
+            send.apply(this, arguments);
         };
     };
 
