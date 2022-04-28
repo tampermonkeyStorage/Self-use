@@ -1476,7 +1476,7 @@
                     else if (responseURL.indexOf("/file/list") > 0) {
                         response = JSON.parse(this.response);
                         sendParams = JSON.parse(sendParams);
-                        if (sendParams.share_id == aliyundrive.share_id) {
+                        if (aliyundrive.share_id && sendParams.share_id == aliyundrive.share_id) {
                             var shareData = obj.getSharePwdLocal(aliyundrive.share_id) || {};
                             if (!shareData.share_name || shareData.share_pwd != aliyundrive.share_pwd) {
                                 shareData = Object.assign(shareData || {}, {
