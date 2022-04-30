@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.4.6
+// @version      0.4.8
 // @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云】 功能概述：【[1]：网盘页面增加资源搜索快捷方式】【[2]：[资源站点]自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地缓存数据库搜索】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -181,7 +181,13 @@
                 callback && callback(response);
             },
             error: function () {
-                callback && callback("");
+                if (shareData.objectId) {
+                    delete shareData.objectId;
+                    obj.storeSharePwd(shareData, callback);
+                }
+                else {
+                    callback && callback("");
+                }
             }
         });
     };
@@ -869,7 +875,7 @@
                 }
                 var shareRandsk = decodeURIComponent(response.randsk);
                 var sharePwd = (/pwd=([a-z\d]+)/i.exec(options.data) || [])[1];
-                if (!sharePwd || sharePwd.length != 4) {
+                if (!sharePwd || sharePwd.length != 4 || sharePwd == obj.share_pwd) {
                     return;
                 }
 
@@ -916,26 +922,29 @@
                     var shareData = obj.getSharePwdLocal(shareId);
                     if (shareData instanceof Object && shareData.share_pwd) {
                         obj.showTipSuccess("本地回填密码成功");
+                        obj.share_pwd = shareData.share_pwd;
                         baidu.submitPwd(shareData.share_pwd);
                     }
-                    obj.queryShareRandsk("baidu", shareId, function(response) {
-                        if (response instanceof Object && response.Randsk) {
-                            if (document.title.indexOf("输入提取码") > 0) {
-                                obj.showTipSuccess("解锁成功，强制跳转");
-                                shareData = Object.assign(shareData || {}, {
-                                    share_id: shareId,
-                                    share_randsk: response.Randsk
-                                });
-                                delete shareData.share_pwd;
-                                shareData.origin_url || !document.referrer || document.referrer.includes(location.host) || (shareData.origin_url = decodeURIComponent(document.referrer));
-                                baidu.reloadPage(response.Randsk);
-                                obj.setSharePwdLocal(shareData);
-                            }
+                    setTimeout(function() {
+                        if (document.title.indexOf("输入提取码") > 0) {
+                            obj.queryShareRandsk("baidu", shareId, function(response) {
+                                if (response instanceof Object && response.Randsk) {
+                                    obj.showTipSuccess("解锁成功，强制跳转");
+                                    shareData = Object.assign(shareData || {}, {
+                                        share_id: shareId,
+                                        share_randsk: response.Randsk
+                                    });
+                                    delete shareData.share_pwd;
+                                    shareData.origin_url || !document.referrer || document.referrer.includes(location.host) || (shareData.origin_url = decodeURIComponent(document.referrer));
+                                    baidu.reloadPage(response.Randsk);
+                                    obj.setSharePwdLocal(shareData);
+                                }
+                                else {
+                                    obj.showTipError("未找到密码");
+                                }
+                            });
                         }
-                        else {
-                            obj.showTipError("未找到密码");
-                        }
-                    });
+                    }, 1000);
                 }
             });
         }
@@ -954,11 +963,11 @@
                 share_url: location.href.replace(location.hash, ""),
                 share_name: (/(.*)_/.exec(document.title) || [])[1]
             });
-            obj.setSharePwdLocal(shareData);
             if (shareData.share_pwd || shareData.share_randsk) {
                 shareData.share_randsk || (shareData.share_randsk = unsafeWindow.currentSekey);
                 obj.storeSharePwd(shareData);
             }
+            obj.setSharePwdLocal(shareData);
         }
     };
 
