@@ -100,21 +100,7 @@
 
     obj.getSharePwdLocal = function(shareId) {
         var shareList = GM_getValue("share_list") || {};
-        if (shareList[shareId]) {
-            return shareList[shareId];
-        }
-        else {
-            var sharePwd = obj.getParam("pwd");
-            if (sharePwd) {
-                var shareData = {
-                    share_id: shareId,
-                    share_pwd: sharePwd
-                };
-                obj.setSharePwdLocal(shareData);
-                return shareData;
-            }
-            return "";
-        }
+        return shareList[shareId];
     };
 
     obj.setSharePwdLocal = function(shareData) {
