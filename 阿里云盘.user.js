@@ -353,7 +353,7 @@
             }
         }
         else {
-            setTimeout(obj.dplayerStart, 500);
+            setTimeout(obj.dPlayerStart, 500);
             return;
         }
 
