@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.9.6
-// @description  支持生成文件下载链接，支持视频播放页面打开自动播放/播放区点击暂停继续/播放控制器拖拽调整位置，支持自定义分享密码，突破视频2分钟限制，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕），...
+// @version      1.9.7
+// @description  支持生成文件下载链接，支持自定义分享密码，支持原生播放器优化，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
 // @match        https://www.aliyundrive.com/drive*
@@ -273,6 +273,7 @@
     };
 
     obj.useNativePlayer = function () {
+        document.querySelector(".video-player--29_72").setAttribute("title", "长按拖动位置");
     };
 
     obj.useDPlayer = function () {
@@ -291,17 +292,14 @@
             [
                 "https://cdn.jsdelivr.net/npm/hls.js/dist/hls.min.js",
                 "https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.js",
-                "https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.css",
             ],
             [
                 "https://cdn.staticfile.org/hls.js/1.1.4/hls.min.js",
                 "https://cdn.staticfile.org/dplayer/1.26.0/DPlayer.min.js",
-                "https://cdn.staticfile.org/dplayer/1.25.0/DPlayer.min.css",
             ],
             [
                 "https://cdn.bootcdn.net/ajax/libs/hls.js/1.1.4/hls.min.js",
                 "https://cdn.bootcdn.net/ajax/libs/dplayer/1.26.0/DPlayer.min.js",
-                "https://cdn.bootcdn.net/ajax/libs/dplayer/1.25.0/DPlayer.min.css",
             ],
         ];
 
@@ -310,13 +308,7 @@
             if (arr) {
                 var promises = [];
                 arr.forEach(function (url, index) {
-                    var extname = url.split(".").pop();
-                    if (extname == "js") {
-                        promises.push(obj.loadScript(url));
-                    }
-                    else if (extname == "css") {
-                        promises.push(obj.loadStyle(url));
-                    }
+                    promises.push(obj.loadScript(url));
                 });
 
                 Promise.all(promises).then(function(results) {
@@ -431,7 +423,7 @@
             theme: "#b7daff"
         };
 
-        try{
+        try {
             var player = obj.video_page.dPlayer = new unsafeWindow.DPlayer(options);
 
             var attributes = obj.video_page.attributes;
@@ -447,10 +439,10 @@
                 obj.addCueVideoSubtitle();
             });
 
-
-            player.speed(localStorage['dplayer-speed'] || 1);
-            $(document).off("click", ".dplayer-setting-speed-item").on("click", ".dplayer-setting-speed-item", function() {
-                localStorage['dplayer-speed'] = $(this).attr('data-speed');
+            player.speed(localStorage.getItem("dplayer-speed") || 1);
+            player.on("ratechange", function () {
+                player.notice("播放速度：" + player.video.playbackRate);
+                localStorage.getItem("dplayer-speed") == player.video.playbackRate || localStorage.setItem("dplayer-speed", player.video.playbackRate);
             });
 
             document.querySelector(".dplayer-controller .dplayer-quality-icon").onclick = function () {
@@ -649,7 +641,7 @@
                             textTrackList[index] || video.addTextTrack("subtitles", label, item.language);
 
                             item.subtitleArray.forEach(function (item) {
-                                /<b>*<\/b>/.test(item.text) || (item.text = item.text.split(/\r?\n/).map((item) => `<b>${item}</b>`).join("\n"));
+                                /<b>.*<\/b>/.test(item.text) || (item.text = item.text.split(/\r?\n/).map((item) => `<b>${item}</b>`).join("\n"));
                                 var textTrackCue = new VTTCue(item.startTime, item.endTime, item.text);
                                 textTrackCue.id = item.index;
                                 textTrackList[index] && textTrackList[index].addCue(textTrackCue);
@@ -1195,8 +1187,14 @@
     };
 
     obj.showDownloadSharePage = function () {
+        if (obj.isLogin()) {
+        }
+        else {
+            document.querySelector("[class^=login]").click();
+            return;
+        }
         var token = obj.getItem("token");
-        if (token && token.access_token && obj.isLogin()) {
+        if (token && token.access_token) {
             obj.showTipLoading("正在获取链接...");
         }
         else {
@@ -1211,39 +1209,14 @@
             return;
         }
 
-        obj.showBox('<div class="item-list" style="padding: 20px; height: 410px; overflow-y: auto;"></div>');
-        var rowStyle = "margin:10px 0px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;";
-
-        var share_id = obj.getShareId();
-        fileList.forEach(function (item, index) {
-            var html = '<p>' + (++index) + '：' + item.name + '</p>';
-            if (item.download_url) {
-                html += '<p style="' + rowStyle + '"><a title="' + item.download_url + '" href="' + item.download_url + '" style="color: blue;">' + item.download_url + '</a></p>';
-                $(".item-list").append(html);
-            }
-            else {
-                if (item.type == "folder") {
-                    html += '<p style="' + rowStyle + '"><font color="green">&emsp;&emsp;请进入文件夹下载</font></p>';
-                    $(".item-list").append(html);
-                }
-                else {
-                    setTimeout(function() {
-                        obj.getShareLinkDownloadUrl(item.file_id, share_id, function (download_url) {
-                            item.download_url = download_url;
-                            html += '<p style="' + rowStyle + '"><a title="' + item.download_url + '" href="' + item.download_url + '" style="color: blue;">' + item.download_url + '</a></p>';
-                            $(".item-list").append(html);
-                        });
-                    }, 66 * index);
-                }
-            }
+        obj.getShareLinkDownloadUrlAll(fileList, function(fileList) {
+            obj.hideTip();
+            obj.showBox(fileList);
         });
-
-        obj.hideTip();
     };
 
     obj.showDownloadHomePage = function () {
-        var token = obj.getItem("token");
-        if (token && token.access_token) {
+        if (obj.getItem("token").access_token) {
             obj.showTipLoading("正在获取链接...");
         }
         else {
@@ -1254,87 +1227,51 @@
         var fileList = obj.getSelectedFileList();
         if (fileList.length == 0) {
             console.error("致命错误：获取个人文件列表失败");
-            obj.showTipError("致命错误：获取主页文件列表失败");
+            obj.showTipError("致命错误：获取个人文件列表失败");
             return;
         }
 
-        obj.showBox('<div class="item-list" style="padding: 20px; height: 410px; overflow-y: auto;"></div>');
-        var rowStyle = "margin:10px 0px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;";
-        var Re = function(e) {
-            var t = document.createElement("a");
-            t.rel = "noopener";
-            t.href = e;
-            t.download = "download";
-            //t.target = "_blank";
-            (function(e) {
-                try {
-                    e.dispatchEvent(new MouseEvent("click"))
-                } catch (n) {
-                    var t = document.createEvent("MouseEvents");
-                    t.initMouseEvent("click", !0, !0, window, 0, 0, 0, 80, 20, !1, !1, !1, !1, 0, null);
-                    e.dispatchEvent(t);
-                }
-            }(t));
-        };
-
-        fileList.forEach(function (item, index) {
-            var html = '<p>' + (++index) + '：' + item.name + '</p>';
-            if (item.download_url) {
-                html += '<p style="' + rowStyle + '"><a title="' + item.download_url + '" style="color: blue;">' + item.download_url + '</a></p>';
-                $(".item-list").append(html);
-            }
-            else {
-                if (item.type == "folder") {
-                    html += '<p style="' + rowStyle + '"><font color="green">&emsp;&emsp;请进入文件夹下载</font></p>';
-                    $(".item-list").append(html);
-                }
-                else {
-                    setTimeout(function() {
-                        obj.getHomeLinkDownloadUrl(item.file_id, item.drive_id, function (download_url) {
-                            item.download_url = download_url;
-                            html += '<p style="' + rowStyle + '"><a title="' + item.download_url + '" style="color: blue;">' + item.download_url + '</a></p>';
-                            $(".item-list").append(html);
-                        });
-                    }, 66 * index);
-                }
-            }
-        });
-
-        obj.hideTip();
-
-        $(document).on("click", ".item-list a", function(event) {
-            var url = $(this).attr("href");
-            if (!url) {
-                url = $(this).attr("title");
-                Re(url);
-            }
+        obj.getHomeLinkDownloadUrlAll(fileList, function(fileList) {
+            obj.hideTip();
+            obj.showBox(fileList);
         });
     };
 
-    obj.showBox = function (body) {
-        var template = '<div class="ant-modal-root ant-modal-my"><div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap" role="dialog"><div role="document" class="ant-modal modal-wrapper--2yJKO" style="width: 666px;"><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle1">文件下载</div></div><div class="ant-modal-body"><div class="icon-wrapper--3dbbo"><span data-role="icon" data-render-as="svg" data-icon-type="PDSClose" class="close-icon--33bP0 icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSClose"></use></svg></span></div>';
-        template += body;
-        template += '</div><div class="ant-modal-footer"><div class="footer--1r-ur"><div class="buttons--nBPeo"><button class="button--2Aa4u primary--3AJe5 small---B8mi">IDM 导出文件</button></div></div></div></div></div></div></div>';
-        $("body").append(template);
+    obj.showBox = function (fileList) {
+        var rowStyle = "margin:10px 0px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;";
+        var html = '<div class="ant-modal-root ant-modal-Link"><div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap" role="dialog"><div role="document" class="ant-modal modal-wrapper--2yJKO" style="width: 666px;"><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle1">文件下载</div></div><div class="ant-modal-body"><div class="icon-wrapper--3dbbo"><span data-role="icon" data-render-as="svg" data-icon-type="PDSClose" class="close-icon--33bP0 icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSClose"></use></svg></span></div>';
+        html += '<div class="item-list" style="padding: 20px; height: 410px; overflow-y: auto;">';
+        fileList.forEach(function (item, index) {
+            html += '<p>' + (++index) + '：' + item.name + '</p>';
+            if (item.type == "file") {
+                html += '<p style="' + rowStyle + '"><a title="' + item.download_url + '" href="' + item.download_url + '" style="color: blue;">' + item.download_url + '</a></p>';
+            }
+            else if (item.type == "folder") {
+                html += '<p style="' + rowStyle + '"><font color="green">&emsp;&emsp;请进入文件夹下载</font></p>';
+            }
+        });
+        html += '</div></div><div class="ant-modal-footer"><div class="footer--1r-ur"><div class="buttons--nBPeo">';
+        html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi idm-download">IDM 导出文件</button>';
+        html += '</div></div></div></div></div></div></div>';
+        $("body").append(html);
 
         $(".icon-wrapper--3dbbo").one("click", function () {
-            $(".ant-modal-my").remove();
+            $(".ant-modal-Link").remove();
         });
-
-        $(".ant-modal-my button").off("click").on("click", function () {
-            var content = "", referer = "https://www.aliyundrive.com/", userAgent = navigator.userAgent;
-            $(".item-list a").each(function (index, value) {
-                content += ["<", this.title, "referer: " + referer, "User-Agent: " + userAgent, ">"].join("\r\n") + "\r\n";
-            });
-            obj.downloadFile(content, "IDM 导出文件.ef2")
-        });
-
-        //$(".ant-modal.modal-wrapper--2yJKO").css({width: "666px"}); //调整宽度（"666px" 改成 "777px"  "888px"  "999px" ...）
-        $(".ant-modal-wrap").off("click").on("click", function (event) {
-            //点击链接窗口外部自动关闭窗口
+        $(".ant-modal-wrap").on("click", function (event) {
             if ($(event.target).closest(".ant-modal-content").length == 0) {
-                $(".ant-modal-my").remove();
+                $(".ant-modal-Link").remove();
             }
+        });
+
+        $(".ant-modal-Link .idm-download").on("click", function () {
+            var content = "", referer = "https://www.aliyundrive.com/", userAgent = navigator.userAgent;
+            fileList.forEach(function (item, index) {
+                if (item.type == "file") {
+                    content += ["<", item.download_url, "referer: " + referer, "User-Agent: " + userAgent, ">"].join("\r\n") + "\r\n";
+                }
+            });
+            obj.downloadFile(content, "IDM 导出文件.ef2");
         });
     };
 
@@ -1373,13 +1310,33 @@
         return selectedFileList.length ? selectedFileList : fileList;
     };
 
+    obj.getShareLinkDownloadUrlAll = function (fileList, callback) {
+        var share_id = obj.getShareId();
+        var fileListLen = fileList.length;
+        fileList.forEach(function (item, index) {
+            if (item.type == "folder") {
+                if (-- fileListLen == 0) {
+                    callback && callback(fileList);
+                }
+            }
+            else {
+                obj.getShareLinkDownloadUrl(item.file_id, share_id, function (download_url) {
+                    item.download_url = download_url;
+                    if (-- fileListLen == 0) {
+                        callback && callback(fileList);
+                    }
+                });
+            }
+        });
+    };
+
     obj.getShareLinkDownloadUrl = function (file_id, share_id, callback) {
-        var token = obj.getItem("token") || {};
+        var token = obj.getItem("token");
         $.ajax({
             type: "post",
             url: "https://api.aliyundrive.com/v2/file/get_share_link_download_url",
             data: JSON.stringify({
-                expire_sec: 600,
+                //expire_sec: 600,
                 file_id: file_id,
                 share_id: share_id
             }),
@@ -1399,7 +1356,8 @@
                 }
             },
             error: function (error) {
-                if (error.responseJSON.code == "AccessTokenInvalid") {
+                var errorCode = error.responseJSON ? error.responseJSON.code : "";
+                if ("AccessTokenInvalid" === errorCode) {
                     obj.refresh_token(function (response) {
                         if (response instanceof Object) {
                             obj.getShareLinkDownloadUrl(file_id, share_id, callback);
@@ -1409,7 +1367,7 @@
                         }
                     });
                 }
-                else if (error.responseJSON.code == "ShareLinkTokenInvalid") {
+                else if ("ShareLinkTokenInvalid" === errorCode || "InvalidParameterNotMatch.ShareId" === errorCode) {
                     obj.get_share_token(function (response) {
                         if (response instanceof Object) {
                             obj.getShareLinkDownloadUrl(file_id, share_id, callback);
@@ -1421,7 +1379,7 @@
                 }
                 else {
                     console.error("getShareLinkDownloadUrl 错误", error);
-                    if (error.responseJSON.code == "InvalidParameterNotMatch.ShareId") {
+                    if ("InvalidParameterNotMatch.ShareId" === errorCode) {
                         obj.showTipError("错误：参数不匹配，此错误可能是打开了另一个分享页面导致，请刷新", 10000);
                     }
                     callback && callback("");
@@ -1430,12 +1388,33 @@
         });
     };
 
+    obj.getHomeLinkDownloadUrlAll = function (fileList, callback) {
+        var share_id = obj.getShareId();
+        var fileListLen = fileList.length;
+        fileList.forEach(function (item, index) {
+            if (item.type == "folder") {
+                if (-- fileListLen == 0) {
+                    callback && callback(fileList);
+                }
+            }
+            else {
+                obj.getHomeLinkDownloadUrl(item.file_id, item.drive_id, function (download_url) {
+                    item.download_url = download_url;
+                    if (-- fileListLen == 0) {
+                        callback && callback(fileList);
+                    }
+                });
+            }
+        });
+    };
+
     obj.getHomeLinkDownloadUrl = function (file_id, drive_id, callback) {
-        var token = obj.getItem("token") || {};
+        var token = obj.getItem("token");
         $.ajax({
             type: "post",
             url: "https://api.aliyundrive.com/v2/file/get_download_url",
             data: JSON.stringify({
+                expire_sec: 14400,
                 drive_id: drive_id,
                 file_id: file_id
             }),
@@ -1550,24 +1529,6 @@
             });
         }
         return window.instances[src];
-    };
-
-    obj.loadStyle = function (href) {
-        if (!window.instances) {
-            window.instances = {};
-        }
-        if (!window.instances[href]) {
-            window.instances[href] = new Promise((resolve, reject) => {
-                const style = document.createElement("link");
-                style.type = "text/css";
-                style.rel = "stylesheet";
-                style.href = href;
-                style.onload = resolve;
-                style.onerror = reject;
-                document.head.appendChild(style);
-            });
-        }
-        return window.instances[href];
     };
 
     obj.switchViewArrow = function () {
@@ -1793,19 +1754,31 @@
         };
     };
 
-    var url = location.href;
-    if (url.indexOf(".aliyundrive.com/s/") > 0) {
+    obj.goldlogSpm = function () {
+        unsafeWindow.goldlog = {};
+        Object.defineProperty(unsafeWindow.goldlog, "_$",{
+            value: {},
+            configurable: false
+        });
+        var key = obj.getItem("APLUS_LS_KEY");
+        key && key != "/**/" && obj.setItem(key[0], "/**/");
+    };
+
+    obj.run = function() {
+        obj.goldlogSpm();
+
         obj.addPageFileList();
 
         obj.initVideoPage();
-    }
-    else if (url.indexOf(".aliyundrive.com/drive") > 0) {
-        obj.addPageFileList();
 
-        obj.initVideoPage();
+        var url = location.href;
+        if (url.indexOf(".aliyundrive.com/s/") > 0) {
+        }
+        else if (url.indexOf(".aliyundrive.com/drive") > 0) {
+            obj.customSharePwd();
+        }
+    }();
 
-        obj.customSharePwd();
-    }
     console.log("=== 阿里云盘 好棒棒！===");
 
     // Your code here...
