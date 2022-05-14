@@ -131,7 +131,7 @@
             }
             else {
                 console.warn("尝试再次获取 adToken");
-                setTimeout(function () { obj.getAdToken(callback) }, 500);
+                setTimeout(function () { obj.getAdToken(url, callback) }, 500);
             }
         });
     };
