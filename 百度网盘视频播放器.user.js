@@ -108,7 +108,7 @@
         }
 
         obj.getAdToken(getUrl("M3U8_AUTO_480"), function () {
-            obj.addQuality(getUrl);
+            obj.addQuality(getUrl, "width:1920,height:1080");
 
             obj.useDPlayer();
         });
