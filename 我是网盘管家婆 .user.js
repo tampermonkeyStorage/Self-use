@@ -10,7 +10,6 @@
 // @connect      baidu.com
 // @connect      fryaisjx.lc-cn-n1-shared.com
 // @connect      api.kinh.cc
-// @require      https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js
 // @require      https://cdn.staticfile.org/jquery/3.6.0/jquery.min.js
 // @grant        unsafeWindow
 // @grant        GM_xmlhttpRequest
