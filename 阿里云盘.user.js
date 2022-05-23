@@ -759,6 +759,7 @@
                 fileInfo.subtitleArray = obj.parseTextToArray(fileInfo.file_extension, fileInfo.subtitleText);
                 if (fileInfo.subtitleArray.length) {
                     fileInfo.language = obj.langdetect(fileInfo.subtitleArray);
+                    obj.video_page.subtitle_list.push(fileInfo);
                     callback && callback([fileInfo]);
                 }
                 else {
