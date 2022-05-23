@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.9.7
+// @version      1.9.8
 // @description  支持生成文件下载链接，支持自定义分享密码，支持原生播放器优化，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -290,16 +290,16 @@
     obj.dPlayerSupport = function (callback) {
         var urlArr = [
             [
-                "https://cdn.jsdelivr.net/npm/hls.js/dist/hls.min.js",
-                "https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.js",
-            ],
-            [
                 "https://cdn.staticfile.org/hls.js/1.1.4/hls.min.js",
                 "https://cdn.staticfile.org/dplayer/1.26.0/DPlayer.min.js",
             ],
             [
                 "https://cdn.bootcdn.net/ajax/libs/hls.js/1.1.4/hls.min.js",
                 "https://cdn.bootcdn.net/ajax/libs/dplayer/1.26.0/DPlayer.min.js",
+            ],
+            [
+                "https://cdn.jsdelivr.net/npm/hls.js/dist/hls.min.js",
+                "https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.js",
             ],
         ];
 
@@ -312,15 +312,9 @@
                 });
 
                 Promise.all(promises).then(function(results) {
-                    if (results.length == arr.length) {
-                        setTimeout(function () {
-                            callback && callback(unsafeWindow.DPlayer);
-                        }, 100);
-                    }
-                    else {
-                        console.error("laodcdn 发生错误！", index, results);
-                        laodcdn(urlArr, ++index);
-                    }
+                    setTimeout(function () {
+                        callback && callback(unsafeWindow.DPlayer);
+                    }, 0);
                 }).catch(function(error) {
                     console.error("laodcdn 发生错误！", index, error);
                     laodcdn(urlArr, ++index);
@@ -765,7 +759,6 @@
                 fileInfo.subtitleArray = obj.parseTextToArray(fileInfo.file_extension, fileInfo.subtitleText);
                 if (fileInfo.subtitleArray.length) {
                     fileInfo.language = obj.langdetect(fileInfo.subtitleArray);
-                    obj.video_page.subtitle_list.push(fileInfo);
                     callback && callback([fileInfo]);
                 }
                 else {
@@ -1108,7 +1101,7 @@
         , n = parseFloat(t.length > 0 ? t.pop().replace(/,/g, ".") : "00.000") || 0
         , r = parseFloat(t.length > 0 ? t.pop() : "00") || 0;
         return 3600 * (parseFloat(t.length > 0 ? t.pop() : "00") || 0) + 60 * r + n;
-    }
+    };
 
     obj.customSharePwd = function () {
         $(document).on("DOMNodeInserted", ".ant-modal-root", function() {
@@ -1399,12 +1392,19 @@
                 }
             }
             else {
-                obj.getHomeLinkDownloadUrl(item.file_id, item.drive_id, function (download_url) {
-                    item.download_url = download_url;
+                if (item.download_url) {
                     if (-- fileListLen == 0) {
                         callback && callback(fileList);
                     }
-                });
+                }
+                else {
+                    obj.getHomeLinkDownloadUrl(item.file_id, item.drive_id, function (download_url) {
+                        item.download_url = download_url;
+                        if (-- fileListLen == 0) {
+                            callback && callback(fileList);
+                        }
+                    });
+                }
             }
         });
     };
@@ -1651,14 +1651,14 @@
         XMLHttpRequest.prototype.send = function(data) {
             this.addEventListener("load", function(event) {
                 if (this.readyState == 4 && this.status == 200) {
-                    var response, responseURL = this.responseURL;
-                    if (responseURL.indexOf("/file/list") > 0) {
+                    var response = this.response, responseURL = this.responseURL;
+                    if (responseURL.indexOf("/file/list") > 0 || responseURL.indexOf("/file/search") > 0) {
                         if (document.querySelector(".ant-modal-mask")) {
                             //排除【保存 移动 等行为触发】
                             return;
                         };
 
-                        response = JSON.parse(this.response);
+                        try { response = JSON.parse(response) } catch (error) { };
                         if (response instanceof Object && response.items) {
                             try { data = JSON.parse(data) } catch (error) { data = {} };
 
@@ -1707,7 +1707,7 @@
                         }
                     }
                     else if (responseURL.indexOf("/file/get_share_link_video_preview_play_info") > 0) {
-                        try { response = JSON.parse(this.response) } catch (error) { response = this.response };
+                        try { response = JSON.parse(response) } catch (error) { };
                         if (response instanceof Object) {
                             obj.video_page.play_info.file_id == response.file_id || (obj.video_page.subtitle_list = []);
                             obj.video_page.play_info = response;
@@ -1716,7 +1716,7 @@
                         }
                     }
                     else if (responseURL.indexOf("/file/get_video_preview_play_info") > 0) {
-                        try { response = JSON.parse(this.response) } catch (error) { response = this.response };
+                        try { response = JSON.parse(response) } catch (error) { };
                         if (response instanceof Object) {
                             obj.video_page.play_info.file_id == response.file_id || (obj.video_page.subtitle_list = []);
                             obj.video_page.play_info = response;
