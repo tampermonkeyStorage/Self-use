@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.1.9.1
+// @version      0.2.0
 // @description  播放器替换为DPlayer
 // @author       You
 // @match        https://pan.baidu.com/s/*
@@ -172,16 +172,16 @@
     obj.dPlayerSupport = function (callback) {
         var urlArr = [
             [
-                "https://cdn.jsdelivr.net/npm/hls.js/dist/hls.min.js",
-                "https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.js",
-            ],
-            [
                 "https://cdn.staticfile.org/hls.js/1.1.4/hls.min.js",
                 "https://cdn.staticfile.org/dplayer/1.26.0/DPlayer.min.js",
             ],
             [
                 "https://cdn.bootcdn.net/ajax/libs/hls.js/1.1.4/hls.min.js",
                 "https://cdn.bootcdn.net/ajax/libs/dplayer/1.26.0/DPlayer.min.js",
+            ],
+            [
+                "https://cdn.jsdelivr.net/npm/hls.js/dist/hls.min.js",
+                "https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.js",
             ],
         ];
         (function laodcdn(urlArr, index = 0) {
@@ -192,13 +192,9 @@
                     promises.push(obj.loadScript(url));
                 });
                 Promise.all(promises).then(function(results) {
-                    if (results.length == arr.length) {
+                    setTimeout(function () {
                         callback && callback(unsafeWindow.DPlayer);
-                    }
-                    else {
-                        console.error("laodcdn 发生错误！", index, results);
-                        laodcdn(urlArr, ++index);
-                    }
+                    }, 0);
                 }).catch(function(error) {
                     console.error("laodcdn 发生错误！", index, error);
                     laodcdn(urlArr, ++index);
