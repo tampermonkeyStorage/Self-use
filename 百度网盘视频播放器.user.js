@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.2.0
+// @version      0.2.1
 // @description  播放器替换为DPlayer
 // @author       You
 // @match        https://pan.baidu.com/s/*
@@ -224,12 +224,24 @@
             return setTimeout(obj.dPlayerStart, 500);
         }
 
+        var defaultQuality = function () {
+            var name = localStorage.getItem("dplayer-quality");
+            if (name) {
+                var quality = obj.video_page.quality;
+                for (let i = 0; i < quality.length; i++) {
+                    if (quality[i].name == name) {
+                        return i;
+                    }
+                }
+            }
+            return 0;
+        }();
         var options = {
             container: dPlayerNode,
             video: {
                 quality: obj.video_page.quality,
-                defaultQuality: 0,
-                pic: unsafeWindow.locals.get("file_list") ? unsafeWindow.locals.get("file_list")[0].thumbs.url3 : ""
+                defaultQuality: defaultQuality,
+                pic: ""
             },
             autoplay: true,
             screenshot: true,
@@ -240,7 +252,7 @@
             contextmenu: [
                 {
                     text: "作者加油",
-                    link: "https://cdn.jsdelivr.net/gh/tampermonkeyStorage/Self-use@main/appreciation.png",
+                    link: "https://pc-index-skin.cdn.bcebos.com/6cb0bccb31e49dc0dba6336167be0a18.png",
                 },
             ],
             theme: "#b7daff"
@@ -248,6 +260,9 @@
 
         try {
             var dPlayer = new unsafeWindow.DPlayer(options);
+            obj.getJquery()(dPlayerNode).nextAll().remove();
+            location.pathname == "/mbox/streampage" && obj.getJquery()(dPlayerNode).css("height", "480px");
+
             dPlayer.on("error", function () {
                 setTimeout(function () {
                     if (isNaN(dPlayer.video.duration)) {
@@ -262,8 +277,9 @@
                 localStorage.getItem("dplayer-speed") == dPlayer.video.playbackRate || localStorage.setItem("dplayer-speed", dPlayer.video.playbackRate);
             });
 
-            obj.getJquery()(dPlayerNode).nextAll().remove();
-            location.pathname == "/mbox/streampage" && obj.getJquery()(dPlayerNode).css("height", "480px");
+            dPlayer.on("quality_end", function () {
+                localStorage.setItem("dplayer-quality", dPlayer.quality.name);
+            });
 
             obj.resetPlayer();
             obj.msg("DPlayer 播放器创建成功");
@@ -338,7 +354,7 @@
             });
             window.onhashchange = function (e) {
                 location.reload();
-            }
+            };
         }
         else if (url.indexOf(".baidu.com/mbox/streampage") > 0) {
             obj.playVideoStreamPage();
