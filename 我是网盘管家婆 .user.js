@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.4.9
+// @version      0.5.0
 // @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云】 功能概述：【[1]：网盘页面增加资源搜索快捷方式】【[2]：[资源站点]自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地缓存数据库搜索】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -453,6 +453,31 @@
         return {
             "baidu": [
                 {
+                    name: "NEW字幕组",
+                    link: "http://newzmz.com/tvslist.html?keyword=%s",
+                    type: 1,
+                },
+                {
+                    name: "冰冰字幕组",
+                    link: "http://www.icezmz.com/search?keywords=%s",
+                    type: 1,
+                },
+                {
+                    name: "诸神字幕组",
+                    link: "https://subs.kamigami.org/?s=%s",
+                    type: 1,
+                },
+                {
+                    name: "弯弯字幕组",
+                    link: "http://wanwansub.com/search?q=%s",
+                    type: 1,
+                },
+                {
+                    name: "Orange字幕组",
+                    link: "http://www.orangesub.com/search/%s",
+                    type: 1,
+                },
+                {
                     name: "小猪快盘",
                     link: "https://www.xiaozhukuaipan.com/s/search?q=%s",
                     type: 2,
@@ -550,11 +575,6 @@
                     type: 5,
                 },
                 {
-                    name: "小悠家",
-                    link: "http://888.xuj.cool/?s=%s",
-                    type: 5,
-                },
-                {
                     name: "知识库",
                     link: "https://book.zhishikoo.com/?s=%s",
                     type: 5,
@@ -599,6 +619,11 @@
                 {
                     name: "橘子盘搜",
                     link: "https://www.nmme.cc/s/1/%s",
+                    type: 7,
+                },
+                {
+                    name: "搜云盘",
+                    link: "https://www.iyunpan.net/search/%s-0-全部-0.html",
                     type: 7,
                 },
                 // 《8》不用扫码
@@ -789,7 +814,7 @@
                     type: 1,
                 },
                 {
-                    name: "阿里盘搜",
+                    name: "喵狸盘搜",
                     link: "https://www.alipansou.com/search?k=%s",
                     type: 1,
                 },
@@ -814,6 +839,11 @@
                     type: 1,
                 },
                 {
+                    name: "我的小站",
+                    link: "https://pan666.cn/?q=%s",
+                    type: 1,
+                },
+                {
                     name: "阿里盘盘",
                     link: "https://www.panpanr.com/",
                     type: 1,
@@ -821,11 +851,6 @@
                 {
                     name: "阿里资源论坛",
                     link: "https://aliyunpan1.com/",
-                    type: 1,
-                },
-                {
-                    name: "阿里资源分享网",
-                    link: "https://ypfx.club/",
                     type: 1,
                 },
                 {
@@ -1230,7 +1255,7 @@
                         share_id: shareId,
                         share_pwd: sharePwd,
                         share_url: decodeURIComponent(location.href),
-                        share_name: document.title
+                        share_name: document.title || $("#name a").text()
                     });
                     shareData.origin_url || !document.referrer || document.referrer.includes(location.host) || (shareData.origin_url = decodeURIComponent(document.referrer));
                     obj.setSharePwdLocal(shareData);
