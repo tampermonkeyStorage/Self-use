@@ -5,7 +5,7 @@
 // @description  播放器替换为DPlayer
 // @author       You
 // @match        https://pan.baidu.com/s/*
-// @match        https://pan.baidu.com/play/video
+// @match        https://pan.baidu.com/play/video*
 // @match        https://pan.baidu.com/mbox/streampage*
 // @icon         https://nd-static.bdstatic.com/business-static/pan-center/images/vipIcon/user-level2-middle_4fd9480.png
 // @grant        unsafeWindow
