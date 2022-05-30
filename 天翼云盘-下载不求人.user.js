@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         天翼云盘-下载不求人
 // @namespace    http://tampermonkey.net/
-// @version      0.6.1
+// @version      0.7.0
 // @description  让下载成为一件愉快的事情
 // @author       You
 // @match        https://cloud.189.cn/web/*
@@ -10,6 +10,7 @@
 // @require      https://code.jquery.com/jquery-3.6.0.min.js
 // @require      https://cdn.staticfile.org/blueimp-md5/2.19.0/js/md5.min.js
 // @grant        GM_xmlhttpRequest
+// @grant        GM_setClipboard
 // ==/UserScript==
 
 (function() {
@@ -198,18 +199,31 @@
     };
 
     obj.showBox = function (body) {
-        var html = '<section class="Directory_c-directory-list_wNNms show-link-list" style=""><div class="Directory_directory-content_22Yq7"><div class="Directory_directory-content-head_31-xU"><h3>显示链接</h3><span></span></div><div class="Directory_directory-content-wrapper_4Ezq3"><div class="Directory_directory-content-list_1yQ2p" style="height:410px;">' + body + '</div></div><div class="Directory_directory-content-bottom_2h5CC"><div class="Directory_button-group_23dIK"></div><div class="Directory_button-group_23dIK"><button class="Directory_directory-button-confirm_YFyF3 close">关闭</button></div></div></div></section>';
+        var html = '<section class="Directory_c-directory-list_wNNms show-link-list" style=""><div class="Directory_directory-content_22Yq7"><div class="Directory_directory-content-head_31-xU"><h3>显示链接</h3><span></span></div><div class="Directory_directory-content-wrapper_4Ezq3"><div class="Directory_directory-content-list_1yQ2p" style="height:410px;">' + body + '</div></div><div class="Directory_directory-content-bottom_2h5CC"><div class="Directory_button-group_23dIK"><button class="Directory_directory-button_PJfdV">打赏作者</button><button class="Directory_directory-button_PJfdV">复制全部链接</button></div><div class="Directory_button-group_23dIK"></div><div class="Directory_button-group_23dIK"><button class="Directory_directory-button-confirm_YFyF3 close">关闭</button></div></div></div></section>';
         $(".Directory_c-directory-list_wNNms").parent().append(html);
         $(".show-link-list").find(".close").on("click", function () {
             $(".show-link-list").remove();
+        });
+        $(".show-link-list .Directory_button-group_23dIK:eq(0) button:eq(0)").on("click", function () {
+            window.open("https://pc-index-skin.cdn.bcebos.com/6cb0bccb31e49dc0dba6336167be0a18.png", "_blank");
+        });
+        $(".show-link-list .Directory_button-group_23dIK:eq(0) button:eq(1)").on("click", function () {
+            var urls = [];
+            $(".show-link-list a").each(function (index, value) {
+                urls.push(this.href);
+            });
+            if (urls.length) {
+                GM_setClipboard(urls.join("\r\n"));
+                obj.showTipSuccess(urls.length + " 条链接已复制");
+            }
         });
     };
 
     obj.showDownload = function () {
         var $Vue = document.querySelector(".p-main").__vue__;
-        if (!$Vue.isLogin) {
-            obj.showTipError("无法显示链接，请登录后重试");
-            return;
+        var accessToken = localStorage.getItem("accessToken");
+        if (!$Vue.isLogin && !accessToken) {
+            return obj.showTipError("无法显示链接，请登录后重试");
         }
 
         var fileList = obj.getSelectedFileList();
