@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.9.8
+// @version      1.9.9
 // @description  支持生成文件下载链接，支持自定义分享密码，支持原生播放器优化，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -407,11 +407,11 @@
             contextmenu: [
                 {
                     text: "支持作者",
-                    link: "https://cdn.jsdelivr.net/gh/tampermonkeyStorage/Self-use@main/appreciation.png",
+                    link: "https://pc-index-skin.cdn.bcebos.com/6cb0bccb31e49dc0dba6336167be0a18.png",
                 },
                 {
                     text: "阿里云盘脚本",
-                    link: "https://github.com/tampermonkeyStorage/Self-use/blob/main/阿里云盘.user.js",
+                    link: "https://github.com/tampermonkeyStorage/Self-use",
                 }
             ],
             theme: "#b7daff"
@@ -613,8 +613,8 @@
     };
 
     obj.addCueVideoSubtitle = function (callback) {
-        obj.getSubtitles(function (subtitleList) {
-            if (subtitleList.length) {
+        obj.getSubtitles(function (sublist) {
+            if (sublist.length) {
                 var video = document.querySelector("video");
                 if (video) {
                     var textTrackList = video.textTracks;
@@ -622,9 +622,10 @@
                         textTrackList[i].mode = "hidden" || (textTrackList[i].mode = "hidden");
                     }
 
-                    subtitleList = obj.sortSubtitleList(subtitleList);
-                    subtitleList.forEach(function (item, index) {
-                        if (item.subtitleArray) {
+                    sublist = obj.sortSubtitleList(sublist);
+                    sublist = obj.fuseSubtitleList(sublist);
+                    sublist.forEach(function (item, index) {
+                        if (item.subarr) {
                             var label = {
                                 chi: "中文字幕",
                                 eng: "英文字幕",
@@ -634,7 +635,7 @@
                             }[item.language] || "未知字幕";
                             textTrackList[index] || video.addTextTrack("subtitles", label, item.language);
 
-                            item.subtitleArray.forEach(function (item) {
+                            item.subarr.forEach(function (item) {
                                 /<b>.*<\/b>/.test(item.text) || (item.text = item.text.split(/\r?\n/).map((item) => `<b>${item}</b>`).join("\n"));
                                 var textTrackCue = new VTTCue(item.startTime, item.endTime, item.text);
                                 textTrackCue.id = item.index;
@@ -668,21 +669,21 @@
             return callback && callback(obj.video_page.subtitle_list);
         }
 
-        obj.getInternalSubtitles(function (subtitleList) {
+        obj.getInternalSubtitles(function (sublist) {
             var ischi = false;
-            if (subtitleList.length && !!subtitleList[0]) {
-                for (var i = 0; i < subtitleList.length; i++) {
-                    if (subtitleList[i].language == "chi") {
+            if (sublist.length && !!sublist[0]) {
+                for (var i = 0; i < sublist.length; i++) {
+                    if (sublist[i].language == "chi") {
                         ischi = true;
-                        callback && callback(subtitleList);
+                        callback && callback(sublist);
                         break;
                     }
                 }
             }
             if (ischi == false) {
-                obj.getDriveSubtitles(function (subtitleList) {
-                    if (subtitleList.length && !!subtitleList[0]) {
-                        callback && callback(subtitleList);
+                obj.getDriveSubtitles(function (sublist) {
+                    if (sublist.length && !!sublist[0]) {
+                        callback && callback(sublist);
                     }
                     else {
                         callback && callback(obj.video_page.subtitle_list);
@@ -701,20 +702,20 @@
             var listLen = subtitle_task_list.length;
             subtitle_task_list.forEach(function (item, index) {
                 item.language || (item.language = "chi");
-                if (item.subtitleArray) {
+                if (item.subarr) {
                     obj.video_page.subtitle_list.push(item);
                     if (--listLen == 0) {
                         callback && callback(obj.video_page.subtitle_list);
                     }
                 }
                 else {
-                    obj.getSubtitleText(item.url, function (subtitleText) {
-                        if (subtitleText) {
+                    obj.getSubtitleText(item.url, function (subtext) {
+                        if (subtext) {
                             play_info.subtitle_extension = "vtt";
-                            play_info.subtitleText = subtitleText;
-                            var subtitles = obj.parseTextToArray(play_info.subtitle_extension, play_info.subtitleText);
+                            play_info.subtext = subtext;
+                            var subtitles = obj.parseTextToArray(play_info.subtitle_extension, play_info.subtext);
                             if (subtitles.length) {
-                                item.subtitleArray = subtitles;
+                                item.subarr = subtitles;
                                 obj.video_page.subtitle_list.push(item);
                             }
                         }
@@ -737,7 +738,7 @@
                 subtitleFiles.forEach(function (item, index) {
                     obj.toFileInfoSubtitleArray(item, function (fileInfo) {
                         if (!fileInfo.language) {
-                            fileInfo.language = obj.langdetect(fileInfo.subtitleArray);
+                            fileInfo.language = obj.langdetect(fileInfo.subarr);
                         }
 
                         obj.video_page.subtitle_list.push(fileInfo);
@@ -755,10 +756,10 @@
 
     obj.getLocalSubtitles = function (callback) {
         obj.localFilesSubtitleText(function (fileInfo) {
-            if (fileInfo.subtitleText) {
-                fileInfo.subtitleArray = obj.parseTextToArray(fileInfo.file_extension, fileInfo.subtitleText);
-                if (fileInfo.subtitleArray.length) {
-                    fileInfo.language = obj.langdetect(fileInfo.subtitleArray);
+            if (fileInfo.subtext) {
+                fileInfo.subarr = obj.parseTextToArray(fileInfo.file_extension, fileInfo.subtext);
+                if (fileInfo.subarr.length) {
+                    fileInfo.language = obj.langdetect(fileInfo.subarr);
                     obj.video_page.subtitle_list.push(fileInfo);
                     callback && callback([fileInfo]);
                 }
@@ -773,10 +774,10 @@
         });
     };
 
-    obj.sortSubtitleList = function (subtitleList) {
+    obj.sortSubtitleList = function (sublist) {
         var newSubtitleList = [];
-        if (subtitleList[0] && subtitleList[0].subtitleArray) {
-            subtitleList.forEach(function (item, index) {
+        if (sublist[0] && sublist[0].subarr) {
+            sublist.forEach(function (item, index) {
                 if (item.language == "chi" || item.language == "adj") {
                     newSubtitleList.unshift(item);
                 }
@@ -788,8 +789,27 @@
         return newSubtitleList;
     };
 
-    obj.langdetect = function (subtitleArray) {
-        var text = subtitleArray[parseInt(subtitleArray.length / 2)].text;
+    obj.fuseSubtitleList = function (sublist) {
+        sublist.forEach(function (item, index) {
+            if (item.subarr) {
+                var newSubList = [ item.subarr.shift() ];
+                item.subarr.forEach(function (item, index) {
+                    var prevSub = newSubList.slice(-1)[0];
+                    if (item.startTime == prevSub.startTime && item.endTime == prevSub.endTime) {
+                        prevSub.text += "\n" + item.text;
+                    }
+                    else {
+                        newSubList.push(item);
+                    }
+                });
+                sublist[index].subarr = newSubList;
+            }
+        });
+        return sublist;
+    };
+
+    obj.langdetect = function (subarr) {
+        var text = subarr[parseInt(subarr.length / 2)].text;
         var textSplit = text.split(/\n/);
         if (textSplit.length == 1) {
             if (escape(textSplit[0]).indexOf( "%u" ) != -1 && /[\u4E00-\u9FA5]/.test(textSplit[0])) {
@@ -892,16 +912,16 @@
 
     obj.toFileInfoSubtitleArray = function (fileInfo, callback) {
         if (fileInfo instanceof Object) {
-            if (fileInfo.hasOwnProperty("subtitleArray")) {
+            if (fileInfo.hasOwnProperty("subarr")) {
                 return callback && callback(fileInfo);
             }
-            else if (fileInfo.hasOwnProperty("subtitleText")) {
-                fileInfo.subtitleArray = obj.parseTextToArray(fileInfo.file_extension, fileInfo.subtitleText) || [];
+            else if (fileInfo.hasOwnProperty("subtext")) {
+                fileInfo.subarr = obj.parseTextToArray(fileInfo.file_extension, fileInfo.subtext) || [];
                 return obj.toFileInfoSubtitleArray(fileInfo, callback);
             }
             else if (fileInfo.hasOwnProperty("download_url") || fileInfo.hasOwnProperty("url")) {
-                obj.getSubtitleText(fileInfo.download_url || fileInfo.url, function (subtitleText) {
-                    fileInfo.subtitleText = subtitleText || "";
+                obj.getSubtitleText(fileInfo.download_url || fileInfo.url, function (subtext) {
+                    fileInfo.subtext = subtext || "";
                     obj.toFileInfoSubtitleArray(fileInfo, callback);
                 });
                 return;
@@ -944,7 +964,7 @@
                     if (result.indexOf("�") > -1) {
                         return reader.readAsText(file, "GBK");
                     }
-                    callback && callback({file_extension: file_extension, subtitleText: result});
+                    callback && callback({file_extension: file_extension, subtext: result});
                 };
                 reader.onerror = function(e) {
                     callback && callback([]);
@@ -990,11 +1010,11 @@
         });
     };
 
-    obj.parseTextToArray = function (subtitleType, subtitleText) {
-        subtitleType = subtitleType.toLowerCase();
-        var subtitleParser = obj.subtitleParser(), method = subtitleParser[subtitleType];
+    obj.parseTextToArray = function (subtype, subtext) {
+        subtype = subtype.toLowerCase();
+        var subtitleParser = obj.subtitleParser(), method = subtitleParser[subtype];
         if (method) {
-            var itemArray = method.getItems(subtitleText);
+            var itemArray = method.getItems(subtext);
             if (itemArray.length) {
                 return method.getInfo(itemArray);
             }
