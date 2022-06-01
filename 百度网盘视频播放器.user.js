@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.2.1
+// @version      0.2.2
 // @description  播放器替换为DPlayer
 // @author       You
 // @match        https://pan.baidu.com/s/*
@@ -18,7 +18,8 @@
         video_page: {
             info: [],
             quality: [],
-            adToken: ""
+            adToken: "",
+            hasMemoryDisplay: false
         }
     };
 
@@ -40,7 +41,8 @@
                 if (i && 0 === i.errno && i.info && i.info[0]) {
                     obj.video_page.info = i.info;
                     callback && callback(i.info[0]);
-                } else {
+                }
+                else {
                     obj.msg("视频加载失败，请刷新页面后重试", "failure");
                     callback && callback("");
                 }
@@ -76,6 +78,7 @@
             if (file_list.length > 1 || file_list[0].mediaType != "video") {
                 return;
             }
+            obj.video_page.info = file_list;
 
             var file = file_list[0], resolution = file.resolution, fid = file.fs_id, vip = obj.getVip();
             function getUrl(i) {
@@ -102,6 +105,7 @@
             msg_id: getParam("msg_id"),
             path: decodeURIComponent(decodeURIComponent(getParam("path")))
         };
+        obj.video_page.info = [ file ];
 
         function getUrl (i) {
             return location.protocol + "//" + location.host + "/mbox/msg/streaming?from_uk=" + file.from_uk + "&to=" + file.to + "&msg_id=" + file.msg_id + "&fs_id=" + file.fs_id + "&type=" + file.type + "&stream_type=" + i;
@@ -172,11 +176,11 @@
     obj.dPlayerSupport = function (callback) {
         var urlArr = [
             [
-                "https://cdn.staticfile.org/hls.js/1.1.4/hls.min.js",
+                "https://cdn.staticfile.org/hls.js/1.1.5/hls.min.js",
                 "https://cdn.staticfile.org/dplayer/1.26.0/DPlayer.min.js",
             ],
             [
-                "https://cdn.bootcdn.net/ajax/libs/hls.js/1.1.4/hls.min.js",
+                "https://cdn.bootcdn.net/ajax/libs/hls.js/1.1.5/hls.min.js",
                 "https://cdn.bootcdn.net/ajax/libs/dplayer/1.26.0/DPlayer.min.js",
             ],
             [
@@ -224,10 +228,9 @@
             return setTimeout(obj.dPlayerStart, 500);
         }
 
-        var defaultQuality = function () {
+        var quality = obj.video_page.quality, defaultQuality = function () {
             var name = localStorage.getItem("dplayer-quality");
             if (name) {
-                var quality = obj.video_page.quality;
                 for (let i = 0; i < quality.length; i++) {
                     if (quality[i].name == name) {
                         return i;
@@ -239,10 +242,10 @@
         var options = {
             container: dPlayerNode,
             video: {
-                quality: obj.video_page.quality,
-                defaultQuality: defaultQuality,
-                pic: ""
+                quality: quality,
+                defaultQuality: defaultQuality
             },
+            autoPosition: false, // 记忆播放 如需自动跳转至上次播放位置，值设为 true
             autoplay: true,
             screenshot: true,
             hotkey: true,
@@ -263,20 +266,22 @@
             obj.getJquery()(dPlayerNode).nextAll().remove();
             location.pathname == "/mbox/streampage" && obj.getJquery()(dPlayerNode).css("height", "480px");
 
-            dPlayer.on("error", function () {
+            dPlayer.on("loadstart", function () {
                 setTimeout(function () {
                     if (isNaN(dPlayer.video.duration)) {
                         location.reload();
                     }
                 }, 3000);
             });
+            dPlayer.on("durationchange", function () {
+                obj.memoryPlay(dPlayer);
+            });
 
             dPlayer.speed(localStorage.getItem("dplayer-speed") || 1);
             dPlayer.on("ratechange", function () {
                 dPlayer.notice("播放速度：" + dPlayer.video.playbackRate);
-                localStorage.getItem("dplayer-speed") == dPlayer.video.playbackRate || localStorage.setItem("dplayer-speed", dPlayer.video.playbackRate);
+                localStorage.setItem("dplayer-speed", dPlayer.video.playbackRate);
             });
-
             dPlayer.on("quality_end", function () {
                 localStorage.setItem("dplayer-quality", dPlayer.quality.name);
             });
@@ -285,6 +290,67 @@
             obj.msg("DPlayer 播放器创建成功");
         } catch (error) {
             obj.msg("播放器创建失败", "failure");
+        }
+    };
+
+    obj.memoryPlay = function (player) {
+        if (obj.video_page.hasMemoryDisplay) return;
+        obj.video_page.hasMemoryDisplay = true;
+
+        var duration = player.video.duration
+        , file = obj.video_page.info[0] || {}
+        , sign = file.md5 || file.fs_id
+        , memoryTime = getFilePosition(sign);
+        if (memoryTime && parseInt(memoryTime)) {
+            var autoPosition = player.options.autoPosition;
+            if (autoPosition) {
+                player.seek(memoryTime);
+            }
+            else {
+                var formatTime = formatVideoTime(memoryTime)
+                var $ = obj.getJquery();
+                $(player.container).after('<div class="memory-play-wrap" style="display: block;position: absolute;left: 30px;bottom: 60px;font-size: 15px;padding: 7px;border-radius: 3px;color: #fff;z-index:100;background: rgba(0,0,0,.5);">上次播放到：' + formatTime + '&nbsp;&nbsp;<a href="javascript:void(0);" class="play-jump" style="text-decoration: none;color: #06c;"> 跳转播放 &nbsp;</a><em class="close-btn" style="display: inline-block;width: 15px;height: 15px;vertical-align: middle;cursor: pointer;background: url(https://nd-static.bdstatic.com/m-static/disk-share/widget/pageModule/share-file-main/fileType/video/img/video-flash-closebtn_15f0e97.png) no-repeat;"></em></div>');
+                var memoryTimeout = setTimeout(function () {
+                    $(".memory-play-wrap").remove();
+                }, 15000);
+                $(".memory-play-wrap .close-btn").click(function () {
+                    $(".memory-play-wrap").remove();
+                    clearTimeout(memoryTimeout);
+                });
+                $(".memory-play-wrap .play-jump").click(function () {
+                    player.seek(memoryTime);
+                    player.play();
+                    $(".memory-play-wrap").remove();
+                    clearTimeout(memoryTimeout);
+                });
+            }
+        }
+
+        document.onvisibilitychange = function () {
+            if (document.visibilityState === "hidden") {
+                var currentTime = player.video.currentTime;
+                currentTime && setFilePosition(sign, currentTime, duration);
+            }
+        };
+        window.onbeforeunload = function () {
+            var currentTime = player.video.currentTime;
+            currentTime && setFilePosition(sign, currentTime, duration);
+        };
+
+        function getFilePosition (e) {
+            return localStorage.getItem("video_" + e) || 0;
+        }
+        function setFilePosition (e, t, o) {
+            e && t && (e = "video_" + e, t <= 60 || t + 60 >= o || 0 ? localStorage.removeItem(e) : localStorage.setItem(e, t));
+        }
+        function formatVideoTime (seconds) {
+            var secondTotal = Math.round(seconds)
+            , hour = Math.floor(secondTotal / 3600)
+            , minute = Math.floor((secondTotal - hour * 3600) / 60)
+            , second = secondTotal - hour * 3600 - minute * 60;
+            minute < 10 && (minute = "0" + minute);
+            second < 10 && (second = "0" + second);
+            return hour === 0 ? minute + ":" + second : hour + ":" + minute + ":" + second;
         }
     };
 
