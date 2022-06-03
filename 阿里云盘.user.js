@@ -1776,6 +1776,97 @@
         };
     };
 
+    obj.jituiSharePage = function () {
+        (function(open) {
+            XMLHttpRequest.prototype.open = function() {
+                if (!this._hooked) {
+                    this._hooked = true;
+                    setupHook(this);
+                }
+                open.apply(this, arguments);
+            }
+        })(XMLHttpRequest.prototype.open);
+
+        function setupHook(xhr) {
+            (function setup() {
+                Object.defineProperty(xhr, "responseText", {
+                    get: function() {
+                        delete xhr.responseText;
+                        var responseURL = xhr.responseURL, responseText = xhr.responseText;
+                        if (responseURL.includes("/file/list") && responseText) {
+                            var responseJson = JSON.parse(responseText);
+                            responseJson.items && responseJson.items.forEach(function (item) {
+                                if (item.category == "video") {
+                                    if (["ts"].includes(item.file_extension)) {
+                                        item.file_extension = "mp4";
+                                    }
+                                }
+                                else if (item.category == "audio") {
+                                    if (["ape"].includes(item.file_extension)) {
+                                        item.file_extension = "mp3";
+                                    }
+                                }
+
+                                if (item.punish_flag) {
+                                    item.punish_flag = 0;
+                                }
+                            });
+                            responseText = JSON.stringify(responseJson);
+                        }
+                        setup();
+                        return responseText;
+                    },
+                    configurable: true
+                });
+            })();
+        }
+    };
+
+    obj.jituiHomePage = function () {
+        (function(open) {
+            XMLHttpRequest.prototype.open = function() {
+                if (!this._hooked) {
+                    this._hooked = true;
+                    setupHook(this);
+                }
+                open.apply(this, arguments);
+            }
+        })(XMLHttpRequest.prototype.open);
+
+        function setupHook(xhr) {
+            (function setup() {
+                Object.defineProperty(xhr, "response", {
+                    get: function getter() {
+                        delete xhr.response;
+                        var responseURL = xhr.responseURL, response = xhr.response;
+                        if (responseURL.includes("/file/list") && response) {
+                            try { response = JSON.parse(response) } catch (error) { };
+                            response.items && response.items.forEach(function (item) {
+                                if (item.category == "video") {
+                                    if (["ts"].includes(item.file_extension)) {
+                                        item.file_extension = "mp4";
+                                    }
+                                }
+                                else if (item.category == "audio") {
+                                    if (["ape"].includes(item.file_extension)) {
+                                        item.file_extension = "mp3";
+                                    }
+                                }
+
+                                if (item.punish_flag) {
+                                    item.punish_flag = 0;
+                                }
+                            });
+                        }
+                        setup();
+                        return response;
+                    },
+                    configurable: true
+                });
+            })();
+        }
+    };
+
     obj.goldlogSpm = function () {
         unsafeWindow.goldlog = {};
         Object.defineProperty(unsafeWindow.goldlog, "_$",{
@@ -1795,8 +1886,10 @@
 
         var url = location.href;
         if (url.indexOf(".aliyundrive.com/s/") > 0) {
+            obj.jituiSharePage();
         }
         else if (url.indexOf(".aliyundrive.com/drive") > 0) {
+            obj.jituiHomePage();
             obj.customSharePwd();
         }
     }();
