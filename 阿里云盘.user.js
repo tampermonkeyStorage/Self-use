@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.9.9
+// @version      1.9.9.1
 // @description  支持生成文件下载链接，支持自定义分享密码，支持原生播放器优化，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -396,7 +396,7 @@
                 type: "webvtt",
                 fontSize: "5vh", //字幕大小 可修改为["4vh", "4.5vh", "5vh", 等]
                 bottom: "10%", //字幕相对底部的位置 可修改为["5%", "10%", "15%", 等]
-                color: "white", //字幕颜色 可修改为["#b7daff", "white", red orange yellow green blue indigo purple, 等]
+                color: "#ffd821", //字幕颜色 可修改为["#b7daff", "white", red orange yellow green blue indigo purple, 等]
             },
             autoplay: true,
             screenshot: true,
@@ -1029,27 +1029,6 @@
 
     obj.subtitleParser = function() {
         return {
-            vtt: {
-                getItems(text) {
-                    text = text.replace(/\r/g, "");
-                    var regex = /(\d{0,2}:?\d{2}:\d{2}.\d{3}) --> (\d{0,2}:?\d{2}:\d{2}.\d{3})/g;
-                    var data = text.split(regex);
-                    data.shift();
-                    return data;
-                },
-                getInfo(data) {
-                    var items = [];
-                    for (var i = 0; i < data.length; i += 3) {
-                        items.push({
-                            index: items.length,
-                            startTime: obj.toSeconds(data[i]),
-                            endTime: obj.toSeconds(data[i + 1]),
-                            text: data[i + 2].trim().replace(/{.*?}/g, "")
-                        });
-                    }
-                    return items;
-                }
-            },
             srt: {
                 getItems(text) {
                     text = text.replace(/\r/g, "");
@@ -1062,10 +1041,9 @@
                     var items = [];
                     for (var i = 0; i < data.length; i += 4) {
                         items.push({
-                            //index: parseInt(data[i]),
                             index: items.length,
-                            startTime: obj.toSeconds(data[i + 1]),
-                            endTime: obj.toSeconds(data[i + 2]),
+                            startTime: obj.parseTimestamp(data[i + 1]),
+                            endTime: obj.parseTimestamp(data[i + 2]),
                             text: data[i + 3].trim().replace(/{.*?}/g, "")
                         });
                     }
@@ -1085,8 +1063,8 @@
                     for (var i = 0; i < data.length; i += 3) {
                         items.push({
                             index: items.length,
-                            startTime: obj.toSeconds(data[i]),
-                            endTime: obj.toSeconds(data[i + 1]),
+                            startTime: obj.parseTimestamp(data[i]),
+                            endTime: obj.parseTimestamp(data[i + 1]),
                             text: data[i + 2].trim().replace(/\\N/g, "\n").replace(/{.*?}/g, "")
                         });
                     }
@@ -1096,7 +1074,7 @@
             ssa: {
                 getItems(text) {
                     text = text.replace(/\r\n/g, "");
-                    var regex = /Dialogue: \d+,(\d+:\d{2}:\d{2}\.\d{2}),(\d+:\d{2}:\d{2}\.\d{2}),.*?,\d+,\d+,\d+,,/g;
+                    var regex = /Dialogue: \d+,(\d+:\d{2}:\d{2}\.\d{2}),(\d+:\d{2}:\d{2}\.\d{2}),.*?,\d+,\d+,\d+,.*?,/g;
                     var data = text.split(regex);
                     data.shift();
                     return data;
@@ -1106,18 +1084,39 @@
                     for (var i = 0; i < data.length; i += 3) {
                         items.push({
                             index: items.length,
-                            startTime: obj.toSeconds(data[i]),
-                            endTime: obj.toSeconds(data[i + 1]),
+                            startTime: obj.parseTimestamp(data[i]),
+                            endTime: obj.parseTimestamp(data[i + 1]),
                             text: data[i + 2].trim().replace(/\\N/g, "\n").replace(/{.*?}/g, "")
                         });
                     }
                     return items;
                 }
-            }
+            },
+            vtt: {
+                getItems(text) {
+                    text = text.replace(/\r/g, "");
+                    var regex = /(\d+)\n(\d{0,2}:?\d{2}:\d{2}.\d{3}) -?-> (\d{0,2}:?\d{2}:\d{2}.\d{3})/g;
+                    var data = text.split(regex);
+                    data.shift();
+                    return data;
+                },
+                getInfo(data) {
+                    var items = [];
+                    for (var i = 0; i < data.length; i += 4) {
+                        items.push({
+                            index: items.length,
+                            startTime: obj.parseTimestamp(data[i + 1]),
+                            endTime: obj.parseTimestamp(data[i + 2]),
+                            text: data[i + 3].trim().replace(/{.*?}/g, "").replace(/[a-z]+\:.*\d+\.\d+\%\s/, "")
+                        });
+                    }
+                    return items;
+                }
+            },
         };
     };
 
-    obj.toSeconds = function(e) {
+    obj.parseTimestamp = function(e) {
         var t = e.split(":")
         , n = parseFloat(t.length > 0 ? t.pop().replace(/,/g, ".") : "00.000") || 0
         , r = parseFloat(t.length > 0 ? t.pop() : "00") || 0;
@@ -1407,25 +1406,18 @@
         var share_id = obj.getShareId();
         var fileListLen = fileList.length;
         fileList.forEach(function (item, index) {
-            if (item.type == "folder") {
+            if (item.type == "folder" || item.download_url) {
                 if (-- fileListLen == 0) {
                     callback && callback(fileList);
                 }
             }
             else {
-                if (item.download_url) {
+                obj.getHomeLinkDownloadUrl(item.file_id, item.drive_id, function (url) {
+                    item.download_url = url;
                     if (-- fileListLen == 0) {
                         callback && callback(fileList);
                     }
-                }
-                else {
-                    obj.getHomeLinkDownloadUrl(item.file_id, item.drive_id, function (download_url) {
-                        item.download_url = download_url;
-                        if (-- fileListLen == 0) {
-                            callback && callback(fileList);
-                        }
-                    });
-                }
+                });
             }
         });
     };
@@ -1464,6 +1456,11 @@
                             callback && callback("");
                         }
                     });
+                }
+                else if (error.responseJSON.code == "TooManyRequests") {
+                    setTimeout(function () {
+                        obj.getHomeLinkDownloadUrl(file_id, drive_id, callback);
+                    }, 500);
                 }
                 else {
                     console.error("getHomeLinkDownloadUrl 错误", error);
