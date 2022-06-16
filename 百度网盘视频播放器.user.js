@@ -18,8 +18,7 @@
         video_page: {
             info: [],
             quality: [],
-            adToken: "",
-            hasMemoryDisplay: false
+            adToken: ""
         }
     };
 
@@ -131,12 +130,8 @@
             var t = jQuery.parseJSON(n.responseText);
             if (t && 133 === t.errno && 0 !== t.adTime) {
                 obj.video_page.adToken = t.adToken;
-                callback && callback();
             }
-            else {
-                console.warn("尝试再次获取 adToken");
-                setTimeout(function () { obj.getAdToken(url, callback) }, 500);
-            }
+            callback && callback();
         });
     };
 
@@ -267,11 +262,14 @@
             location.pathname == "/mbox/streampage" && obj.getJquery()(dPlayerNode).css("height", "480px");
 
             dPlayer.on("loadstart", function () {
+                if (this.hasDurationDisplay) return;
+                this.hasDurationDisplay = true;
+
                 setTimeout(function () {
                     if (isNaN(dPlayer.video.duration)) {
                         location.reload();
                     }
-                }, 3000);
+                }, 5000);
             });
             dPlayer.on("durationchange", function () {
                 obj.memoryPlay(dPlayer);
@@ -294,8 +292,8 @@
     };
 
     obj.memoryPlay = function (player) {
-        if (obj.video_page.hasMemoryDisplay) return;
-        obj.video_page.hasMemoryDisplay = true;
+        if (this.hasMemoryDisplay) return;
+        this.hasMemoryDisplay = true;
 
         var duration = player.video.duration
         , file = obj.video_page.info[0] || {}
