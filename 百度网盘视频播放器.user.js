@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.2.2
+// @version      0.2.3
 // @description  播放器替换为DPlayer
 // @author       You
 // @match        https://pan.baidu.com/s/*
