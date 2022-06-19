@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.5.0
+// @version      0.5.1
 // @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云】 功能概述：【[1]：网盘页面增加资源搜索快捷方式】【[2]：[资源站点]自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地缓存数据库搜索】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -9,7 +9,6 @@
 // @icon         https://scpic.chinaz.net/Files/pic/icons128/7231/o4.png
 // @connect      baidu.com
 // @connect      fryaisjx.lc-cn-n1-shared.com
-// @connect      api.kinh.cc
 // @require      https://cdn.staticfile.org/jquery/3.6.0/jquery.min.js
 // @grant        unsafeWindow
 // @grant        GM_xmlhttpRequest
@@ -212,30 +211,6 @@
                 }
             },
             error: function () {
-                callback && callback("");
-            }
-        });
-    };
-
-    obj.queryShareRandsk = function (shareSource, shareId, callback) {
-        obj.ajax({
-            type: "get",
-            url: "https://api.kinh.cc/BaiDu/Share/Query.php?ShareUrl=1" + shareId + "&type=BaiduCloud",
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
-            },
-            success: function (response) {
-                if (response instanceof Object && response.status == 0) {
-                    response = Object.assign({
-                        share_randsk: response.Randsk
-                    }, response);
-                    callback && callback(response);
-                }
-                else {
-                    callback && callback("");
-                }
-            },
-            error: function (error) {
                 callback && callback("");
             }
         });
@@ -453,6 +428,16 @@
         return {
             "baidu": [
                 {
+                    name: "爱笑聚",
+                    link: "https://www.axjbd.com/app-thread-run?app=search&keywords=%s",
+                    type: 0,
+                },
+                {
+                    name: "FIX字幕侠",
+                    link: "https://www.zimuxia.cn/?s=%s",
+                    type: 1,
+                },
+                {
                     name: "NEW字幕组",
                     link: "http://newzmz.com/tvslist.html?keyword=%s",
                     type: 1,
@@ -475,6 +460,26 @@
                 {
                     name: "Orange字幕组",
                     link: "http://www.orangesub.com/search/%s",
+                    type: 1,
+                },
+                {
+                    name: "幻月字幕组",
+                    link: "https://www.huanyuezmz.site/?s=%s",
+                    type: 1,
+                },
+                {
+                    name: "心动日剧",
+                    link: "http://www.doki8.com/?s=%s",
+                    type: 1,
+                },
+                {
+                    name: "幻想乐园字幕组",
+                    link: "http://www.hxly9.com/search.php?mod=forum&searchid=51&orderby=lastpost&ascdesc=desc&searchsubmit=yes&kw=%s",
+                    type: 1,
+                },
+                {
+                    name: "深影译站",
+                    link: "https://sub.shinybbs.vip/?s=%s",
                     type: 1,
                 },
                 {
@@ -662,6 +667,11 @@
                     link: "https://www.bdsoba.com/search/type_0_1_%s",
                     type: 8,
                 },
+                {
+                    name: "小贝子",
+                    link: "http://xiaobeizi.2kongjiang.com/s/%s",
+                    type: 8,
+                },
 
                 //不能直接搜索
                 {
@@ -778,6 +788,63 @@
                     type: 10,
                 },
             ],
+            "aliyundrive": [
+                {
+                    name: "咔帕搜索",
+                    link: "https://www.cuppaso.fun/search?type=all&keyword=%s",
+                    type: 1,
+                },
+                {
+                    name: "UP云搜",
+                    link: "https://www.upyunso.com/search.html?keyword=%s",
+                    type: 1,
+                },
+                {
+                    name: "喵狸盘搜",
+                    link: "https://www.alipansou.com/search?k=%s",
+                    type: 1,
+                },
+                {
+                    name: "大盘搜",
+                    link: "https://aliyunso.cn/search?keyword=%s",
+                    type: 1,
+                },
+                {
+                    name: "云盘资源网",
+                    link: "https://www.yunpanziyuan.com/fontsearch.htm?fontname=%s",
+                    type: 1,
+                },
+                {
+                    name: "奈斯搜索",
+                    link: "https://www.niceso.fun/search/?q=%s",
+                    type: 1,
+                },
+                {
+                    name: "资源星球",
+                    link: "https://aliyunpanso.cn/?s=%s",
+                    type: 1,
+                },
+                {
+                    name: "我的小站",
+                    link: "https://pan666.cn/?q=%s",
+                    type: 1,
+                },
+                {
+                    name: "盘盘资源",
+                    link: "https://www.panpanr.com/",
+                    type: 1,
+                },
+                {
+                    name: "盘基地",
+                    link: "https://www.panjd.com/",
+                    type: 1,
+                },
+                {
+                    name: "阿里资源论坛",
+                    link: "https://aliyunpan1.com/",
+                    type: 1,
+                },
+            ],
             "lanzous": [
                 {
                     name: "六音软件",
@@ -807,58 +874,6 @@
                     type: 1,
                 },
             ],
-            "aliyundrive": [
-                {
-                    name: "UP云搜",
-                    link: "https://www.upyunso.com/search.html?keyword=%s",
-                    type: 1,
-                },
-                {
-                    name: "喵狸盘搜",
-                    link: "https://www.alipansou.com/search?k=%s",
-                    type: 1,
-                },
-                {
-                    name: "大盘搜",
-                    link: "https://aliyunso.cn/search?keyword=%s",
-                    type: 1,
-                },
-                {
-                    name: "云盘资源网",
-                    link: "https://www.yunpanziyuan.com/fontsearch.htm?fontname=%s",
-                    type: 1,
-                },
-                {
-                    name: "奈斯搜索",
-                    link: "https://www.niceso.fun/search/?q=%s",
-                    type: 1,
-                },
-                {
-                    name: "AliYunPanSo",
-                    link: "https://aliyunpanso.cn/?s=%s",
-                    type: 1,
-                },
-                {
-                    name: "我的小站",
-                    link: "https://pan666.cn/?q=%s",
-                    type: 1,
-                },
-                {
-                    name: "阿里盘盘",
-                    link: "https://www.panpanr.com/",
-                    type: 1,
-                },
-                {
-                    name: "阿里资源论坛",
-                    link: "https://aliyunpan1.com/",
-                    type: 1,
-                },
-                {
-                    name: "盘基地",
-                    link: "https://www.panjd.com/",
-                    type: 1,
-                },
-            ]
         };
     };
 
@@ -952,26 +967,9 @@
                         obj.share_pwd = shareData.share_pwd;
                         baidu.submitPwd(shareData.share_pwd);
                     }
-                    setTimeout(function() {
-                        if (document.title.indexOf("输入提取码") > 0) {
-                            obj.queryShareRandsk("baidu", shareId, function(response) {
-                                if (response instanceof Object && response.Randsk) {
-                                    obj.showTipSuccess("解锁成功，强制跳转");
-                                    shareData = Object.assign(shareData || {}, {
-                                        share_id: shareId,
-                                        share_randsk: response.Randsk
-                                    });
-                                    delete shareData.share_pwd;
-                                    shareData.origin_url || !document.referrer || document.referrer.includes(location.host) || (shareData.origin_url = decodeURIComponent(document.referrer));
-                                    baidu.reloadPage(response.Randsk);
-                                    obj.setSharePwdLocal(shareData);
-                                }
-                                else {
-                                    obj.showTipError("未找到密码");
-                                }
-                            });
-                        }
-                    }, 1000);
+                    else {
+                        obj.showTipError("未找到密码");
+                    }
                 }
             });
         }
@@ -1488,7 +1486,7 @@
         if (tracker) { tracker.setValue(lastValue) };
         input.dispatchEvent(event);
 
-        var $button = document.querySelector("#root button");
+        var $button = document.querySelector("#root button[type='submit']");
         $button && $button.click();
     };
 
@@ -1497,21 +1495,21 @@
         XMLHttpRequest.prototype.send = function(sendParams) {
             this.addEventListener("load", function(event) {
                 if (this.readyState == 4 && this.status == 200) {
-                    var response, responseURL = this.responseURL;
+                    var responseURL = this.responseURL, response = this.response;
                     if (responseURL.indexOf("/share_link/get_share_by_anonymous") > 0) {
-                        response = JSON.parse(this.response);
+                        try { response = JSON.parse(this.response) } catch (e) { };
                         if (response.share_name) {
                             aliyundrive.share_name = response.share_name;
                         }
                     }
                     else if (responseURL.indexOf("/share_link/get_share_token") > 0) {
-                        sendParams = JSON.parse(sendParams);
+                        try { sendParams = JSON.parse(sendParams) } catch (e) { sendParams = { } };
                         aliyundrive.share_id = sendParams.share_id;
                         aliyundrive.share_pwd = sendParams.share_pwd;
                     }
                     else if (responseURL.indexOf("/file/list") > 0) {
-                        response = JSON.parse(this.response);
-                        sendParams = JSON.parse(sendParams);
+                        try { response = JSON.parse(this.response) } catch (e) { };
+                        try { sendParams = JSON.parse(sendParams) } catch (e) { sendParams = { } };
                         if (aliyundrive.share_id && sendParams.share_id == aliyundrive.share_id) {
                             var shareData = obj.getSharePwdLocal(aliyundrive.share_id) || {};
                             if (!shareData.share_name || shareData.share_pwd != aliyundrive.share_pwd) {
