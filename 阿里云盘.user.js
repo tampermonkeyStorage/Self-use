@@ -1287,26 +1287,30 @@
             return item.type == "file";
         });
         $(".ant-modal-Link .idm-download").on("click", function () {
-            var content = "", referer = "https://www.aliyundrive.com/", userAgent = navigator.userAgent;
-            fileList.forEach(function (item, index) {
-                content += ["<", item.download_url, "referer: " + referer, "User-Agent: " + userAgent, ">"].join("\r\n") + "\r\n";
-            });
-            obj.downloadFile(content, "IDM 导出文件.ef2");
+            if (fileList.length) {
+                var content = "", referer = "https://www.aliyundrive.com/", userAgent = navigator.userAgent;
+                fileList.forEach(function (item, index) {
+                    content += ["<", item.download_url, "referer: " + referer, "User-Agent: " + userAgent, ">"].join("\r\n") + "\r\n";
+                });
+                obj.downloadFile(content, "IDM 导出文件.ef2");
+            }
         });
         $(".ant-modal-Link .aria2-download").on("click", function () {
-            var successNum = 0;
-            fileList.forEach(function (item, index) {
-                obj.aria2RPC(item, function (result) {
-                    if (result) {
-                        if (++successNum == fileList.length) {
-                            obj.showTipSuccess("Aria2 推送完成，请查收");
+            if (fileList.length) {
+                var successNum = 0;
+                fileList.forEach(function (item, index) {
+                    obj.aria2RPC(item, function (result) {
+                        if (result) {
+                            if (++successNum == fileList.length) {
+                                obj.showTipSuccess("Aria2 推送完成，请查收");
+                            }
                         }
-                    }
-                    else {
-                        obj.showTipError(++index + " " + item.name + " 推送失败 可能 Aria2 未启动或配置错误");
-                    }
-                })
-            });
+                        else {
+                            obj.showTipError(++index + " " + item.name + " 推送失败 可能 Aria2 未启动或配置错误");
+                        }
+                    })
+                });
+            }
         });
     };
 
