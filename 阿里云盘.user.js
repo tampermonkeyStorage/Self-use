@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      1.9.9.1
-// @description  支持生成文件下载链接，支持自定义分享密码，支持原生播放器优化，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕），...
+// @version      2.0.0
+// @description  支持生成文件下载链接（多种下载姿势），支持自定义分享密码，支持原生播放器优化，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
 // @match        https://www.aliyundrive.com/drive*
@@ -1265,7 +1265,9 @@
             }
         });
         html += '</div></div><div class="ant-modal-footer"><div class="footer--1r-ur"><div class="buttons--nBPeo">';
+        html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi appreciation">👍 点个赞</button>';
         html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi idm-download">IDM 导出文件</button>';
+        html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi aria2-download">Aria2 推送</button>';
         html += '</div></div></div></div></div></div></div>';
         $("body").append(html);
 
@@ -1277,19 +1279,38 @@
                 $(".ant-modal-Link").remove();
             }
         });
+        $(".ant-modal-Link .appreciation").on("click", function () {
+            window.open("https://pc-index-skin.cdn.bcebos.com/6cb0bccb31e49dc0dba6336167be0a18.png", "_blank");
+        });
 
+        fileList = fileList.filter(function (item) {
+            return item.type == "file";
+        });
         $(".ant-modal-Link .idm-download").on("click", function () {
             var content = "", referer = "https://www.aliyundrive.com/", userAgent = navigator.userAgent;
             fileList.forEach(function (item, index) {
-                if (item.type == "file") {
-                    content += ["<", item.download_url, "referer: " + referer, "User-Agent: " + userAgent, ">"].join("\r\n") + "\r\n";
-                }
+                content += ["<", item.download_url, "referer: " + referer, "User-Agent: " + userAgent, ">"].join("\r\n") + "\r\n";
             });
             obj.downloadFile(content, "IDM 导出文件.ef2");
         });
+        $(".ant-modal-Link .aria2-download").on("click", function () {
+            var successNum = 0;
+            fileList.forEach(function (item, index) {
+                obj.aria2RPC(item, function (result) {
+                    if (result) {
+                        if (++successNum == fileList.length) {
+                            obj.showTipSuccess("Aria2 推送完成，请查收");
+                        }
+                    }
+                    else {
+                        obj.showTipError(++index + " " + item.name + " 推送失败 可能 Aria2 未启动或配置错误");
+                    }
+                })
+            });
+        });
     };
 
-    obj.downloadFile = function(content, filename) {
+    obj.downloadFile = function (content, filename) {
         var a = document.createElement("a");
         var blob = new Blob([content]);
         var url = window.URL.createObjectURL(blob);
@@ -1297,6 +1318,55 @@
         a.download = filename;
         a.click();
         window.URL.revokeObjectURL(url);
+    };
+
+    obj.aria2RPC = function (fileItem, callback) {
+        var urls = ["http://127.0.0.1:6800/jsonrpc", "http://localhost:16800/jsonrpc"];
+        var url = sessionStorage.getItem("aria-url");
+        $.ajax({
+            type: "POST",
+            url: url || "http://127.0.0.1:6800/jsonrpc",
+            data: JSON.stringify({
+                id: "",
+                jsonrpc: "2.0",
+                method: "aria2.addUri",
+                params:[
+                    [ fileItem.download_url ],
+                    {
+                        out: fileItem.name,
+                        dir:"D:\/aliyundriveDownload", // 下载路径
+                        referer: "https://www.aliyundrive.com/",
+                        "user-agent": navigator.userAgent
+                    }
+                ],
+                token: ""
+            }),
+            crossDomain: true,
+            processData: false,
+            contentType: "application/json",
+            success: function(result){
+                url || sessionStorage.setItem("aria-url", this.url);
+                callback && callback(result);
+            },
+            error: function (error) {
+                var index = urls.indexOf(this.url);
+                if (url) {
+                    if (index < urls.length - 1) {
+                        sessionStorage.setItem("aria-url", urls[index + 1]);
+                        setTimeout(function() { obj.aria2RPC(fileItem, callback) }, 500);
+                    }
+                    else {
+                        console.error("Aria2 推送服务 错误：", error, this.url);
+                        sessionStorage.removeItem("aria-url");
+                        callback && callback("");
+                    }
+                }
+                else {
+                    sessionStorage.setItem("aria-url", urls[index + 1]);
+                    setTimeout(function() { obj.aria2RPC(fileItem, callback) }, 500);
+                }
+            }
+        });
     };
 
     obj.getSelectedFileList = function () {
