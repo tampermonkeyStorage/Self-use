@@ -23,6 +23,7 @@
     var obj = {
         file_page: {
             parent_file_id: "root",
+            file_info: {},
             order_by: "",
             order_direction: "",
             next_marker_list: [],
@@ -1325,11 +1326,16 @@
     };
 
     obj.aria2RPC = function (fileItem, callback) {
+        var folderName, fileInfo = obj.file_page.file_info;
+        if (fileInfo.type == "folder") {
+            folderName = fileInfo.name;
+        }
+
         var urls = ["http://127.0.0.1:6800/jsonrpc", "http://localhost:16800/jsonrpc"];
         var url = sessionStorage.getItem("aria-url");
         $.ajax({
             type: "POST",
-            url: url || "http://127.0.0.1:6800/jsonrpc",
+            url: url || urls[0],
             data: JSON.stringify({
                 id: "",
                 jsonrpc: "2.0",
@@ -1338,7 +1344,7 @@
                     [ fileItem.download_url ],
                     {
                         out: fileItem.name,
-                        dir:"D:\/aliyundriveDownload", // 下载路径
+                        dir: "D:\/aliyundriveDownload" + (folderName ? "\/" + folderName : ""), // 下载路径
                         referer: "https://www.aliyundrive.com/",
                         "user-agent": navigator.userAgent
                     }
@@ -1744,7 +1750,13 @@
             this.addEventListener("load", function(event) {
                 if (this.readyState == 4 && this.status == 200) {
                     var response = this.response, responseURL = this.responseURL;
-                    if (responseURL.indexOf("/file/list") > 0 || responseURL.indexOf("/file/search") > 0) {
+                    if (responseURL.endsWith("/file/get")) {
+                        try { response = JSON.parse(response) } catch (error) { };
+                        if (response instanceof Object) {
+                            obj.file_page.file_info = response;
+                        }
+                    }
+                    else if (responseURL.indexOf("/file/list") > 0 || responseURL.indexOf("/file/search") > 0) {
                         if (document.querySelector(".ant-modal-mask")) {
                             //排除【保存 移动 等行为触发】
                             return;
