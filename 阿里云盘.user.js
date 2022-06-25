@@ -1298,19 +1298,41 @@
         });
         $(".ant-modal-Link .aria2-download").on("click", function () {
             if (fileList.length) {
-                var successNum = 0;
+                var $this = $(this), $text = $this.text();
+                $this.text("正在推送");
+                var folderName, fileInfo = obj.file_page.file_info;
+                if (fileInfo.type == "folder") {
+                    folderName = fileInfo.name;
+                }
+
+                var downData = [];
                 fileList.forEach(function (item, index) {
-                    obj.aria2RPC(item, function (result) {
-                        if (result) {
-                            if (++successNum == fileList.length) {
-                                obj.showTipSuccess("Aria2 推送完成，请查收");
+                    downData.push({
+                        id: "",
+                        jsonrpc: "2.0",
+                        method: "aria2.addUri",
+                        params:[
+                            [ item.download_url ],
+                            {
+                                out: item.name,
+                                dir: "D:\/aliyundriveDownload" + (folderName ? "\/" + folderName : ""), // 下载路径
+                                referer: "https://www.aliyundrive.com/",
+                                "user-agent": navigator.userAgent
                             }
-                        }
-                        else {
-                            obj.showTipError(++index + " " + item.name + " 推送失败 可能 Aria2 未启动或配置错误");
-                        }
-                    })
+                        ],
+                        token: ""
+                    });
                 });
+
+                obj.aria2RPC(downData, function (result) {
+                    if (result) {
+                        obj.showTipSuccess("Aria2 推送完成，请查收");
+                    }
+                    else {
+                        obj.showTipError("Aria2 推送失败 可能 Aria2 未启动或配置错误");
+                    }
+                    $this.text($text);
+                })
             }
         });
     };
@@ -1325,32 +1347,13 @@
         window.URL.revokeObjectURL(url);
     };
 
-    obj.aria2RPC = function (fileItem, callback) {
-        var folderName, fileInfo = obj.file_page.file_info;
-        if (fileInfo.type == "folder") {
-            folderName = fileInfo.name;
-        }
-
+    obj.aria2RPC = function (downData, callback) {
         var urls = ["http://127.0.0.1:6800/jsonrpc", "http://localhost:16800/jsonrpc"];
         var url = sessionStorage.getItem("aria-url");
         $.ajax({
             type: "POST",
             url: url || urls[0],
-            data: JSON.stringify({
-                id: "",
-                jsonrpc: "2.0",
-                method: "aria2.addUri",
-                params:[
-                    [ fileItem.download_url ],
-                    {
-                        out: fileItem.name,
-                        dir: "D:\/aliyundriveDownload" + (folderName ? "\/" + folderName : ""), // 下载路径
-                        referer: "https://www.aliyundrive.com/",
-                        "user-agent": navigator.userAgent
-                    }
-                ],
-                token: ""
-            }),
+            data: JSON.stringify(downData),
             crossDomain: true,
             processData: false,
             contentType: "application/json",
@@ -1363,7 +1366,7 @@
                 if (url) {
                     if (index < urls.length - 1) {
                         sessionStorage.setItem("aria-url", urls[index + 1]);
-                        setTimeout(function() { obj.aria2RPC(fileItem, callback) }, 500);
+                        setTimeout(function() { obj.aria2RPC(downData, callback) }, 500);
                     }
                     else {
                         console.error("Aria2 推送服务 错误：", error, this.url);
@@ -1373,7 +1376,7 @@
                 }
                 else {
                     sessionStorage.setItem("aria-url", urls[index + 1]);
-                    setTimeout(function() { obj.aria2RPC(fileItem, callback) }, 500);
+                    setTimeout(function() { obj.aria2RPC(downData, callback) }, 500);
                 }
             }
         });
