@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.0.0
+// @version      2.0.2
 // @description  支持生成文件下载链接（多种下载姿势），支持自定义分享密码，支持原生播放器优化，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕），...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -1178,9 +1178,13 @@
             return;
         }
         if ($("#root [class^=banner] [class^=right]").length) {
-            var html = '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-download--batch" style="margin-right: 28px;">显示链接</button>';
+            var html = '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-search--batch" style="margin-right: 28px;">网盘资源搜索</button>';
+            html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-download--batch" style="margin-right: 28px;">显示链接</button>';
             $("#root [class^=banner] [class^=right]").prepend(html);
             $(".button-download--batch").on("click", obj.showDownloadSharePage);
+            $(".button-search--batch").on("click", function () {
+                window.open("https://www.niceso.fun/", "_blank");
+            });
         }
         else {
             setTimeout(obj.initDownloadSharePage, 500)
@@ -1192,9 +1196,13 @@
             return;
         }
         if ($("#root header").length) {
-            var html = '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi button-download--batch">显示链接</button>';
+            var html = '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi button-search--batch">网盘资源搜索</button>';
+            html += '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi button-download--batch">显示链接</button>';
             $("#root header:eq(0)").append(html);
             $(".button-download--batch").on("click", obj.showDownloadHomePage);
+            $(".button-search--batch").on("click", function () {
+                window.open("https://www.niceso.fun/", "_blank");
+            });
         }
         else {
             setTimeout(obj.initDownloadHomePage, 1000)
@@ -1312,6 +1320,7 @@
                         jsonrpc: "2.0",
                         method: "aria2.addUri",
                         params:[
+                            //"token:你的RPC密钥", // 替换你的RPC密钥
                             [ item.download_url ],
                             {
                                 out: item.name,
@@ -1319,8 +1328,7 @@
                                 referer: "https://www.aliyundrive.com/",
                                 "user-agent": navigator.userAgent
                             }
-                        ],
-                        token: ""
+                        ]
                     });
                 });
 
