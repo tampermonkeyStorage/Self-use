@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.0.2
-// @description  支持生成文件下载链接（多种下载姿势），支持自定义分享密码，支持原生播放器优化，支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕），...
+// @version      2.0.3
+// @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕），支持自定义分享密码，支持保存到我的网盘时默认新标签页打开，支持原生播放器优化，...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
 // @match        https://www.aliyundrive.com/drive*
@@ -327,6 +327,23 @@
         })(urlArr);
     };
 
+    obj.loadScript = function (src) {
+        if (!window.instances) {
+            window.instances = {};
+        }
+        if (!window.instances[src]) {
+            window.instances[src] = new Promise((resolve, reject) => {
+                const script = document.createElement("script")
+                script.src = src;
+                script.type = "text/javascript";
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+        return window.instances[src];
+    };
+
     obj.dPlayerStart = function () {
         var dPlayerNode, videoNode = document.querySelector("video");
         if (videoNode) {
@@ -450,7 +467,7 @@
                 }
             };
         } catch (error) {
-            console.log("播放器创建失败", error);
+            console.error("播放器创建失败", error);
         }
     };
 
@@ -623,18 +640,11 @@
                         textTrackList[i].mode = "hidden" || (textTrackList[i].mode = "hidden");
                     }
 
-                    sublist = obj.sortSubtitleList(sublist);
-                    sublist = obj.fuseSubtitleList(sublist);
+                    sublist = obj.sortSubList(sublist);
+                    sublist = obj.fuseSubList(sublist);
                     sublist.forEach(function (item, index) {
                         if (item.subarr) {
-                            var label = {
-                                chi: "中文字幕",
-                                eng: "英文字幕",
-                                jpn: "日文字幕",
-                                adj: "双语字幕",
-                                unk: "外语字幕"
-                            }[item.language] || "未知字幕";
-                            textTrackList[index] || video.addTextTrack("subtitles", label, item.language);
+                            textTrackList[index] || video.addTextTrack("subtitles", item.label, item.language);
 
                             item.subarr.forEach(function (item) {
                                 /<b>.*<\/b>/.test(item.text) || (item.text = item.text.split(/\r?\n/).map((item) => `<b>${item}</b>`).join("\n"));
@@ -672,7 +682,7 @@
 
         obj.getInternalSubtitles(function (sublist) {
             var ischi = false;
-            if (sublist.length && !!sublist[0]) {
+            if (sublist && sublist.length) {
                 for (var i = 0; i < sublist.length; i++) {
                     if (sublist[i].language == "chi") {
                         ischi = true;
@@ -683,7 +693,7 @@
             }
             if (ischi == false) {
                 obj.getDriveSubtitles(function (sublist) {
-                    if (sublist.length && !!sublist[0]) {
+                    if (sublist && sublist.length) {
                         callback && callback(sublist);
                     }
                     else {
@@ -702,7 +712,6 @@
         if (subtitle_task_list) {
             var listLen = subtitle_task_list.length;
             subtitle_task_list.forEach(function (item, index) {
-                item.language || (item.language = "chi");
                 if (item.subarr) {
                     obj.video_page.subtitle_list.push(item);
                     if (--listLen == 0) {
@@ -712,11 +721,9 @@
                 else {
                     obj.getSubtitleText(item.url, function (subtext) {
                         if (subtext) {
-                            play_info.subtitle_extension = "vtt";
-                            play_info.subtext = subtext;
-                            var subtitles = obj.parseTextToArray(play_info.subtitle_extension, play_info.subtext);
-                            if (subtitles.length) {
-                                item.subarr = subtitles;
+                            var subarr = obj.parseTextToArray("vtt", subtext);
+                            if (subarr.length) {
+                                item.subarr = subarr;
                                 obj.video_page.subtitle_list.push(item);
                             }
                         }
@@ -735,11 +742,12 @@
     obj.getDriveSubtitles = function (callback) {
         obj.findSubtitleFiles("", function (subtitleFiles) {
             if (subtitleFiles && subtitleFiles.length) {
-                var subtitleFileList = [];
+                var subFileList = [];
                 subtitleFiles.forEach(function (item, index) {
-                    obj.toFileInfoSubtitleArray(item, function (fileInfo) {
+                    obj.toFileInfoSubList(item, function (fileInfo) {
                         if (!fileInfo.language) {
                             fileInfo.language = obj.langdetect(fileInfo.subarr);
+                            fileInfo.label = obj.labeldetect(fileInfo.language);
                         }
 
                         obj.video_page.subtitle_list.push(fileInfo);
@@ -756,13 +764,14 @@
     };
 
     obj.getLocalSubtitles = function (callback) {
-        obj.localFilesSubtitleText(function (fileInfo) {
+        obj.localFilesSubText(function (fileInfo) {
             if (fileInfo.subtext) {
                 fileInfo.subarr = obj.parseTextToArray(fileInfo.file_extension, fileInfo.subtext);
                 if (fileInfo.subarr.length) {
                     fileInfo.language = obj.langdetect(fileInfo.subarr);
+                    fileInfo.label = obj.labeldetect(fileInfo.language);
                     obj.video_page.subtitle_list.push(fileInfo);
-                    callback && callback([fileInfo]);
+                    callback && callback(obj.video_page.subtitle_list);
                 }
                 else {
                     callback && callback([]);
@@ -775,22 +784,22 @@
         });
     };
 
-    obj.sortSubtitleList = function (sublist) {
-        var newSubtitleList = [];
+    obj.sortSubList = function (sublist) {
+        var newSubList = [];
         if (sublist[0] && sublist[0].subarr) {
             sublist.forEach(function (item, index) {
                 if (item.language == "chi" || item.language == "adj") {
-                    newSubtitleList.unshift(item);
+                    newSubList.unshift(item);
                 }
                 else {
-                    newSubtitleList.push(item);
+                    newSubList.push(item);
                 }
             });
         }
-        return newSubtitleList;
+        return newSubList;
     };
 
-    obj.fuseSubtitleList = function (sublist) {
+    obj.fuseSubList = function (sublist) {
         sublist.forEach(function (item, index) {
             if (item.subarr) {
                 var newSubList = [ item.subarr.shift() ];
@@ -839,6 +848,16 @@
         else {
             return "unk";
         }
+    };
+
+    obj.labeldetect = function (language) {
+        return {
+            chi: "中文字幕",
+            eng: "英文字幕",
+            jpn: "日文字幕",
+            adj: "双语字幕",
+            unk: "外语字幕"
+        }[language] || "未知语言";
     };
 
     obj.findSubtitleFiles = function (video_name, callback) {
@@ -911,19 +930,19 @@
         }
     };
 
-    obj.toFileInfoSubtitleArray = function (fileInfo, callback) {
+    obj.toFileInfoSubList = function (fileInfo, callback) {
         if (fileInfo instanceof Object) {
             if (fileInfo.hasOwnProperty("subarr")) {
                 return callback && callback(fileInfo);
             }
             else if (fileInfo.hasOwnProperty("subtext")) {
                 fileInfo.subarr = obj.parseTextToArray(fileInfo.file_extension, fileInfo.subtext) || [];
-                return obj.toFileInfoSubtitleArray(fileInfo, callback);
+                return obj.toFileInfoSubList(fileInfo, callback);
             }
             else if (fileInfo.hasOwnProperty("download_url") || fileInfo.hasOwnProperty("url")) {
                 obj.getSubtitleText(fileInfo.download_url || fileInfo.url, function (subtext) {
                     fileInfo.subtext = subtext || "";
-                    obj.toFileInfoSubtitleArray(fileInfo, callback);
+                    obj.toFileInfoSubList(fileInfo, callback);
                 });
                 return;
             }
@@ -932,13 +951,13 @@
             if (shareId) {
                 obj.getShareLinkDownloadUrl(fileInfo.file_id, shareId, function (download_url) {
                     fileInfo.download_url = download_url || "";
-                    obj.toFileInfoSubtitleArray(fileInfo, callback);
+                    obj.toFileInfoSubList(fileInfo, callback);
                 })
             }
             else {
                 obj.getHomeLinkDownloadUrl(fileInfo.file_id, fileInfo.drive_id, function (download_url) {
                     fileInfo.download_url = download_url || "";
-                    obj.toFileInfoSubtitleArray(fileInfo, callback);
+                    obj.toFileInfoSubList(fileInfo, callback);
                 });
             }
         }
@@ -947,7 +966,7 @@
         }
     };
 
-    obj.localFilesSubtitleText = function (callback) {
+    obj.localFilesSubText = function (callback) {
         $(document).on("change", "#addsubtitle", function(event) {
             if (this.files.length) {
                 var file = this.files[0];
@@ -1096,7 +1115,7 @@
             vtt: {
                 getItems(text) {
                     text = text.replace(/\r/g, "");
-                    var regex = /(\d+)\n(\d{0,2}:?\d{2}:\d{2}.\d{3}) -?-> (\d{0,2}:?\d{2}:\d{2}.\d{3})/g;
+                    var regex = /(\d+)?\n?(\d{0,2}:?\d{2}:\d{2}.\d{3}) -?-> (\d{0,2}:?\d{2}:\d{2}.\d{3})/g;
                     var data = text.split(regex);
                     data.shift();
                     return data;
@@ -1122,55 +1141,6 @@
         , n = parseFloat(t.length > 0 ? t.pop().replace(/,/g, ".") : "00.000") || 0
         , r = parseFloat(t.length > 0 ? t.pop() : "00") || 0;
         return 3600 * (parseFloat(t.length > 0 ? t.pop() : "00") || 0) + 60 * r + n;
-    };
-
-    obj.customSharePwd = function () {
-        $(document).on("DOMNodeInserted", ".ant-modal-root", function() {
-            if ($(this).find(".ant-modal-title").text() == "分享文件") {
-                if ($(".input-share-pwd").length == 0) {
-                    if ($(".choose-expiration-wrapper--vo0z9").length) {
-                        var sharePwd = localStorage.getItem("share_pwd");
-                        var html = '<label class="label--3Ub6A" style="margin-left: 12px;">自定义提取码</label>';
-                        html += '<input type="text" class="ant-input input-share-pwd" value="' + (sharePwd ? sharePwd : "") + '" placeholder="" style="width: 100px;height: 25px;line-height: normal;border: 1px solid #D4D7DE;text-align: center;"></div>';
-                        $(".choose-expiration-wrapper--vo0z9").append(html);
-                    }
-                }
-            }
-        });
-
-        (function(send) {
-            XMLHttpRequest.prototype.send = function() {
-                if (arguments.length && typeof arguments[0] == "string" && arguments[0].includes("expiration")) {
-                    var sharePwd = localStorage.getItem("share_pwd");
-                    if (sharePwd) {
-                        var body = JSON.parse(arguments[0]);
-                        body.share_pwd = sharePwd;
-                        arguments[0] = JSON.stringify(body);
-
-                        this.addEventListener("load", function() {
-                            if (this.readyState == 4 && this.status == 200) {
-                                var url = this.responseURL;
-                                if (url.includes("/share_link/create") || url.includes("/share_link/update")) {
-                                    if (this.response.includes(sharePwd)) {
-                                        obj.showTipSuccess("自定义分享密码 成功");
-                                    }
-                                    else {
-                                        localStorage.removeItem("share_pwd");
-                                        obj.showTipError("自定义分享密码 失败，请修改分享密码后重试");
-                                    }
-                                }
-                            }
-                        }, false);
-                    }
-                }
-                send.apply(this, arguments);
-            };
-        })(XMLHttpRequest.prototype.send);
-
-        $(document).on("change", ".input-share-pwd", function () {
-            var value = this.value;
-            localStorage.setItem("share_pwd", value);
-        });
     };
 
     obj.initDownloadSharePage = function () {
@@ -1624,21 +1594,119 @@
         });
     };
 
-    obj.loadScript = function (src) {
-        if (!window.instances) {
-            window.instances = {};
+    obj.goldlogSpm = function () {
+        unsafeWindow.goldlog = {};
+        Object.defineProperty(unsafeWindow.goldlog, "_$",{
+            value: {},
+            configurable: false
+        });
+        var key = obj.getItem("APLUS_LS_KEY");
+        key && key != "/**/" && obj.setItem(key[0], "/**/");
+    };
+
+    obj.newTabOpen = function () {
+        var open = unsafeWindow.open;
+        unsafeWindow.open = function (url, name, specs, replace) {
+            name == "_blank" || (name = "_blank");
+            return open(url, name, specs, replace);
         }
-        if (!window.instances[src]) {
-            window.instances[src] = new Promise((resolve, reject) => {
-                const script = document.createElement("script")
-                script.src = src;
-                script.type = "text/javascript";
-                script.onload = resolve;
-                script.onerror = reject;
-                document.head.appendChild(script);
+    };
+
+    obj.customSharePwd = function () {
+        $(document).on("DOMNodeInserted", ".ant-modal-root", function() {
+            var text = $(this).find(".ant-modal-title").text();
+            if (text == "分享文件") {
+                if ($(".input-share-pwd").length == 0) {
+                    var sharePwd = localStorage.getItem("share_pwd");
+                    var html = '<label class="label--3Ub6A">自定义提取码</label>';
+                    html += '<input type="text" class="ant-input input-share-pwd" value="' + (sharePwd ? sharePwd : "") + '" placeholder="" style="margin-left: 12px;width: 100px;height: 25px;line-height: normal;border: 1px solid #D4D7DE;text-align: center;"></div>'
+                    if ($(".choose-expiration-wrapper--vo0z9").length) {
+                        $(".choose-expiration-wrapper--vo0z9").append(html);
+                    }
+                    else if ($(".share-by-url--1Gk0N").length) {
+                        $(".share-by-url--1Gk0N").append(html);
+                    }
+
+                    sendSharePwd();
+                }
+            }
+            else if (text == "重命名") {
+            }
+        });
+
+        function sendSharePwd () {
+            (function(send) {
+                XMLHttpRequest.prototype.send = function() {
+                    if (arguments.length && typeof arguments[0] == "string" && arguments[0].includes("expiration")) {
+                        var sharePwd = localStorage.getItem("share_pwd");
+                        if (sharePwd) {
+                            var body = JSON.parse(arguments[0]);
+                            body.share_pwd = sharePwd;
+                            arguments[0] = JSON.stringify(body);
+
+                            this.addEventListener("load", function() {
+                                if (this.readyState == 4 && this.status == 200) {
+                                    var url = this.responseURL;
+                                    if (url.includes("/share_link/create") || url.includes("/share_link/update")) {
+                                        if (this.response.share_pwd == sharePwd) {
+                                            obj.showTipSuccess("自定义分享密码 成功");
+                                        }
+                                        else {
+                                            localStorage.removeItem("share_pwd");
+                                            obj.showTipError("自定义分享密码 失败，请修改分享密码后重试");
+                                        }
+                                    }
+                                }
+                            }, false);
+                        }
+                    }
+                    send.apply(this, arguments);
+                };
+            })(XMLHttpRequest.prototype.send);
+
+            $(document).on("change", ".input-share-pwd", function () {
+                var value = this.value;
+                localStorage.setItem("share_pwd", value);
             });
-        }
-        return window.instances[src];
+        };
+    };
+
+    obj.unlockFileLimit = function () {
+        (function(open) {
+            XMLHttpRequest.prototype.open = function() {
+                if (!this._hooked) {
+                    this._hooked = true;
+                    Object.defineProperty(this, "response", {
+                        get: function () {
+                            delete this.response;
+                            var responseURL = this.responseURL, response = this.response;
+                            if (responseURL.includes("/file/list") && response instanceof Object) {
+                                try { response = JSON.parse(response) } catch (error) { };
+                                response.items && response.items.forEach(function (item) {
+                                    if (item.category == "video") {
+                                        if (["ts"].includes(item.file_extension)) {
+                                            item.file_extension = "mp4";
+                                        }
+                                    }
+                                    else if (item.category == "audio") {
+                                        if (["ape"].includes(item.file_extension)) {
+                                            item.file_extension = "mp3";
+                                        }
+                                    }
+
+                                    if (item.punish_flag) {
+                                        item.punish_flag = 0;
+                                    }
+                                });
+                            }
+                            return response;
+                        },
+                        configurable: true
+                    });
+                }
+                open.apply(this, arguments);
+            }
+        })(XMLHttpRequest.prototype.open);
     };
 
     obj.switchViewArrow = function () {
@@ -1870,107 +1938,6 @@
         };
     };
 
-    obj.jituiSharePage = function () {
-        (function(open) {
-            XMLHttpRequest.prototype.open = function() {
-                if (!this._hooked) {
-                    this._hooked = true;
-                    setupHook(this);
-                }
-                open.apply(this, arguments);
-            }
-        })(XMLHttpRequest.prototype.open);
-
-        function setupHook(xhr) {
-            (function setup() {
-                Object.defineProperty(xhr, "responseText", {
-                    get: function() {
-                        delete xhr.responseText;
-                        var responseURL = xhr.responseURL, responseText = xhr.responseText;
-                        if (responseURL.includes("/file/list") && responseText) {
-                            var responseJson = JSON.parse(responseText);
-                            responseJson.items && responseJson.items.forEach(function (item) {
-                                if (item.category == "video") {
-                                    if (["ts"].includes(item.file_extension)) {
-                                        item.file_extension = "mp4";
-                                    }
-                                }
-                                else if (item.category == "audio") {
-                                    if (["ape"].includes(item.file_extension)) {
-                                        item.file_extension = "mp3";
-                                    }
-                                }
-
-                                if (item.punish_flag) {
-                                    item.punish_flag = 0;
-                                }
-                            });
-                            responseText = JSON.stringify(responseJson);
-                        }
-                        setup();
-                        return responseText;
-                    },
-                    configurable: true
-                });
-            })();
-        }
-    };
-
-    obj.jituiHomePage = function () {
-        (function(open) {
-            XMLHttpRequest.prototype.open = function() {
-                if (!this._hooked) {
-                    this._hooked = true;
-                    setupHook(this);
-                }
-                open.apply(this, arguments);
-            }
-        })(XMLHttpRequest.prototype.open);
-
-        function setupHook(xhr) {
-            (function setup() {
-                Object.defineProperty(xhr, "response", {
-                    get: function getter() {
-                        delete xhr.response;
-                        var responseURL = xhr.responseURL, response = xhr.response;
-                        if (responseURL.includes("/file/list") && response) {
-                            try { response = JSON.parse(response) } catch (error) { };
-                            response.items && response.items.forEach(function (item) {
-                                if (item.category == "video") {
-                                    if (["ts"].includes(item.file_extension)) {
-                                        item.file_extension = "mp4";
-                                    }
-                                }
-                                else if (item.category == "audio") {
-                                    if (["ape"].includes(item.file_extension)) {
-                                        item.file_extension = "mp3";
-                                    }
-                                }
-
-                                if (item.punish_flag) {
-                                    item.punish_flag = 0;
-                                }
-                            });
-                        }
-                        setup();
-                        return response;
-                    },
-                    configurable: true
-                });
-            })();
-        }
-    };
-
-    obj.goldlogSpm = function () {
-        unsafeWindow.goldlog = {};
-        Object.defineProperty(unsafeWindow.goldlog, "_$",{
-            value: {},
-            configurable: false
-        });
-        var key = obj.getItem("APLUS_LS_KEY");
-        key && key != "/**/" && obj.setItem(key[0], "/**/");
-    };
-
     obj.run = function() {
         obj.goldlogSpm();
 
@@ -1978,12 +1945,13 @@
 
         obj.initVideoPage();
 
+        obj.unlockFileLimit();
+
         var url = location.href;
         if (url.indexOf(".aliyundrive.com/s/") > 0) {
-            obj.jituiSharePage();
+            obj.newTabOpen();
         }
         else if (url.indexOf(".aliyundrive.com/drive") > 0) {
-            obj.jituiHomePage();
             obj.customSharePwd();
         }
     }();
