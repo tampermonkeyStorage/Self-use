@@ -908,10 +908,8 @@
                 callback && callback(subtitleFileLists);
             }
             else {
-                var nameSplit = video_name.split(".");
-                nameSplit.pop();
-                if (nameSplit.length) {
-                    video_name = nameSplit.join(".");
+                video_name = video_name.split(".").slice(0, -1).join(".");
+                if (video_name) {
                     obj.findSubtitleFiles(video_name, callback);
                 }
                 else {
