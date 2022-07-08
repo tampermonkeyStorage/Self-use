@@ -684,7 +684,7 @@
             var ischi = false;
             if (sublist && sublist.length) {
                 for (var i = 0; i < sublist.length; i++) {
-                    if (sublist[i].language == "chi") {
+                    if (["chi", "zho", "adj"].includes(sublist[i].language)) {
                         ischi = true;
                         callback && callback(sublist);
                         break;
@@ -788,7 +788,7 @@
         var newSubList = [];
         if (sublist[0] && sublist[0].subarr) {
             sublist.forEach(function (item, index) {
-                if (item.language == "chi" || item.language == "adj") {
+                if (["chi", "zho", "adj"].includes(item.language)) {
                     newSubList.unshift(item);
                 }
                 else {
@@ -853,6 +853,7 @@
     obj.labeldetect = function (language) {
         return {
             chi: "中文字幕",
+            zho: "中文字幕",
             eng: "英文字幕",
             jpn: "日文字幕",
             adj: "双语字幕",
