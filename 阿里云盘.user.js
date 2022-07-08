@@ -681,26 +681,19 @@
         }
 
         obj.getInternalSubtitles(function (sublist) {
-            var ischi = false;
-            if (sublist && sublist.length) {
-                for (var i = 0; i < sublist.length; i++) {
-                    if (["chi", "zho", "adj"].includes(sublist[i].language)) {
-                        ischi = true;
-                        callback && callback(sublist);
-                        break;
-                    }
+            for (var i = 0; i < sublist.length; i++) {
+                if (["chi", "zho", "adj"].includes(sublist[i].language)) {
+                    return callback && callback(sublist);
                 }
             }
-            if (ischi == false) {
-                obj.getDriveSubtitles(function (sublist) {
-                    if (sublist && sublist.length) {
-                        callback && callback(sublist);
-                    }
-                    else {
-                        callback && callback(obj.video_page.subtitle_list);
-                    }
-                });
-            }
+            obj.getDriveSubtitles(function (sublist) {
+                if (sublist && sublist.length) {
+                    callback && callback(sublist);
+                }
+                else {
+                    callback && callback(obj.video_page.subtitle_list);
+                }
+            });
         });
 
         obj.getLocalSubtitles(callback);
@@ -875,7 +868,7 @@
             var play_info = obj.video_page.play_info;
             for (let i = 0; i < fileList.length; i++) {
                 if (fileList[i].file_id == play_info.file_id) {
-                    video_name = fileList[i].name.replace("." + fileList[i].file_extension, "");
+                    video_name = fileList[i].name.replace("." + fileList[i].file_extension, "").toLowerCase();
                     break;
                 }
             }
