@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.0.3
-// @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕），支持自定义分享密码，支持保存到我的网盘时默认新标签页打开，支持原生播放器优化，...
+// @version      2.0.4
+// @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕，突破视频2分钟限制），支持自定义分享密码，支持保存到我的网盘时默认新标签页打开，支持原生播放器优化，...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
 // @match        https://www.aliyundrive.com/drive*
@@ -472,12 +472,8 @@
     };
 
     obj.dPlayerHotkey = function () {
-        if (!window.dPlayerHotkey) {
-            window.dPlayerHotkey = true;
-        }
-        else {
-            return;
-        }
+        if (window.dPlayerHotkey) return;
+        window.dPlayerHotkey = true;
 
         document.addEventListener("keydown", (function(e) {
             var t = obj.video_page.dPlayer;
@@ -517,12 +513,14 @@
                             break;
                         case 36:
                             r.preventDefault();
-                            o = document.querySelector("[data-icon-type=PDSChevronLeft]");
+                            t.notice("上一项");
+                            o = document.querySelector("[data-icon-type=PDSChevronLeft]") || document.querySelector("[data-icon-type=PDSLeftNormal]");
                             o && o.click();
                             break;
                         case 35:
                             r.preventDefault();
-                            o = document.querySelector("[data-icon-type=PDSChevronRight]");
+                            t.notice("下一项");
+                            o = document.querySelector("[data-icon-type=PDSChevronRight]") || document.querySelector("[data-icon-type=PDSRightNormal]");
                             o && o.click();
                             break;
                     }
@@ -878,34 +876,30 @@
             }
         }
 
-        var subtitleFileList = [], subtitleFileLists = [], videoFileList = [];
-        var subtitle_extension = Object.keys(obj.subtitleParser());
-        var file_extension, file_name, item;
-        for (let i = 0; i < fileList.length; i++) {
-            item = fileList[i];
+        var subExts = Object.keys(obj.subtitleParser());
+        var subFileLists = [], subFileList = [], videoFileList = [];
+        fileList.forEach(function (item) {
             if (item.type == "file") {
-                file_extension = item.file_extension.toLowerCase();
-                if (subtitle_extension.includes(file_extension)) {
-                    file_name = item.name.replace("." + item.file_extension, "").toLowerCase();
+                var file_ext = item.file_extension.toLowerCase();
+                if (subExts.includes(file_ext)) {
+                    var file_name = item.name.replace("." + item.file_extension, "").toLowerCase();
                     if (file_name.includes(video_name) || video_name.includes(file_name)) {
-                        subtitleFileList.push(item);
+                        subFileList.push(item);
                     }
-                    else {
-                        subtitleFileLists.push(item);
-                    }
+                    subFileLists.push(item);
                 }
                 else if (item.category == "video") {
                     videoFileList.push(item);
                 }
             }
-        }
+        });
 
-        if (subtitleFileList.length) {
-            callback && callback(subtitleFileList);
+        if (subFileList.length) {
+            callback && callback(subFileList);
         }
-        else if (subtitleFileLists.length) {
+        else if (subFileLists.length) {
             if (videoFileList.length == 1) {
-                callback && callback(subtitleFileLists);
+                callback && callback(subFileLists);
             }
             else {
                 video_name = video_name.split(".").slice(0, -1).join(".");
