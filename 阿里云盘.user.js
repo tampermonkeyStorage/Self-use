@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.0.5
+// @version      2.0.4
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕，突破视频2分钟限制），支持自定义分享密码，支持保存到我的网盘时默认新标签页打开，支持原生播放器优化，...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -396,13 +396,11 @@
 
                 obj.video_page.dPlayer.destroy();
                 obj.video_page.dPlayer = null;
-                obj.hasMemoryDisplay = true;
             }
         }
         else {
             obj.video_page.file_id = play_info.file_id;
             obj.video_page.attributes = {};
-            obj.hasMemoryDisplay = false;
         }
 
         var options = {
@@ -459,10 +457,6 @@
                 localStorage.getItem("dplayer-speed") == player.video.playbackRate || localStorage.setItem("dplayer-speed", player.video.playbackRate);
             });
 
-            player.on("durationchange", function () {
-                obj.memoryPlay(player);
-            });
-
             document.querySelector(".dplayer-controller .dplayer-quality-icon").onclick = function () {
                 var qualityNode = document.querySelector(".dplayer-controller .dplayer-quality-mask");
                 if (qualityNode) {
@@ -491,7 +485,7 @@
                     switch (r.keyCode) {
                         case 13:
                             r.preventDefault();
-                            t.fullScreen.toggle();
+                            t.fullScreen.toggle("web");
                             break;
                         case 32:
                             r.preventDefault();
@@ -500,19 +494,21 @@
                         case 37:
                             r.preventDefault();
                             t.seek(t.video.currentTime - 5);
+                            t.controller.setAutoHide();
                             break;
                         case 39:
                             r.preventDefault();
                             t.seek(t.video.currentTime + 5);
+                            t.controller.setAutoHide();
                             break;
                         case 38:
                             r.preventDefault();
-                            o = t.volume() + .01;
+                            o = t.volume() + .1;
                             t.volume(o);
                             break;
                         case 40:
                             r.preventDefault();
-                            o = t.volume() - .01;
+                            o = t.volume() - .1;
                             t.volume(o);
                             break;
                         case 36:
@@ -531,110 +527,6 @@
                 }
             }
         }));
-    };
-
-    obj.memoryPlay = function (player) {
-        if (obj.hasMemoryDisplay) return;
-        obj.hasMemoryDisplay = true;
-
-        var jumpstart = 0; // 默认跳过片头
-        var jumpend = 120; // 默认跳过片尾
-
-        var duration = player.video.duration;
-        var playInfo = obj.video_page.play_info;
-        var fileList = obj.file_page.items
-        , fileIndex, file = fileList.find(function (item, index) {
-            fileIndex = index;
-            return item.file_id == playInfo.file_id;
-        })
-        , sign = file.content_hash || file.file_id
-        , memoryTime = getFilePosition(sign);
-        if (memoryTime && parseInt(memoryTime)) {
-            var autoPosition = player.options.autoPosition;
-            if (autoPosition) {
-                player.seek(memoryTime);
-            }
-            else {
-                var formatTime = formatVideoTime(memoryTime);
-                $(player.container).after('<div class="memory-play-wrap" style="display: block;position: absolute;left: 160px;bottom: 160px;font-size: 15px;padding: 7px;border-radius: 3px;color: #fff;z-index:100;background: rgba(0,0,0,.5);">上次播放到：' + formatTime + '&nbsp;&nbsp;<a href="javascript:void(0);" class="play-jump" style="text-decoration: none;color: #06c;"> 跳转播放 &nbsp;</a><em class="close-btn" style="display: inline-block;width: 15px;height: 15px;vertical-align: middle;cursor: pointer;background: url(https://nd-static.bdstatic.com/m-static/disk-share/widget/pageModule/share-file-main/fileType/video/img/video-flash-closebtn_15f0e97.png) no-repeat;"></em></div>');
-                var memoryTimeout = setTimeout(function () {
-                    $(".memory-play-wrap").remove();
-                }, 15000);
-                $(".memory-play-wrap .close-btn").click(function () {
-                    $(".memory-play-wrap").remove();
-                    clearTimeout(memoryTimeout);
-                });
-                $(".memory-play-wrap .play-jump").click(function () {
-                    player.seek(memoryTime);
-                    player.play();
-                    $(".memory-play-wrap").remove();
-                    clearTimeout(memoryTimeout);
-                });
-            }
-        }
-        else {
-            jumpstart && player.seek(jumpstart);
-            player.play();
-        }
-
-        // 片尾自动进入下一项
-        var vid = setInterval(function () {
-            var currentTime = player.video.currentTime;
-            if (player.video.duration - currentTime <= jumpend) {
-                clearInterval(vid);
-                var nextfile = fileList[fileIndex + 1];
-                if (nextfile && nextfile.category == "video") {
-                    $(player.container).after('<div class="memory-play-wrap" style="display: block;position: absolute;left: 160px;bottom: 160px;font-size: 15px;padding: 7px;border-radius: 3px;color: #fff;z-index:100;background: rgba(0,0,0,.5);">10秒后自动下一项&nbsp;&nbsp;<a href="javascript:void(0);" class="play-jump" style="text-decoration: none;color: #06c;"> 直接下一项 &nbsp;</a><em class="close-btn" style="display: inline-block;width: 15px;height: 15px;vertical-align: middle;cursor: pointer;background: url(https://nd-static.bdstatic.com/m-static/disk-share/widget/pageModule/share-file-main/fileType/video/img/video-flash-closebtn_15f0e97.png) no-repeat;"></em></div>');
-                    var memoryTimeout = setTimeout(function () {
-                        var o = document.querySelector("[data-icon-type=PDSChevronRight]") || document.querySelector("[data-icon-type=PDSRightNormal]");
-                        o && o.click();
-                        $(".memory-play-wrap").remove();
-                    }, 10000);
-                    $(".memory-play-wrap .close-btn").click(function () {
-                        $(".memory-play-wrap").remove();
-                        clearTimeout(memoryTimeout);
-                    });
-                    $(".memory-play-wrap .play-jump").click(function () {
-                        var o = document.querySelector("[data-icon-type=PDSChevronRight]") || document.querySelector("[data-icon-type=PDSRightNormal]");
-                        o && o.click();
-                        $(".memory-play-wrap").remove();
-                        clearTimeout(memoryTimeout);
-                    });
-                }
-            }
-        },5000);
-
-        document.onvisibilitychange = function () {
-            if (document.visibilityState === "hidden") {
-                var currentTime = player.video.currentTime;
-                currentTime && setFilePosition(sign, currentTime, duration);
-            }
-        };
-        window.onbeforeunload = function () {
-            var currentTime = player.video.currentTime;
-            currentTime && setFilePosition(sign, currentTime, duration);
-        };
-        $("[data-icon-type=PDSClose]").on("click", function () {
-            var currentTime = player.video.currentTime;
-            currentTime && setFilePosition(sign, currentTime, duration);
-            obj.autoLastBtn();
-        });
-
-        function getFilePosition (e) {
-            return localStorage.getItem("video_" + e) || 0;
-        }
-        function setFilePosition (e, t, o) {
-            e && t && (e = "video_" + e, t <= 60 || t + 120 >= o || 0 ? (localStorage.removeItem(e), localStorage.removeItem(file.parent_file_id), obj.video_page.dPlayer = null) : (localStorage.setItem(e, t), localStorage.setItem(file.parent_file_id, file.name)));
-        }
-        function formatVideoTime (seconds) {
-            var secondTotal = Math.round(seconds)
-            , hour = Math.floor(secondTotal / 3600)
-            , minute = Math.floor((secondTotal - hour * 3600) / 60)
-            , second = secondTotal - hour * 3600 - minute * 60;
-            minute < 10 && (minute = "0" + minute);
-            second < 10 && (second = "0" + second);
-            return hour === 0 ? minute + ":" + second : hour + ":" + minute + ":" + second;
-        }
     };
 
     obj.get_share_link_video_preview_play_info = function (callback) {
@@ -1237,66 +1129,15 @@
         return 3600 * (parseFloat(t.length > 0 ? t.pop() : "00") || 0) + 60 * r + n;
     };
 
-    obj.playlast = function() {
-        // 继续上次播放 提供者：https://greasyfork.org/zh-CN/users/795227-星峰
-        var fileList = obj.file_page.items
-        , parent_file_id = fileList[0].parent_file_id
-        , lastplay = localStorage.getItem(parent_file_id);
-        var topp = 0;
-        var scrollerdiv=$(".scroller--2hMGk")
-        var he=0;
-
-        var url = location.href;
-        if (url.indexOf(".aliyundrive.com/s/") > 0) {
-            he= $(".thead--JwBMm").next().children().height();
-        }
-        else if (url.indexOf(".aliyundrive.com/drive") > 0) {
-            he= scrollerdiv.children().children().height();
-        }
-        //通过文件列表定位上次播放文件
-        for(var i=0;i<fileList.length;i++){
-            var tmptext=fileList[i].name
-            if(tmptext==lastplay){
-                topp=(i*(he/fileList.length))
-            }
-        }
-        scrollerdiv.scrollTop(topp);
-        //移动滚动条后点击上次播放文件
-        setTimeout(() => {
-            $(".text-primary--3DHOJ").each( function () {
-                var tmptext=this.textContent
-                if(tmptext==lastplay){
-                    this.click();
-                }
-            });
-        },300)
-    };
-
-    obj.autoLastBtn = function () {
-        var fileList = obj.file_page.items
-        , parent_file_id = fileList[0].parent_file_id
-        , lastplay = localStorage.getItem(parent_file_id);
-        if (lastplay) {
-            $(".button-last--batch").show();
-        }
-        else{
-            $(".button-last--batch").hide();
-        }
-    };
-
     obj.initDownloadSharePage = function () {
         if ($(".button-download--batch").length) {
             return;
         }
         if ($("#root [class^=banner] [class^=right]").length) {
-            var html = '';
-            html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-last--batch" style="margin-right: 28px;">继续上次播放</button>';
-            html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-search--batch" style="margin-right: 28px;">网盘资源搜索</button>';
+            var html = '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-search--batch" style="margin-right: 28px;">网盘资源搜索</button>';
             html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-download--batch" style="margin-right: 28px;">显示链接</button>';
             $("#root [class^=banner] [class^=right]").prepend(html);
-
             $(".button-download--batch").on("click", obj.showDownloadSharePage);
-            $(".button-last--batch").on("click", obj.playlast);
             $(".button-search--batch").on("click", function () {
                 window.open("https://www.niceso.fun/", "_blank");
             });
@@ -1311,17 +1152,13 @@
             return;
         }
         if ($("#root header").length) {
-            var html = '';
-            html += '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi button-last--batch">继续上次播放</button>';
-            html += '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi button-search--batch">网盘资源搜索</button>';
+            var html = '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi button-search--batch">网盘资源搜索</button>';
             html += '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi button-download--batch">显示链接</button>';
             $("#root header:eq(0)").append(html);
-
             $(".button-download--batch").on("click", obj.showDownloadHomePage);
             $(".button-search--batch").on("click", function () {
                 window.open("https://www.niceso.fun/", "_blank");
             });
-            $(".button-last--batch").on("click", obj.playlast);
         }
         else {
             setTimeout(obj.initDownloadHomePage, 1000)
@@ -2032,9 +1869,9 @@
                                 }
                                 else {
                                     obj.initDownloadSharePage();
+
                                     obj.switchViewArrow();
                                 }
-                                obj.autoLastBtn();
                             }
                         }
                     }
