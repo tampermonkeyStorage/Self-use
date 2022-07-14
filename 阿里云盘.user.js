@@ -537,7 +537,7 @@
         if (obj.hasMemoryDisplay) return;
         obj.hasMemoryDisplay = true;
 
-        var jumpstart = 60; // 默认跳过片头
+        var jumpstart = 0; // 默认跳过片头
         var jumpend = 120; // 默认跳过片尾
 
         var duration = player.video.duration;
@@ -573,7 +573,7 @@
             }
         }
         else {
-            player.seek(jumpstart);
+           jumpstart && player.seek(jumpstart);
             player.play();
         }
 
