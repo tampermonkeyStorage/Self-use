@@ -2029,9 +2029,9 @@
                                 }
                                 else {
                                     obj.initDownloadSharePage();
-
                                     obj.switchViewArrow();
                                 }
+                                obj.autoLastBtn();
                             }
                         }
                     }
