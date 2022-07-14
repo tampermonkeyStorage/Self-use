@@ -573,7 +573,7 @@
             }
         }
         else {
-           jumpstart && player.seek(jumpstart);
+            jumpstart && player.seek(jumpstart);
             player.play();
         }
 
@@ -1239,7 +1239,9 @@
 
     obj.playlast = function() {
         // 继续上次播放 提供者：https://greasyfork.org/zh-CN/users/795227-星峰
-        var lastplay = localStorage.getItem(window.location.pathname.split("/").pop());
+        var fileList = obj.file_page.items
+        , parent_file_id = fileList[0].parent_file_id
+        , lastplay = localStorage.getItem(parent_file_id);
         var topp = 0;
         var scrollerdiv=$(".scroller--2hMGk")
         var he=0;
@@ -1252,7 +1254,6 @@
             he= scrollerdiv.children().children().height();
         }
         //通过文件列表定位上次播放文件
-        var fileList = obj.file_page.items;
         for(var i=0;i<fileList.length;i++){
             var tmptext=fileList[i].name
             if(tmptext==lastplay){
@@ -1272,8 +1273,10 @@
     };
 
     obj.autoLastBtn = function () {
-        var lastplay = localStorage.getItem(window.location.pathname.split("/").pop());
-        if(lastplay){
+        var fileList = obj.file_page.items
+        , parent_file_id = fileList[0].parent_file_id
+        , lastplay = localStorage.getItem(parent_file_id);
+        if (lastplay) {
             $(".button-last--batch").show();
         }
         else{
