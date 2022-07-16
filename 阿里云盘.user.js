@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.0.5
+// @version      2.0.6
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕，突破视频2分钟限制），支持自定义分享密码，支持保存到我的网盘时默认新标签页打开，支持原生播放器优化，...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -549,11 +549,13 @@
         , sign = file.file_id
         , memoryTime = obj.getPlayMemory(sign);
 
-        var jumpstart = obj.getPlayMemory("jumpstart"); // 默认跳过片头
-        var jumpend = obj.getPlayMemory("jumpend"); // 默认跳过片尾
+        var jumpstart = obj.getPlayMemory("jumpstart") || "60"; // 默认跳过片头
+        var jumpend = obj.getPlayMemory("jumpend") || "130"; // 默认跳过片尾
         var skipstart = obj.getPlayMemory("skipstart");
+        typeof skipstart == "boolean" || (skipstart = true); //默认开启跳过片头片尾
+
         if (memoryTime && parseInt(memoryTime)) {
-            var autoPosition = obj.getItem("dplayer-position");;
+            var autoPosition = obj.getItem("dplayer-position");
             if (autoPosition) {
                 player.seek(memoryTime - 1);
             }
@@ -575,27 +577,20 @@
             }
         }
         else {
-            var videoList = fileList.filter(function (item) {
-                return item.category == "video";
-            });
-            if (videoList.length > 1) {
-                if (typeof skipstart == "boolean") {
-                    skipstart && jumpstart && player.seek(jumpstart);
-                }
+            if (typeof skipstart == "boolean") {
+                skipstart && jumpstart && player.seek(jumpstart);
             }
         }
 
         // 片尾自动进入下一项
-        var vid = setInterval(function () {
-            var currentTime = player.video.currentTime;
-            jumpend = obj.getPlayMemory("jumpend");
-            if (jumpend && player.video.duration - currentTime <= jumpend) {
-                clearInterval(vid);
-                //只有启用跳过片头片尾和洗脑循环未开启才执行
-                if (obj.getPlayMemory("skipstart") && $(".dplayer-toggle-setting-input").get(0).checked == false) {
-                    var nextfile = fileList[fileIndex + 1];
-                    if (nextfile && nextfile.category == "video") {
-                        //player.notice("10秒后自动播放下一项"); // 直接跳，还是给多一个选择？
+        var nextfile = fileList[fileIndex + 1];
+        if (nextfile && nextfile.category == "video") {
+            var vid = setInterval(function () {
+                if (skipstart && jumpend) {
+                    var currentTime = player.video.currentTime;
+                    //只有启用跳过片头片尾才执行
+                    if (player.video.duration - currentTime <= +jumpend + 10 * player.video.playbackRate) {
+                        clearInterval(vid);
                         $(player.container).append('<div class="memory-play-wrap" style="display: block;position: absolute;left: 33px;bottom: 66px;font-size: 15px;padding: 7px;border-radius: 3px;color: #fff;z-index:100;background: rgba(0,0,0,.5);">10秒后自动下一项&nbsp;&nbsp;<a href="javascript:void(0);" class="play-jump" style="text-decoration: none;color: #06c;"> 取消 &nbsp;</a><em class="close-btn" style="display: inline-block;width: 15px;height: 15px;vertical-align: middle;cursor: pointer;background: url(https://nd-static.bdstatic.com/m-static/disk-share/widget/pageModule/share-file-main/fileType/video/img/video-flash-closebtn_15f0e97.png) no-repeat;"></em></div>');
                         var memoryTimeout = setTimeout(function () {
                             var o = document.querySelector("[data-icon-type=PDSChevronRight]") || document.querySelector("[data-icon-type=PDSRightNormal]");
@@ -611,24 +606,27 @@
                         });
                     }
                 }
-            }
-        }, 1000);
+                else {
+                    clearInterval(vid);
+                }
+            }, 1000);
+        }
 
         document.onvisibilitychange = function () {
             if (document.visibilityState === "hidden") {
                 var currentTime = player.video.currentTime;
-                currentTime && obj.setPlayMemory(sign, currentTime, duration);
+                currentTime && obj.setPlayMemory(sign, currentTime, duration, jumpstart, jumpend);
                 obj.setPlayMemory("lastname", file.name);
             }
         };
         window.onbeforeunload = function () {
             var currentTime = player.video.currentTime;
-            currentTime && obj.setPlayMemory(sign, currentTime, duration);
+            currentTime && obj.setPlayMemory(sign, currentTime, duration, jumpstart, jumpend);
             obj.setPlayMemory("lastname", file.name);
         };
         $("[data-icon-type=PDSClose]").on("click", function () {
             var currentTime = player.video.currentTime;
-            currentTime && obj.setPlayMemory(sign, currentTime, duration);
+            currentTime && obj.setPlayMemory(sign, currentTime, duration, jumpstart, jumpend);
             obj.setPlayMemory("lastname", file.name);
             obj.autoLastBtn();
         });
@@ -655,6 +653,7 @@
         var jumpstart = obj.getPlayMemory("jumpstart") || "60"; // 默认跳过片头
         var jumpend = obj.getPlayMemory("jumpend") || "130"; // 默认跳过片尾
         var skipstart = obj.getPlayMemory("skipstart");
+        typeof skipstart == "boolean" || (skipstart = true); //默认开启跳过片头片尾
         if (skipstart) {
             $(".dplayer-toggle-setting-input-skipstart").get(0).checked = true;
             $(".dplayer-setting-jumpstart").show();
@@ -688,13 +687,17 @@
             skipstart = !check.is(":checked");
             $(".dplayer-toggle-setting-input-skipstart").get(0).checked = skipstart;
             obj.setPlayMemory("skipstart", skipstart);
-            if( skipstart){
+            if ( skipstart) {
                 $(".dplayer-setting-jumpstart").show()
                 $(".dplayer-setting-jumpend").show()
                 txt.val(jumpstart);
                 txt1.val(jumpend);
                 obj.setPlayMemory("jumpstart", jumpstart);
                 obj.setPlayMemory("jumpend", jumpend);
+
+                if($(".dplayer-setting-loop .dplayer-toggle-setting-input").is(":checked")) {
+                    $(".dplayer-setting-loop .dplayer-toggle-setting-input").click();
+                }
             }
             else{
                 $(".dplayer-setting-jumpstart").hide()
@@ -708,6 +711,13 @@
             var autoPosition = !check.is(":checked");
             $(".dplayer-toggle-setting-input-autoposition").get(0).checked = autoPosition;
             obj.setItem("dplayer-position", autoPosition);
+        });
+
+        $(".dplayer-setting-loop").on("click", function() {
+            if ($(".dplayer-setting-loop .dplayer-toggle-setting-input").is(":checked") && skipstart) {
+                $(".dplayer-setting-skipstart").click();
+            }
+            $(".dplayer-setting-icon").click();
         });
     };
 
@@ -764,16 +774,20 @@
         return "";
     };
 
-    obj.setPlayMemory = function (e, t, o) {
+    obj.setPlayMemory = function (e, t, o, start, end) {
         if (e) {
             var fileList = obj.file_page.items
             , parent_file_id = fileList[0].parent_file_id
             , videoMemory = obj.getItem("video_memory") || {};
-            if (typeof t == "number" && (t <= 60 || t + 120 >= o)) {
-                if (videoMemory.hasOwnProperty(parent_file_id) && videoMemory[parent_file_id].hasOwnProperty(e)) {
+            if (typeof t == "number" && o) {
+                if ((start && (t <= +start) || end && (t + +end >= o)) && videoMemory.hasOwnProperty(parent_file_id) && videoMemory[parent_file_id].hasOwnProperty(e)) {
                     delete videoMemory[parent_file_id][e];
-                    obj.setItem("video_memory", videoMemory);
                 }
+                else {
+                    videoMemory[parent_file_id] || (videoMemory[parent_file_id] = {});
+                    videoMemory[parent_file_id][e] = t;
+                }
+                obj.setItem("video_memory", videoMemory);
             }
             else {
                 Object.keys(videoMemory).forEach(function (key) {
