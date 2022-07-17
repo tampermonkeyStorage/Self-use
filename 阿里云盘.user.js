@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.0.7
+// @version      2.0.8
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕，突破视频2分钟限制），支持自定义分享密码，支持保存到我的网盘时默认新标签页打开，支持原生播放器优化，...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -44,7 +44,6 @@
             },
             file_id: "",
             elevideo: "",
-            elequality: "",
             dPlayer: null,
             attributes: {},
             media_num: 0
@@ -447,10 +446,14 @@
             }
             player.on("loadedmetadata", function () {
                 options.hotkey || obj.dPlayerHotkey();
-                obj.addCueVideoSubtitle();
+                obj.addCueVideoSubtitle(function (textTrackList) {
+                    textTrackList && obj.selectSubtitles(textTrackList);
+                });
             });
             player.on("quality_end", function () {
-                obj.addCueVideoSubtitle();
+                obj.addCueVideoSubtitle(function (textTrackList) {
+                    textTrackList && obj.selectSubtitles(textTrackList);
+                });
             });
 
             player.speed(localStorage.getItem("dplayer-speed") || 1);
@@ -462,17 +465,8 @@
             player.on("durationchange", function () {
                 obj.memoryPlay(player);
                 obj.playSetting();
+                obj.selectEpisode();
             });
-
-            document.querySelector(".dplayer-controller .dplayer-quality-icon").onclick = function () {
-                var qualityNode = document.querySelector(".dplayer-controller .dplayer-quality-mask");
-                if (qualityNode) {
-                    obj.video_page.elequality = this.parentNode.removeChild(qualityNode);
-                }
-                else {
-                    this.parentNode.appendChild(obj.video_page.elequality);
-                }
-            };
         } catch (error) {
             console.error("播放器创建失败", error);
         }
@@ -715,6 +709,89 @@
                 $(".dplayer-setting-skipstart").click();
             }
             $(".dplayer-setting-icon").click();
+        });
+    };
+
+    obj.selectSubtitles = function (textTrackList) {
+        //字幕选择 代码贡献：https://greasyfork.org/zh-CN/users/795227-星峰
+        //if ($(".dplayer-icons-right .subtitle-select").length) return;
+        if (textTrackList.length <= 1) return;
+
+        var subtitlebtn=$(".dplayer-subtitle-btn")
+        subtitlebtn.addClass("dplayer-quality");
+
+        var eleSub = '<div class="dplayer-quality-item subtitle-item" data-index="'+ 0 +'" style="opacity: 0.4;">默认字幕</div>';
+        for(var i = 1; i < obj.video_page.subtitle_list.length; i++) {
+            eleSub += '<div class="dplayer-quality-item subtitle-item" data-index="'+ i +'">'+ obj.video_page.subtitle_list[i].label+'</div>';
+        }
+        var html = '<div class="dplayer-quality-mask"><div class="dplayer-quality-list subtitle-select"> '+ eleSub +'</div> </div>'
+        subtitlebtn.append(html);
+        var defaultitem = $(".subtitle-select .subtitle-item").eq(0);
+        var subtitlepicbtn = $(".dplayer-subtitle-btn .dplayer-icon-content");
+
+        $(".subtitle-select .subtitle-item").on("click", function() {
+            var $this = $(this), index = $this.attr("data-index");
+            if ($this.css("opacity") == "1") {
+                subtitlepicbtn.css("opacity", "1");
+                $this.css("opacity", "0.4");
+                $this.siblings().css("opacity", "");
+                for(var i = textTrackList[0].cues.length-1; i>=0; i--) {
+                    textTrackList[0].removeCue(textTrackList[0].cues[i]);
+                }
+                var item = obj.video_page.subtitle_list[index];
+                item.subarr.forEach(function (item) {
+                    /<b>.*<\/b>/.test(item.text) || (item.text = item.text.split(/\r?\n/).map((item) => `<b>${item}</b>`).join("\n"));
+                    var textTrackCue = new VTTCue(item.startTime, item.endTime, item.text);
+                    textTrackCue.id = item.index;
+                    textTrackList[0] && textTrackList[0].addCue(textTrackCue);
+                });
+                if (subtitlepicbtn.css("opacity") == "0.4") {
+                    subtitlepicbtn.click();
+                }
+            }
+        });
+    };
+
+    obj.selectEpisode = function () {
+        //选集 代码贡献：https://greasyfork.org/zh-CN/users/795227-星峰
+        if ($(".dplayer-icons-right #btn-video-select").length) return;
+
+        var elevideos = "";
+        var thisFileId = obj.video_page.play_info.file_id;
+        var thisvideoindex = 0;
+        var fileList = obj.file_page.items;
+        var videoList = fileList.filter(function (item, index) {
+            if (item.category == "video") {
+                var iscurrent = item.file_id == thisFileId;
+                iscurrent && (thisvideoindex = index);
+                elevideos += '<li class="drawer-item--2cNtQ " data-is-current="'+ iscurrent +'"><div class="meta--3-qtu"><p class="title--2vewu" title="'+ item.name +'"><span class="filename--3hcxw">'+ item.name +'</span></p></div></li>';
+                return true;
+            }
+            return false;
+        });
+        var html= '<div class="dplayer-quality"><button id="btn-video-select" class="dplayer-icon dplayer-quality-icon">选集</button><div class="drawer-container--1M9Iy" data-open="true" data-is-current="true" style="width: 315px;height: 0px;bottom: 0px;"><div class="drawer-wrapper--3Yfpw" style="height: 345px;"><header class="header--2Y80e"><p class="title--CbV-V">选集</p><div class="btn-close--TihlS"><span data-role="icon" data-render-as="svg" data-icon-type="PDSChevronDown" class="icon--tTxIr icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSChevronDown"></use></svg></span></div></header><section class="scroll-container--Ho4ra" style="height: 280px;"><div class="scroll-wrapper--zw1q2"><ul class="drawer-list--JYzyI">'+ elevideos +'</ul></div></section></div></div></div>';
+        $(".dplayer-icons-right").prepend(html);
+
+        var itemheight = $(".dplayer-icons-right .drawer-container--1M9Iy ul li")[0].offsetHeight;
+        var allitemheight = $(".scroll-container--Ho4ra").height();
+        $(".scroll-container--Ho4ra").scrollTop((thisvideoindex+1) * itemheight - (allitemheight) / 2);
+
+        $(".dplayer-icons-right #btn-video-select").on("click", function() {
+            var ele = $(this).next();
+            ele.css("height") == "0px" ? ele.css({bottom:"60px", height: "345px"}) : ele.css({bottom:"0px", height: "0px"});
+        });
+        $(".dplayer-icons-right .btn-close--TihlS").on("click", function() {
+            $(".dplayer-icons-right .drawer-container--1M9Iy").css({bottom:"0px", height: "0px"});
+        });
+        $(".dplayer-icons-right .drawer-container--1M9Iy ul li").on("click", function() {
+            var $this = $(this);
+            if ($this.attr("data-is-current") == "false") {
+                $this.attr("data-is-current", "true");
+                $this.siblings().attr("data-is-current", "false");
+
+                obj.setPlayMemory("lastname",videoList[$this.index()].name);
+                obj.playLast();
+            }
         });
     };
 
@@ -978,6 +1055,8 @@
         if (subtitle_task_list) {
             var listLen = subtitle_task_list.length;
             subtitle_task_list.forEach(function (item, index) {
+                item.language || (item.language = "chi");
+                item.label || (item.label = obj.labeldetect(item.language));
                 if (item.subarr) {
                     obj.video_page.subtitle_list.push(item);
                     if (--listLen == 0) {
