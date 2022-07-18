@@ -1150,6 +1150,9 @@
     obj.sortSubList = function (sublist) {
         var newSubList = [];
         if (sublist[0] && sublist[0].subarr) {
+            if (["chi", "zho", "adj"].includes(sublist[0].language)) {
+                return sublist;
+            }
             sublist.forEach(function (item, index) {
                 if (["chi", "zho", "adj"].includes(item.language)) {
                     newSubList.unshift(item);
