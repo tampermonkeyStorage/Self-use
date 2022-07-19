@@ -597,11 +597,12 @@
                         $(".memory-play-wrap").remove();
                     }, 10000);
                     $(".memory-play-wrap .close-btn").click(function () {
+                        clearTimeout(memoryTimeout);
                         $(".memory-play-wrap").remove();
                     });
                     $(".memory-play-wrap .play-jump").click(function () {
-                        $(".memory-play-wrap").remove();
                         clearTimeout(memoryTimeout);
+                        $(".memory-play-wrap").remove();
                     });
                 }
             }
