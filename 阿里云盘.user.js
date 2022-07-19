@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.0.9
-// @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕，突破视频2分钟限制，和一些你想要的功能），支持自定义分享密码，支持保存到我的网盘时默认新标签页打开，支持原生播放器优化，...
+// @version      2.1.0
+// @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, ...），支持自定义分享密码，支持原生播放器优化，...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
 // @match        https://www.aliyundrive.com/drive*
@@ -463,6 +463,12 @@
                 localStorage.getItem("dplayer-speed") == player.video.playbackRate || localStorage.setItem("dplayer-speed", player.video.playbackRate);
             });
 
+            localStorage.getItem("dplayer-isfullscreen") == "true" && player.fullScreen.request("web");
+            $(document).on("click", ".dplayer .dplayer-full", function(event) {
+                var isFullScreen = player.fullScreen.isFullScreen("web");
+                localStorage.setItem("dplayer-isfullscreen", isFullScreen);
+            });
+
             player.on("durationchange", function () {
                 obj.memoryPlay(player);
                 obj.playSetting();
@@ -773,8 +779,11 @@
             }
             return false;
         });
-        var html = '<div class="dplayer-setting"><button id="btn-video-select" class="dplayer-icon dplayer-quality-icon">选集</button><div class="drawer-container--1M9Iy" data-open="true" data-is-current="true" style="left:-135px; display:none; width: 315px;height: 345px;bottom: 60px;"><div class="drawer-wrapper--3Yfpw" style="height: 345px;"><header class="header--2Y80e"><p class="title--CbV-V">选集</p><div class="btn-close--TihlS"><span data-role="icon" data-render-as="svg" data-icon-type="PDSChevronDown" class="icon--tTxIr icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSChevronDown"></use></svg></span></div></header><section class="scroll-container--Ho4ra" style="height: 280px;"><div class="scroll-wrapper--zw1q2"><ul class="drawer-list--JYzyI">'+ elevideos +'</ul></div></section></div></div></div>';
+        var html = '<button class="dplayer-icon dplayer-play-icon left-icon"><svg t="1658231494866" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="22734" width="128" height="128" xmlns:xlink="http://www.w3.org/1999/xlink"><defs><style type="text/css"></style></defs><path d="M757.527273 190.138182L382.510545 490.123636a28.020364 28.020364 0 0 0 0 43.752728l375.016728 299.985454a28.020364 28.020364 0 0 0 45.474909-21.876363V212.014545a28.020364 28.020364 0 0 0-45.474909-21.876363zM249.949091 221.509818a28.020364 28.020364 0 0 0-27.973818 27.973818v525.032728a28.020364 28.020364 0 1 0 55.994182 0V249.483636a28.020364 28.020364 0 0 0-28.020364-27.973818zM747.054545 270.242909v483.514182L444.834909 512l302.173091-241.757091z" fill="#333333" p-id="22735"></path></svg></button>';
+        html += '<div class="dplayer-setting"><button id="btn-video-select" class="dplayer-icon dplayer-quality-icon">选集</button><div class="drawer-container--1M9Iy" data-open="true" data-is-current="true" style="left:-135px; display:none; width: 315px;height: 345px;bottom: 60px;"><div class="drawer-wrapper--3Yfpw" style="height: 345px;"><header class="header--2Y80e"><p class="title--CbV-V">选集</p><div class="btn-close--TihlS"><span data-role="icon" data-render-as="svg" data-icon-type="PDSChevronDown" class="icon--tTxIr icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSChevronDown"></use></svg></span></div></header><section class="scroll-container--Ho4ra" style="height: 280px;"><div class="scroll-wrapper--zw1q2"><ul class="drawer-list--JYzyI">'+ elevideos +'</ul></div></section></div></div></div>';
+        html+='<button class="dplayer-icon dplayer-play-icon right-icon"><svg t="1658231512641" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="23796" xmlns:xlink="http://www.w3.org/1999/xlink" width="128" height="128"><defs><style type="text/css"></style></defs><path d="M248.506182 190.138182l374.970182 299.985454a28.020364 28.020364 0 0 1 0 43.752728L248.552727 833.861818a28.020364 28.020364 0 0 1-45.521454-21.876363V212.014545c0-23.505455 27.182545-36.538182 45.521454-21.876363z m507.485091 31.371636c15.453091 0 28.020364 12.567273 28.020363 27.973818v525.032728a28.020364 28.020364 0 1 1-55.994181 0V249.483636c0-15.453091 12.520727-27.973818 27.973818-27.973818zM258.978909 270.242909v483.514182L561.198545 512 258.978909 270.242909z" fill="#333333" p-id="23797"></path></svg></button>';
         $(".dplayer-icons-right").prepend(html);
+        //$(".dplayer-icons-left").append(html);
         var speed = 800;
         $(".dplayer-icons-right #btn-video-select").on("click", function() {
             var ele = $(this).next();
@@ -801,7 +810,7 @@
                 $this.siblings().attr("data-is-current", "false");
                 $this.siblings().css("opacity", "1");
                 obj.setPlayMemory("lastname",videoList[$this.index()].name);
-                obj.playLast();
+                obj.playByScroll();
             }
         });
         $(".dplayer-mask").on("click",function() {
@@ -810,10 +819,40 @@
                 $(this).removeClass("dplayer-mask-show");
             }
         });
+
+        // 上下集
+        $(".left-icon").on("click",function(){
+            obj.LastNextPlay('last');
+        });
+        $(".right-icon").on("click",function(){
+            obj.LastNextPlay('next');
+        });
     };
 
-    obj.playLast = function () {
+    obj.LastNextPlay = function(type){
+        // 上下集 代码贡献：https://greasyfork.org/zh-CN/users/795227-星峰
+        var playInfo = obj.video_page.play_info;
+        var fileList = obj.file_page.items
+        , fileIndex, file = fileList.find(function (item, index) {
+            fileIndex = index;
+            return item.file_id == playInfo.file_id;
+        });
+        var playfile = fileList.filter(function (item, index) {
+            return item.category == "video" && ((fileIndex < index && type == 'next') || (fileIndex > index && type == 'last'));
+        });
+        var playfiletmp;
+        if (type == 'next') {
+            playfiletmp = playfile[0];
+        }
+        else{
+            playfiletmp = playfile[playfile.length - 1];
+        }
+        playfiletmp ? obj.playByScroll(playfiletmp.name) : obj.video_page.dPlayer.notice((type == 'last' ? "上" : "下") + "一集已经没有了");
+    };
+
+    obj.playByScroll = function(lastplay){
         // 继续上次播放 代码贡献：https://greasyfork.org/zh-CN/users/795227-星峰
+        lastplay = lastplay || obj.getPlayMemory("lastname");
         var topp = 0;
         var scrollerdiv = $(".scroller--2hMGk");
         var he = 0;
@@ -826,7 +865,6 @@
         }
         //通过文件列表定位上次播放文件
         var fileList = obj.file_page.items
-        , lastplay = obj.getPlayMemory("lastname");
         for(var i = 0; i < fileList.length; i++) {
             var tmptext = fileList[i].name;
             if (tmptext == lastplay) {
@@ -1515,7 +1553,9 @@
             $("#root [class^=banner] [class^=right]").prepend(html);
 
             $(".button-download--batch").on("click", obj.showDownloadSharePage);
-            $(".button-last--batch").on("click", obj.playLast);
+            $(".button-last--batch").on("click", function () {
+                obj.playByScroll();
+            });
             $(".button-search--batch").on("click", function () {
                 window.open("https://www.niceso.fun/", "_blank");
             });
@@ -1539,7 +1579,9 @@
             $(".button-search--batch").on("click", function () {
                 window.open("https://www.niceso.fun/", "_blank");
             });
-            $(".button-last--batch").on("click", obj.playLast);
+            $(".button-last--batch").on("click", function () {
+                obj.playByScroll();
+            });
         }
         else {
             setTimeout(obj.initDownloadHomePage, 1000)
