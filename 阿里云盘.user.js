@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.0.8
+// @version      2.0.9
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕，突破视频2分钟限制，和一些你想要的功能），支持自定义分享密码，支持保存到我的网盘时默认新标签页打开，支持原生播放器优化，...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -583,7 +583,6 @@
             var vid = setInterval(function () {
                 if (skipstart && jumpend) {
                     var currentTime = player.video.currentTime;
-                    //只有启用跳过片头片尾才执行
                     if (player.video.duration - currentTime <= parseInt(jumpend) + 10 * player.video.playbackRate) {
                         clearInterval(vid);
                         $(player.container).append('<div class="memory-play-wrap" style="display: block;position: absolute;left: 33px;bottom: 66px;font-size: 15px;padding: 7px;border-radius: 3px;color: #fff;z-index:100;background: rgba(0,0,0,.5);">10秒后自动下一项&nbsp;&nbsp;<a href="javascript:void(0);" class="play-jump" style="text-decoration: none;color: #06c;"> 取消 &nbsp;</a><em class="close-btn" style="display: inline-block;width: 15px;height: 15px;vertical-align: middle;cursor: pointer;background: url(https://nd-static.bdstatic.com/m-static/disk-share/widget/pageModule/share-file-main/fileType/video/img/video-flash-closebtn_15f0e97.png) no-repeat;"></em></div>');
