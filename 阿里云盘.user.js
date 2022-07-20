@@ -574,7 +574,6 @@
                     $(".memory-play-wrap").remove();
                 }, 15000);
                 $(".memory-play-wrap .close-btn").click(function () {
-                    skipstart && jumpstart && jumpstart > player.video.currentTime && player.seek(jumpstart);
                     $(".memory-play-wrap").remove();
                     clearTimeout(memoryTimeout);
                 });
