@@ -452,6 +452,7 @@
 
             player.on("loadstart", function () {
                 obj.selectEpisode();
+                obj.memoryPlay(player);
             });
 
             player.on("loadedmetadata", function () {
@@ -460,7 +461,6 @@
                     textTrackList && obj.selectSubtitles(textTrackList);
                 });
                 obj.playSetting();
-                obj.memoryPlay(player);
                 obj.autoPlayNext(player);
             });
             player.on("quality_end", function () {
