@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.1.2
+// @version      2.1.3
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, ...），支持自定义分享密码，支持原生播放器优化，...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -347,7 +347,6 @@
     obj.dPlayerStart = function () {
         var dPlayerNode, videoNode = document.querySelector("video");
         if (videoNode) {
-            $(".aDrive-custom-content.aDrive-info").css("display", "none"); // 隐藏两分钟提示
             dPlayerNode = document.getElementById("dplayer");
             if (!dPlayerNode) {
                 dPlayerNode = document.createElement("div");
@@ -404,6 +403,10 @@
             obj.hasMemoryDisplay = false;
             obj.video_page.file_id = play_info.file_id;
             obj.video_page.attributes = {};
+            if (!obj.aDrive) {
+                obj.aDrive = true;
+                $("<style></style>").text('.aDrive-custom-content.aDrive-info{display: none;}').appendTo(document.head); // 隐藏两分钟提示
+            }
         }
 
         var options = {
@@ -458,6 +461,7 @@
                 });
                 obj.playSetting();
                 obj.memoryPlay(player);
+                obj.autoPlayNext(player);
             });
             player.on("quality_end", function () {
                 obj.addCueVideoSubtitle(function (textTrackList) {
@@ -543,42 +547,16 @@
     };
 
     obj.memoryPlay = function (player) {
+        if (obj.hasMemoryDisplay) return;
+
         var jumpstart = obj.getPlayMemory("jumpstart") || "60"; // 默认跳过片头
         var jumpend = obj.getPlayMemory("jumpend") || "130"; // 默认跳过片尾
         var skipstart = obj.getPlayMemory("skipstart");
         typeof skipstart == "boolean" || (skipstart = true); //默认开启跳过片头片尾
 
-        var video = player.video, duration = video.duration;
-        player.on("timeupdate", function () {
-            if (!this.autonext && skipstart && jumpend) {
-                var currentTime = video.currentTime;
-                if (duration - currentTime <= parseInt(jumpend) + 10 * video.playbackRate) {
-                    this.autonext = true;
-                    obj.setPlayMemory(sign, currentTime + 20 * video.playbackRate, duration, jumpstart, jumpend);
-                    $(player.container).append('<div class="memory-play-wrap" style="display: block;position: absolute;left: 33px;bottom: 66px;font-size: 15px;padding: 7px;border-radius: 3px;color: #fff;z-index:100;background: rgba(0,0,0,.5);">10秒后自动下一集&nbsp;&nbsp;<a href="javascript:void(0);" class="play-jump" style="text-decoration: none;color: #06c;"> 取消 &nbsp;</a><em class="close-btn" style="display: inline-block;width: 15px;height: 15px;vertical-align: middle;cursor: pointer;background: url(https://nd-static.bdstatic.com/m-static/disk-share/widget/pageModule/share-file-main/fileType/video/img/video-flash-closebtn_15f0e97.png) no-repeat;"></em></div>');
-                    var memoryTimeout = setTimeout(function () {
-                        obj.LastNextPlay('next');
-                        player.destroy();
-                        $(".memory-play-wrap").remove();
-                    }, 10000);
-                    $(".memory-play-wrap .close-btn").click(function () {
-                        clearTimeout(memoryTimeout);
-                        $(".memory-play-wrap").remove();
-                    });
-                    $(".memory-play-wrap .play-jump").click(function () {
-                        clearTimeout(memoryTimeout);
-                        $(".memory-play-wrap").remove();
-                    });
-                }
-            }
-        });
-
-        if (obj.hasMemoryDisplay) return;
-
         var playInfo = obj.video_page.play_info;
         var fileList = obj.file_page.items
-        , fileIndex, file = fileList.find(function (item, index) {
-            fileIndex = index;
+        , file = fileList.find(function (item, index) {
             return item.file_id == playInfo.file_id;
         })
         , sign = file ? file.file_id : ""
@@ -613,6 +591,7 @@
             }
         }
 
+        var duration = player.video.duration;
         document.onvisibilitychange = function () {
             if (document.visibilityState === "hidden") {
                 var currentTime = player.video.currentTime;
@@ -641,6 +620,44 @@
             second < 10 && (second = "0" + second);
             return hour === 0 ? minute + ":" + second : hour + ":" + minute + ":" + second;
         }
+    };
+
+    obj.autoPlayNext = function (player) {
+        var jumpstart = obj.getPlayMemory("jumpstart") || "60"; // 默认跳过片头
+        var jumpend = obj.getPlayMemory("jumpend") || "130"; // 默认跳过片尾
+        var skipstart = obj.getPlayMemory("skipstart");
+        typeof skipstart == "boolean" || (skipstart = true); //默认开启跳过片头片尾
+
+        var playInfo = obj.video_page.play_info;
+        var fileList = obj.file_page.items
+        , file = fileList.find(function (item, index) {
+            return item.file_id == playInfo.file_id;
+        })
+        , sign = file ? file.file_id : ""
+
+        var video = player.video, duration = video.duration;
+        player.on("timeupdate", function () {
+            if (!this.autonext && skipstart && jumpend) {
+                var currentTime = video.currentTime;
+                if (duration - currentTime <= parseInt(jumpend) + 10 * video.playbackRate) {
+                    this.autonext = true;
+                    obj.setPlayMemory(sign, currentTime + 20 * video.playbackRate, duration, jumpstart, jumpend);
+                    $(player.container).append('<div class="memory-play-wrap" style="display: block;position: absolute;left: 33px;bottom: 66px;font-size: 15px;padding: 7px;border-radius: 3px;color: #fff;z-index:100;background: rgba(0,0,0,.5);">10秒后自动下一集&nbsp;&nbsp;<a href="javascript:void(0);" class="play-jump" style="text-decoration: none;color: #06c;"> 取消 &nbsp;</a><em class="close-btn" style="display: inline-block;width: 15px;height: 15px;vertical-align: middle;cursor: pointer;background: url(https://nd-static.bdstatic.com/m-static/disk-share/widget/pageModule/share-file-main/fileType/video/img/video-flash-closebtn_15f0e97.png) no-repeat;"></em></div>');
+                    var memoryTimeout = setTimeout(function () {
+                        obj.LastNextPlay('next');
+                        $(".memory-play-wrap").remove();
+                    }, 10000);
+                    $(".memory-play-wrap .close-btn").click(function () {
+                        clearTimeout(memoryTimeout);
+                        $(".memory-play-wrap").remove();
+                    });
+                    $(".memory-play-wrap .play-jump").click(function () {
+                        clearTimeout(memoryTimeout);
+                        $(".memory-play-wrap").remove();
+                    });
+                }
+            }
+        });
     };
 
     obj.playSetting = function () {
