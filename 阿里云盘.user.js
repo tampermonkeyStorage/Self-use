@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.1.3
+// @version      2.1.4
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, ...），支持自定义分享密码，支持原生播放器优化，...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -32,7 +32,6 @@
         video_page: {
             play_info: {},
             subtitle_list: [],
-            default_subtitle: 0,
             playerObject: {
                 NativePlayer : {
                     name: "原生播放器",
@@ -327,23 +326,6 @@
         })(urlArr);
     };
 
-    obj.loadScript = function (src) {
-        if (!window.instances) {
-            window.instances = {};
-        }
-        if (!window.instances[src]) {
-            window.instances[src] = new Promise((resolve, reject) => {
-                const script = document.createElement("script")
-                script.src = src;
-                script.type = "text/javascript";
-                script.onload = resolve;
-                script.onerror = reject;
-                document.head.appendChild(script);
-            });
-        }
-        return window.instances[src];
-    };
-
     obj.dPlayerStart = function () {
         var dPlayerNode, videoNode = document.querySelector("video");
         if (videoNode) {
@@ -401,12 +383,10 @@
         }
         else {
             obj.hasMemoryDisplay = false;
+            obj.offsettime = 0;
+
             obj.video_page.file_id = play_info.file_id;
             obj.video_page.attributes = {};
-            if (!obj.aDrive) {
-                obj.aDrive = true;
-                $("<style></style>").text('.aDrive-custom-content.aDrive-info{display: none;}').appendTo(document.head); // 隐藏两分钟提示
-            }
         }
 
         var options = {
@@ -418,9 +398,9 @@
             subtitle: {
                 url: "",
                 type: "webvtt",
-                fontSize: "5vh", //字幕大小 可修改为["4vh", "4.5vh", "5vh", 等]
-                bottom: "10%", //字幕相对底部的位置 可修改为["5%", "10%", "15%", 等]
-                color: "#ffd821", //字幕颜色 可修改为["#b7daff", "white", red orange yellow green blue indigo purple, 等]
+                fontSize: (localStorage.getItem("dplayer-subtitle-fontSize") || 5) + "vh",
+                bottom: (localStorage.getItem("dplayer-subtitle-bottom") || 10) + "%",
+                color: localStorage.getItem("dplayer-subtitle-color") || "#ffd821",
             },
             autoplay: true,
             screenshot: true,
@@ -434,9 +414,14 @@
                     link: "https://pc-index-skin.cdn.bcebos.com/6cb0bccb31e49dc0dba6336167be0a18.png",
                 },
                 {
-                    text: "阿里云盘脚本",
-                    link: "https://github.com/tampermonkeyStorage/Self-use",
-                }
+                    text: '字幕设置',
+                    click: () => {
+                        obj.subtitleSetting();
+                        var menubox = $(".dplayer-menu.dplayer-menu-show");
+                        var properties = {left: menubox.css("left"), bottom: menubox.css("bottom")};
+                        $(".subtitle-setting-box").css(properties);
+                    },
+                },
             ],
             theme: "#b7daff"
         };
@@ -452,16 +437,15 @@
 
             player.on("loadstart", function () {
                 obj.selectEpisode();
-                obj.memoryPlay(player);
+                obj.memoryPlay();
             });
-
             player.on("loadedmetadata", function () {
                 options.hotkey || obj.dPlayerHotkey();
                 obj.addCueVideoSubtitle(function (textTrackList) {
                     textTrackList && obj.selectSubtitles(textTrackList);
                 });
                 obj.playSetting();
-                obj.autoPlayNext(player);
+                obj.autoPlayNext();
             });
             player.on("quality_end", function () {
                 obj.addCueVideoSubtitle(function (textTrackList) {
@@ -475,7 +459,7 @@
                 localStorage.getItem("dplayer-speed") == player.video.playbackRate || localStorage.setItem("dplayer-speed", player.video.playbackRate);
             });
 
-            //默认网页全屏，回车切换网页全屏和浏览器全屏
+            //默认全屏，回车切换网页全屏和浏览器全屏
             player.fullScreen.request("web");
             localStorage.getItem("dplayer-isfullscreen") == "true" && player.fullScreen.request("browser");
             player.on("fullscreen", function () {
@@ -488,6 +472,111 @@
         } catch (error) {
             console.error("播放器创建失败", error);
         }
+    };
+
+    obj.subtitleSetting = function () {
+        var subSetBox = $(".subtitle-setting-box");
+        if (subSetBox.length) {
+            if (subSetBox.css("display") == "block") {
+                subSetBox.css("display", "none");
+            }
+            else {
+                subSetBox.css("display", "block");
+            }
+            return;
+        }
+        else {
+            var html = '<div class="dplayer-icons dplayer-comment-box subtitle-setting-box" style="display: block;z-index: 0;width: 204px;height: 0px;bottom: 99px;"><div class="dplayer-comment-setting-box dplayer-comment-setting-open" style="bottom: 0px;">';
+            html += '<div class="dplayer-info-panel-close" style="cursor: pointer;position:absolute;right:10px;top:10px;">[x]</div>';
+            html += '<div class="dplayer-comment-setting-color"><div class="dplayer-comment-setting-title">设置字幕颜色</div><label><input type="radio" name="dplayer-danmaku-color-1" value="#fff" checked=""><span style="background: #fff;"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#e54256"><span style="background: #e54256"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#ffe133"><span style="background: #ffe133"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#64DD17"><span style="background: #64DD17"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#39ccff"><span style="background: #39ccff"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#D500F9"><span style="background: #D500F9"></span></label></div>';
+            html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">设置字幕位置</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>上移</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0" checked=""><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>下移</span></label></div>';
+            html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">设置字幕大小</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>加大</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>减小</span></label></div>';
+            html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">设置字幕时间</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>前移</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>后移</span></label></div>';
+            html += '</div></div>';
+            $(".dplayer-controller").append(html);
+        }
+
+        var player = obj.video_page.dPlayer
+        $(".subtitle-setting-box .dplayer-info-panel-close").on("click",function() {
+            $(".subtitle-setting-box").css("display", "none");
+        });
+        $(".subtitle-setting-box .dplayer-comment-setting-color input").on("click",function() {
+            var color = this.value;
+            if (localStorage.getItem("dplayer-subtitle-color") != color) {
+                localStorage.setItem("dplayer-subtitle-color", color);
+                $(".dplayer-subtitle").css("color", color);
+            }
+        });
+        $(".subtitle-setting-box .dplayer-comment-setting-type input").on("click",function() {
+            var value = this.value;
+            var $this = $(this), $name = $this.parent().parent().children(":first").text();
+            if ($name == "设置字幕位置") {
+                var bottom = Number(localStorage.getItem("dplayer-subtitle-bottom") || 10);
+                if (value == "0") {
+                    bottom = 10;
+                }
+                else if (value == "1") {
+                    bottom += 1;
+                }
+                else if (value == "2") {
+                    bottom -= 1;
+                }
+                localStorage.setItem("dplayer-subtitle-bottom", bottom);
+                $(".dplayer-subtitle").css("bottom", bottom + "%");
+                player.notice("字幕位置 " + $this.next().text() + "：" + bottom + "%");
+            }
+            else if ($name == "设置字幕大小") {
+                var fontSize = Number(localStorage.getItem("dplayer-subtitle-fontSize") || 5);
+                if (value == "0") {
+                    fontSize = 5;
+                }
+                else if (value == "1") {
+                    fontSize += .1;
+                }
+                else if (value == "2") {
+                    fontSize -= .1;
+                }
+                fontSize = fontSize.toFixed(1)
+                localStorage.setItem("dplayer-subtitle-fontSize", fontSize);
+                $(".dplayer-subtitle").css("font-size", fontSize + "vh");
+                player.notice("字幕大小 " + $this.next().text() + "：" + fontSize + "vh");
+            }
+            else if ($name == "设置字幕时间") {
+                var video = document.querySelector("video");
+                if (video) {
+                    var textTracks = video.textTracks;
+                    var offsettime = obj.offsettime || 0;
+                    if (value == "0") {
+                        obj.offsettime = 0;
+                    }
+                    else if (value == "1") {
+                        obj.offsettime = offsettime - 5;
+                    }
+                    else if (value == "2") {
+                        obj.offsettime = offsettime + 5;
+                    }
+                    player.notice("字幕时间 " + $this.next().text() + "：" + obj.offsettime + "秒");
+                    obj.subtitleOffset(textTracks);
+                }
+            }
+        });
+    };
+
+    obj.subtitleOffset = function(textTrackList){
+        // 字幕时间偏移 代码贡献：https://greasyfork.org/zh-CN/users/795227-星峰
+        var offsettime = obj.offsettime || 0;
+        var subList = obj.video_page.subtitle_list;
+        var index = obj.subListIndex || 0;
+        var item = subList[index];
+        for(var i = textTrackList[0].cues.length - 1; i >= 0; i--) {
+            textTrackList[0].removeCue(textTrackList[0].cues[i]);
+        }
+        item.subarr.forEach(function (item) {
+            /<b>.*<\/b>/.test(item.text) || (item.text = item.text.split(/\r?\n/).map((item) => `<b>${item}</b>`).join("\n"));
+            var textTrackCue = new VTTCue(item.startTime + offsettime, item.endTime + offsettime, item.text);
+            textTrackCue.id = item.index;
+            textTrackList[0] && textTrackList[0].addCue(textTrackCue);
+        });
     };
 
     obj.dPlayerHotkey = function () {
@@ -546,7 +635,7 @@
         }));
     };
 
-    obj.memoryPlay = function (player) {
+    obj.memoryPlay = function () {
         if (obj.hasMemoryDisplay) return;
 
         var jumpstart = obj.getPlayMemory("jumpstart") || "60"; // 默认跳过片头
@@ -554,6 +643,7 @@
         var skipstart = obj.getPlayMemory("skipstart");
         typeof skipstart == "boolean" || (skipstart = true); //默认开启跳过片头片尾
 
+        var player = obj.video_page.dPlayer;
         var playInfo = obj.video_page.play_info;
         var fileList = obj.file_page.items
         , file = fileList.find(function (item, index) {
@@ -574,6 +664,7 @@
                     $(".memory-play-wrap").remove();
                 }, 15000);
                 $(".memory-play-wrap .close-btn").click(function () {
+                    skipstart && jumpstart && jumpstart > player.video.currentTime && player.seek(jumpstart);
                     $(".memory-play-wrap").remove();
                     clearTimeout(memoryTimeout);
                 });
@@ -621,7 +712,7 @@
         }
     };
 
-    obj.autoPlayNext = function (player) {
+    obj.autoPlayNext = function () {
         var jumpstart = obj.getPlayMemory("jumpstart") || "60"; // 默认跳过片头
         var jumpend = obj.getPlayMemory("jumpend") || "130"; // 默认跳过片尾
         var skipstart = obj.getPlayMemory("skipstart");
@@ -634,6 +725,7 @@
         })
         , sign = file ? file.file_id : ""
 
+        var player = obj.video_page.dPlayer;
         var video = player.video, duration = video.duration;
         player.on("timeupdate", function () {
             if (!this.autonext && skipstart && jumpend) {
@@ -773,12 +865,12 @@
                 if (subtitlepicbtn.css("opacity") == "0.4") {
                     subtitlepicbtn.click();
                 }
-                obj.video_page.default_subtitle = index;
+                obj.subListIndex = index;
             }
         });
 
-        var default_subtitle = obj.video_page.default_subtitle;
-        default_subtitle && $(".subtitle-select .subtitle-item").eq(default_subtitle).click();
+        var subListIndex = obj.subListIndex;
+        subListIndex && $(".subtitle-select .subtitle-item").eq(subListIndex).click();
     };
 
     obj.selectEpisode = function () {
@@ -799,10 +891,13 @@
             }
             return false;
         });
-        var html = '<button class="dplayer-icon dplayer-play-icon left-icon"><svg t="1658231494866" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="22734" width="128" height="128" xmlns:xlink="http://www.w3.org/1999/xlink"><defs><style type="text/css"></style></defs><path d="M757.527273 190.138182L382.510545 490.123636a28.020364 28.020364 0 0 0 0 43.752728l375.016728 299.985454a28.020364 28.020364 0 0 0 45.474909-21.876363V212.014545a28.020364 28.020364 0 0 0-45.474909-21.876363zM249.949091 221.509818a28.020364 28.020364 0 0 0-27.973818 27.973818v525.032728a28.020364 28.020364 0 1 0 55.994182 0V249.483636a28.020364 28.020364 0 0 0-28.020364-27.973818zM747.054545 270.242909v483.514182L444.834909 512l302.173091-241.757091z" fill="#333333" p-id="22735"></path></svg></button>';
-        html += '<div class="dplayer-setting"><button id="btn-video-select" class="dplayer-icon dplayer-quality-icon">选集</button><div class="drawer-container--1M9Iy" data-open="true" data-is-current="true" style="left:-135px; display:none; width: 315px;height: 345px;bottom: 60px;"><div class="drawer-wrapper--3Yfpw" style="height: 345px;"><header class="header--2Y80e"><p class="title--CbV-V">选集</p><div class="btn-close--TihlS"><span data-role="icon" data-render-as="svg" data-icon-type="PDSChevronDown" class="icon--tTxIr icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSChevronDown"></use></svg></span></div></header><section class="scroll-container--Ho4ra" style="height: 280px;"><div class="scroll-wrapper--zw1q2"><ul class="drawer-list--JYzyI">'+ elevideos +'</ul></div></section></div></div></div>';
-        html += '<button class="dplayer-icon dplayer-play-icon right-icon"><svg t="1658231512641" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="23796" xmlns:xlink="http://www.w3.org/1999/xlink" width="128" height="128"><defs><style type="text/css"></style></defs><path d="M248.506182 190.138182l374.970182 299.985454a28.020364 28.020364 0 0 1 0 43.752728L248.552727 833.861818a28.020364 28.020364 0 0 1-45.521454-21.876363V212.014545c0-23.505455 27.182545-36.538182 45.521454-21.876363z m507.485091 31.371636c15.453091 0 28.020364 12.567273 28.020363 27.973818v525.032728a28.020364 28.020364 0 1 1-55.994181 0V249.483636c0-15.453091 12.520727-27.973818 27.973818-27.973818zM258.978909 270.242909v483.514182L561.198545 512 258.978909 270.242909z" fill="#333333" p-id="23797"></path></svg></button>';
+
+        var svg = '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 32 32"><path d="M22 16l-10.105-10.6-1.895 1.987 8.211 8.613-8.211 8.612 1.895 1.988 8.211-8.613z"></path></svg>'
+        var html = '<button class="dplayer-icon dplayer-play-icon left-icon" style="transform: rotate(-180deg)" title="上一集">'+ svg +'</button>';
+        html += '<div class="dplayer-setting"><button id="btn-video-select" class="dplayer-icon dplayer-quality-icon" title="选集">选集</button><div class="drawer-container--1M9Iy" data-open="true" data-is-current="true" style="left:-135px; display:none; width: 315px;height: 345px;bottom: 60px;"><div class="drawer-wrapper--3Yfpw" style="height: 345px;"><header class="header--2Y80e"><p class="title--CbV-V">选集</p><div class="btn-close--TihlS"><span data-role="icon" data-render-as="svg" data-icon-type="PDSChevronDown" class="icon--tTxIr icon--d-ejA " style="transform: rotate(90deg)">'+svg+'</span></div></header><section class="scroll-container--Ho4ra" style="height: 280px;"><div class="scroll-wrapper--zw1q2"><ul class="drawer-list--JYzyI">'+ elevideos +'</ul></div></section></div></div></div>';
+        html += '<button class="dplayer-icon dplayer-play-icon right-icon" title="下一集">'+ svg +'</button>';
         $(".dplayer-icons-right").prepend(html);
+
         var speed = 800;
         $(".dplayer-icons-right #btn-video-select").on("click", function() {
             var ele = $(this).next();
@@ -1068,6 +1163,7 @@
 
                     sublist = obj.sortSubList(sublist);
                     sublist = obj.fuseSubList(sublist);
+                    obj.video_page.subtitle_list = sublist;
                     sublist.forEach(function (item, index) {
                         if (item.subarr) {
                             textTrackList[index] || video.addTextTrack("subtitles", item.label, item.language);
@@ -1206,21 +1302,16 @@
     };
 
     obj.sortSubList = function (sublist) {
-        var newSubList = [];
-        if (sublist[0] && sublist[0].subarr) {
-            if (["chi", "zho", "adj"].includes(sublist[0].language)) {
-                return sublist;
+        var subs1 = [], subs2 = [];
+        sublist.forEach(function (item, index) {
+            if (["chi", "zho", "adj"].includes(item.language)) {
+                subs1.push(item);
             }
-            sublist.forEach(function (item, index) {
-                if (["chi", "zho", "adj"].includes(item.language)) {
-                    newSubList.unshift(item);
-                }
-                else {
-                    newSubList.push(item);
-                }
-            });
-        }
-        return newSubList;
+            else {
+                subs2.push(item);
+            }
+        });
+        return subs1.concat(subs2);
     };
 
     obj.fuseSubList = function (sublist) {
@@ -1426,12 +1517,16 @@
                 if (!result.status || result.status == 200) {
                     var blob = result.response;
                     var reader = new FileReader();
-                    reader.readAsText(blob, 'UTF-8');
+                    reader.readAsText(blob, "UTF-8");
                     reader.onload = function(e) {
                         var result = reader.result;
-                        if (result.indexOf("�") > -1 && !reader.mark) {
-                            reader.mark = true;
+                        if (result.indexOf("�") > -1 && !reader.markGBK) {
+                            reader.markGBK = true;
                             return reader.readAsText(blob, "GBK");
+                        }
+                        else if (result.indexOf("") > -1 && !reader.markBIG5) {
+                            reader.markBIG5 = true;
+                            return reader.readAsText(blob, "BIG5");
                         }
                         callback && callback(result);
                     };
@@ -1560,6 +1655,23 @@
         , n = parseFloat(t.length > 0 ? t.pop().replace(/,/g, ".") : "00.000") || 0
         , r = parseFloat(t.length > 0 ? t.pop() : "00") || 0;
         return 3600 * (parseFloat(t.length > 0 ? t.pop() : "00") || 0) + 60 * r + n;
+    };
+
+    obj.loadScript = function (src) {
+        if (!window.instances) {
+            window.instances = {};
+        }
+        if (!window.instances[src]) {
+            window.instances[src] = new Promise((resolve, reject) => {
+                const script = document.createElement("script")
+                script.src = src;
+                script.type = "text/javascript";
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+        return window.instances[src];
     };
 
     obj.initDownloadSharePage = function () {
@@ -2171,13 +2283,7 @@
     };
 
     obj.isHomePage = function () {
-        var url = location.href;
-        if (url.indexOf("aliyundrive.com/drive") > 0) {
-            return true;
-        }
-        else {
-            return false;
-        }
+        return location.href.indexOf("aliyundrive.com/drive") > 0;
     };
 
     obj.isLogin = function () {
@@ -2200,15 +2306,23 @@
         n && t != undefined && window.localStorage.setItem(n, t instanceof Object ? JSON.stringify(t) : t);
     };
 
+    obj.filterNotice = function () {
+        $(document).on("DOMNodeInserted", ".aDrive", function() {
+            var $this = $(this), $text = $this.find(".title--Bnudr").text();
+            $text.includes("视频仅可试看") && $this.children("div").empty();
+        });
+    };
+
     obj.showTipSuccess = function (msg, timeout) {
         obj.hideTip();
 
         var $element = $(".aDrive div");
+        var elementhtml='<div class="aDrive-notice"><div class="aDrive-notice-content"><div class="aDrive-custom-content aDrive-success"><span data-role="icon" data-render-as="svg" data-icon-type="PDSCheckmarkCircleFill" class="success-icon--2Zvcy icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSCheckmarkCircleFill"></use></svg></span><span><div class="content-wrapper--B7mAG" data-desc="false" style="margin-left: 44px; padding-right: 20px;"><div class="title-wrapper--3bQQ2">' + msg + '<div class="desc-wrapper--218x0"></div></div></div></span></div></div>'
         if ($element.length) {
-            $element.append('<div class="aDrive-notice"><div class="aDrive-notice-content"><div class="aDrive-custom-content aDrive-success"><span data-role="icon" data-render-as="svg" data-icon-type="PDSCheckmarkCircleFill" class="success-icon--2Zvcy icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSCheckmarkCircleFill"></use></svg></span><span><div class="content-wrapper--B7mAG" data-desc="false" style="margin-left: 44px; padding-right: 20px;"><div class="title-wrapper--3bQQ2">' + msg + '<div class="desc-wrapper--218x0"></div></div></div></span></div></div>');
+            $element.append(elementhtml);
         }
         else {
-            $(document.body).append('<div class="aDrive"><div><div class="aDrive-notice"><div class="aDrive-notice-content"><div class="aDrive-custom-content aDrive-success"><span data-role="icon" data-render-as="svg" data-icon-type="PDSCheckmarkCircleFill" class="success-icon--2Zvcy icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSCheckmarkCircleFill"></use></svg></span><span><div class="content-wrapper--B7mAG" data-desc="false" style="margin-left: 44px; padding-right: 20px;"><div class="title-wrapper--3bQQ2">' + msg + '<div class="desc-wrapper--218x0"></div></div></div></span></div></div></div></div></div>');
+            $(document.body).append('<div><div class="aDrive"><div>'+elementhtml+'</div></div></div>');
         }
 
         setTimeout(function () {
@@ -2220,11 +2334,12 @@
         obj.hideTip();
 
         var $element = $(".aDrive div");
+        var elementhtml='<div class="aDrive-notice"><div class="aDrive-notice-content"><div class="aDrive-custom-content aDrive-error"><span data-role="icon" data-render-as="svg" data-icon-type="PDSCloseCircleFill" class="error-icon--1Ov4I icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSCloseCircleFill"></use></svg></span><span><div class="content-wrapper--B7mAG" data-desc="false" style="margin-left: 44px; padding-right: 20px;"><div class="title-wrapper--3bQQ2">' + msg + '<div class="desc-wrapper--218x0"></div></div></div></span></div></div></div>'
         if ($element.length) {
-            $element.append('<div class="aDrive-notice"><div class="aDrive-notice-content"><div class="aDrive-custom-content aDrive-error"><span data-role="icon" data-render-as="svg" data-icon-type="PDSCloseCircleFill" class="error-icon--1Ov4I icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSCloseCircleFill"></use></svg></span><span><div class="content-wrapper--B7mAG" data-desc="false" style="margin-left: 44px; padding-right: 20px;"><div class="title-wrapper--3bQQ2">' + msg + '<div class="desc-wrapper--218x0"></div></div></div></span></div></div></div>');
+            $element.append(elementhtml);
         }
         else {
-            $(document.body).append('<div><div class="aDrive"><div><div class="aDrive-notice"><div class="aDrive-notice-content"><div class="aDrive-custom-content aDrive-error"><span data-role="icon" data-render-as="svg" data-icon-type="PDSCloseCircleFill" class="error-icon--1Ov4I icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSCloseCircleFill"></use></svg></span><span><div class="content-wrapper--B7mAG" data-desc="false" style="margin-left: 44px; padding-right: 20px;"><div class="title-wrapper--3bQQ2">' + msg + '<div class="desc-wrapper--218x0"></div></div></div></span></div></div></div></div></div></div>');
+            $(document.body).append('<div><div class="aDrive"><div>'+elementhtml+'</div></div></div>');
         }
 
         setTimeout(function () {
@@ -2236,11 +2351,12 @@
         obj.hideTip();
 
         var $element = $(".aDrive div");
+        var elementhtml = '<div class="aDrive-notice"><div class="aDrive-notice-content"><div class="aDrive-custom-content aDrive-loading"><div></div><span><div class="content-wrapper--B7mAG" data-desc="false" style="margin-left: 20px; padding-right: 20px;"><div class="title-wrapper--3bQQ2">' + msg + '<div class="desc-wrapper--218x0"></div></div></div></span></div></div></div>'
         if ($element.length) {
-            $element.append('<div class="aDrive-notice"><div class="aDrive-notice-content"><div class="aDrive-custom-content aDrive-loading"><div></div><span><div class="content-wrapper--B7mAG" data-desc="false" style="margin-left: 20px; padding-right: 20px;"><div class="title-wrapper--3bQQ2">' + msg + '<div class="desc-wrapper--218x0"></div></div></div></span></div></div></div>');
+            $element.append(elementhtml);
         }
         else {
-            $(document.body).append('<div><div class="aDrive"><div><div class="aDrive-notice"><div class="aDrive-notice-content"><div class="aDrive-custom-content aDrive-loading"><div></div><span><div class="content-wrapper--B7mAG" data-desc="false" style="margin-left: 20px; padding-right: 20px;"><div class="title-wrapper--3bQQ2">' + msg + '<div class="desc-wrapper--218x0"></div></div></div></span></div></div></div></div></div></div>');
+            $(document.body).append('<div><div class="aDrive"><div>'+elementhtml+'</div></div></div>');
         }
 
         setTimeout(function () {
@@ -2380,6 +2496,7 @@
         var url = location.href;
         if (url.indexOf(".aliyundrive.com/s/") > 0) {
             obj.newTabOpen();
+            obj.filterNotice();
         }
         else if (url.indexOf(".aliyundrive.com/drive") > 0) {
             obj.customSharePwd();
