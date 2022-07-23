@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.1.4
-// @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, ...），支持自定义分享密码，支持原生播放器优化，...
+// @version      2.1.5
+// @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持原生播放器优化，...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
 // @match        https://www.aliyundrive.com/drive*
@@ -74,15 +74,10 @@
                         }
                     });
                 }
-
-                if ($(".ant-add-subtitle").length == 0) {
-                    $(".ant-dropdown-menu").append('<li class="ant-dropdown-menu-item ant-add-subtitle" role="menuitem"><div class="outer-menu--ihDUR"><div>添加本地字幕</div></div></li>');
-                }
             }
             else {
                 $(".ant-switch-lights").remove();
                 $(".ant-switch-player").remove();
-                $(".ant-add-subtitle").remove();
             }
         });
     };
@@ -91,8 +86,6 @@
         obj.switchLights();
 
         obj.switchPlayer();
-
-        obj.openLocalSubtitleFile();
     };
 
     obj.switchLights = function () {
@@ -156,21 +149,6 @@
 
             obj.setItem("default_player", $thisType);
             obj.autoPlayer();
-        });
-    };
-
-    obj.openLocalSubtitleFile = function () {
-        $(document).on("click", ".ant-add-subtitle", function(event) {
-            if (obj.getItem("default_player") == "NativePlayer") {
-                obj.showTipSuccess("暂不支持原生播放器");
-                return;
-            }
-
-            if ($("#addsubtitle").length == 0) {
-                $("body").append('<input id="addsubtitle" type="file" accept=".srt,.ass,.ssa,.vtt" style="display: none;">');
-            }
-
-            $("#addsubtitle").click();
         });
     };
 
@@ -413,15 +391,6 @@
                     text: "支持作者",
                     link: "https://pc-index-skin.cdn.bcebos.com/6cb0bccb31e49dc0dba6336167be0a18.png",
                 },
-                {
-                    text: '字幕设置',
-                    click: () => {
-                        obj.subtitleSetting();
-                        var menubox = $(".dplayer-menu.dplayer-menu-show");
-                        var properties = {left: menubox.css("left"), bottom: menubox.css("bottom")};
-                        $(".subtitle-setting-box").css(properties);
-                    },
-                },
             ],
             theme: "#b7daff"
         };
@@ -460,7 +429,7 @@
             });
 
             //默认全屏，回车切换网页全屏和浏览器全屏
-            player.fullScreen.request("web");
+            //player.fullScreen.request("web");
             localStorage.getItem("dplayer-isfullscreen") == "true" && player.fullScreen.request("browser");
             player.on("fullscreen", function () {
                 localStorage.setItem("dplayer-isfullscreen", true);
@@ -486,84 +455,136 @@
             return;
         }
         else {
-            var html = '<div class="dplayer-icons dplayer-comment-box subtitle-setting-box" style="display: block;z-index: 0;width: 204px;height: 0px;bottom: 99px;"><div class="dplayer-comment-setting-box dplayer-comment-setting-open" style="bottom: 0px;">';
-            html += '<div class="dplayer-info-panel-close" style="cursor: pointer;position:absolute;right:10px;top:10px;">[x]</div>';
-            html += '<div class="dplayer-comment-setting-color"><div class="dplayer-comment-setting-title">设置字幕颜色</div><label><input type="radio" name="dplayer-danmaku-color-1" value="#fff" checked=""><span style="background: #fff;"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#e54256"><span style="background: #e54256"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#ffe133"><span style="background: #ffe133"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#64DD17"><span style="background: #64DD17"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#39ccff"><span style="background: #39ccff"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#D500F9"><span style="background: #D500F9"></span></label></div>';
-            html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">设置字幕位置</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>上移</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0" checked=""><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>下移</span></label></div>';
-            html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">设置字幕大小</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>加大</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>减小</span></label></div>';
-            html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">设置字幕时间</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>前移</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>后移</span></label></div>';
+            var html = '<div class="dplayer-icons dplayer-comment-box subtitle-setting-box" style="display: block; z-index: 111; position: absolute; bottom: 10px;left:auto; right: 400px !important;"><div class="dplayer-comment-setting-box dplayer-comment-setting-open" >';
+            html += '<div class="dplayer-comment-setting-color"><div class="dplayer-comment-setting-title">字幕颜色<span>　</span><input type="text" class="color-value" style="height: 16px;width: 110px;font-size: 13px;color: black;text-align: center;"></div><label><input type="radio" name="dplayer-danmaku-color-1" value="#fff" checked=""><span style="background: #fff;"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#e54256"><span style="background: #e54256"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#ffe133"><span style="background: #ffe133"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#64DD17"><span style="background: #64DD17"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#39ccff"><span style="background: #39ccff"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#D500F9"><span style="background: #D500F9"></span></label></div>';
+            html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">字幕位置</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>上移</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0" checked=""><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>下移</span></label></div>';
+            html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">字幕大小</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>加大</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>减小</span></label></div>';
+            html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">字幕偏移<span class="offset-text" style="border: 0px;"></span>偏移量/s<input type="text" class="offset-value" style="height: 16px;width: 25px;font-size: 13px;color: black;text-align: center;"></div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>前移</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>后移</span></label></div>';
+            html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">更多字幕功能</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>本地字幕</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>待定</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>网络字幕</span></label></div>';
             html += '</div></div>';
             $(".dplayer-controller").append(html);
+            subSetBox = $(".subtitle-setting-box");
+            var colortxt=$(".color-value");
+            colortxt.val(localStorage.getItem("dplayer-subtitle-color")||"#ffe133")
+            colortxt.on('input propertychange', function(e) {
+                var color = colortxt.val();
+                color = color.replace(/[^#0-9a-fA-F]/g, "");//排除#和十六进制字符
+                color = color.replace(/^[0-9a-fA-F]/g, "");//排除非#开头
+                color = color.replace("#", "$@$").replace(/\#/g, "").replace("$@$", "#");//排除多个#
+                color = color.replace(/^#([0-9a-fA-F]{3,6}).*$/, '#$1');//排除十六进制字符长度超过6位
+
+                colortxt.val(color);
+                if (localStorage.getItem("dplayer-subtitle-color") != color) {
+                    localStorage.setItem("dplayer-subtitle-color", color);
+                    $(".dplayer-subtitle").css("color", color);
+                }
+            });
+            var txt=$(".offset-value");
+            txt.val("5");
+            txt.on('input propertychange', function(e) {
+                var text = txt.val().replace(/[^\d]/g, "");
+                txt.val(text);
+            });
         }
 
-        var player = obj.video_page.dPlayer
-        $(".subtitle-setting-box .dplayer-info-panel-close").on("click",function() {
-            $(".subtitle-setting-box").css("display", "none");
-        });
-        $(".subtitle-setting-box .dplayer-comment-setting-color input").on("click",function() {
+        $(".subtitle-setting-box .dplayer-comment-setting-color input[type='radio']").on("click",function() {
             var color = this.value;
             if (localStorage.getItem("dplayer-subtitle-color") != color) {
                 localStorage.setItem("dplayer-subtitle-color", color);
                 $(".dplayer-subtitle").css("color", color);
             }
+            colortxt.val(color)
         });
-        $(".subtitle-setting-box .dplayer-comment-setting-type input").on("click",function() {
+        $(".subtitle-setting-box .dplayer-comment-setting-type input[type='radio']").on("click",function() {
             var value = this.value;
             var $this = $(this), $name = $this.parent().parent().children(":first").text();
-            if ($name == "设置字幕位置") {
+            if ($name == "字幕位置") {
                 var bottom = Number(localStorage.getItem("dplayer-subtitle-bottom") || 10);
                 if (value == "0") {
-                    bottom = 10;
+                    localStorage.setItem("dplayer-subtitle-bottom", 10);
+                    $(".dplayer-subtitle").css("bottom", "10%");
                 }
                 else if (value == "1") {
                     bottom += 1;
+                    localStorage.setItem("dplayer-subtitle-bottom", bottom);
+                    $(".dplayer-subtitle").css("bottom", bottom + "%");
                 }
                 else if (value == "2") {
                     bottom -= 1;
+                    localStorage.setItem("dplayer-subtitle-bottom", bottom);
+                    $(".dplayer-subtitle").css("bottom", bottom + "%");
                 }
-                localStorage.setItem("dplayer-subtitle-bottom", bottom);
-                $(".dplayer-subtitle").css("bottom", bottom + "%");
-                player.notice("字幕位置 " + $this.next().text() + "：" + bottom + "%");
             }
-            else if ($name == "设置字幕大小") {
+            else if ($name == "字幕大小") {
                 var fontSize = Number(localStorage.getItem("dplayer-subtitle-fontSize") || 5);
                 if (value == "0") {
-                    fontSize = 5;
+                    localStorage.setItem("dplayer-subtitle-fontSize", 5);
+                    $(".dplayer-subtitle").css("font-size", "5vh");
                 }
                 else if (value == "1") {
                     fontSize += .1;
+                    localStorage.setItem("dplayer-subtitle-fontSize", fontSize);
+                    $(".dplayer-subtitle").css("font-size", fontSize + "vh");
                 }
                 else if (value == "2") {
                     fontSize -= .1;
+                    localStorage.setItem("dplayer-subtitle-fontSize", fontSize);
+                    $(".dplayer-subtitle").css("font-size", fontSize + "vh");
                 }
-                fontSize = fontSize.toFixed(1)
-                localStorage.setItem("dplayer-subtitle-fontSize", fontSize);
-                $(".dplayer-subtitle").css("font-size", fontSize + "vh");
-                player.notice("字幕大小 " + $this.next().text() + "：" + fontSize + "vh");
             }
-            else if ($name == "设置字幕时间") {
+            else if ($name.includes("字幕偏移")){
                 var video = document.querySelector("video");
                 if (video) {
                     var textTracks = video.textTracks;
                     var offsettime = obj.offsettime || 0;
+                    var offsetvalue = Number($(".offset-value").val())||5
                     if (value == "0") {
                         obj.offsettime = 0;
                     }
                     else if (value == "1") {
-                        obj.offsettime = offsettime - 5;
+                        obj.offsettime = offsettime - offsetvalue;
                     }
                     else if (value == "2") {
-                        obj.offsettime = offsettime + 5;
+                        obj.offsettime = offsettime + offsetvalue;
                     }
-                    player.notice("字幕时间 " + $this.next().text() + "：" + obj.offsettime + "秒");
+                    if(obj.offsettime==0){
+                        $(".offset-text").text("")
+                    }
+                    else{
+                        $(".offset-text").text(" ("+obj.offsettime+"s)")
+                    }
                     obj.subtitleOffset(textTracks);
+                }
+            }
+            else if ($name == "更多字幕功能") {
+                if (value == "0") {
+                    $this.next().text("。。。。");
+                    setTimeout (function () {
+                        $this.next().text("待定")
+                    }, 5000);
+                }
+                else if (value == "1") {
+                    if ($("#addsubtitle").length == 0) {
+                        $("body").append('<input id="addsubtitle" type="file" accept=".srt,.ass,.ssa,.vtt" style="display: none;">');
+                    }
+                    $("#addsubtitle").click();
+
+                    $this.next().text("请等待...");
+                    setTimeout (function () {
+                        $this.next().text("本地字幕")
+                    }, 5000);
+                }
+                else if (value == "2") {
+                    $this.next().text("。。。。");
+                    setTimeout (function () {
+                        $this.next().text("网络字幕")
+                    }, 5000);
                 }
             }
         });
     };
 
-    obj.subtitleOffset = function(textTrackList){
-        // 字幕时间偏移 代码贡献：https://greasyfork.org/zh-CN/users/795227-星峰
+    obj.subtitleOffset = function (textTrackList){
         var offsettime = obj.offsettime || 0;
         var subList = obj.video_page.subtitle_list;
         var index = obj.subListIndex || 0;
@@ -758,7 +779,20 @@
         var html = '<div class="dplayer-setting-item dplayer-setting-jumpend" style="display:none"><span class="dplayer-label">片尾(秒)</span><input type="text" name="dplayer-toggle" class="dplayer-toggle" style="height: 16px; font-size: 13px;"></div><div class="dplayer-setting-item dplayer-setting-jumpstart" style="display:none"><span class="dplayer-label">片头(秒)</span><input type="text" name="dplayer-toggle" class="dplayer-toggle" style="height: 16px; font-size: 13px;"></div><div class="dplayer-setting-item dplayer-setting-skipstart"><span class="dplayer-label">跳过片头片尾</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-skipstart" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
         html += '<div class="dplayer-setting-item dplayer-setting-autoposition"><span class="dplayer-label">自动记忆播放</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-autoposition" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
         $(".dplayer-setting-origin-panel").prepend(html);
+        html=` <div class="dplayer-setting-item dplayer-setting-subtitle">
+                        <span class="dplayer-label">字幕设置</span></div>
+                    </div>`
+        $(".dplayer-setting-origin-panel").append(html);
 
+        $(".dplayer-setting-subtitle").on("click", function() {
+            obj.subtitleSetting();
+        });
+        $(".dplayer-mask").on("click",function() {
+            if ($(".subtitle-setting-box").css("display") != "none") {
+                $(".subtitle-setting-box").toggle();
+                $(this).removeClass("dplayer-mask-show");
+            }
+        });
         var jumpstart = obj.getPlayMemory("jumpstart") || "60"; // 默认跳过片头
         var jumpend = obj.getPlayMemory("jumpend") || "130"; // 默认跳过片尾
         var skipstart = obj.getPlayMemory("skipstart");
@@ -1161,9 +1195,10 @@
                         textTrackList[i].mode = "hidden" || (textTrackList[i].mode = "hidden");
                     }
 
-                    sublist = obj.sortSubList(sublist);
-                    sublist = obj.fuseSubList(sublist);
-                    obj.video_page.subtitle_list = sublist;
+                    if (sublist.length > 1 && !["chi", "zho", "adj"].includes(sublist[0].language)) {
+                        sublist = obj.sortSubList(sublist);
+                        sublist = obj.fuseSubList(sublist);
+                    }
                     sublist.forEach(function (item, index) {
                         if (item.subarr) {
                             textTrackList[index] || video.addTextTrack("subtitles", item.label, item.language);
@@ -1302,16 +1337,21 @@
     };
 
     obj.sortSubList = function (sublist) {
-        var subs1 = [], subs2 = [];
-        sublist.forEach(function (item, index) {
-            if (["chi", "zho", "adj"].includes(item.language)) {
-                subs1.push(item);
+        var newSubList = [];
+        if (sublist[0] && sublist[0].subarr) {
+            if (["chi", "zho", "adj"].includes(sublist[0].language)) {
+                return sublist;
             }
-            else {
-                subs2.push(item);
-            }
-        });
-        return subs1.concat(subs2);
+            sublist.forEach(function (item, index) {
+                if (["chi", "zho", "adj"].includes(item.language)) {
+                    newSubList.unshift(item);
+                }
+                else {
+                    newSubList.push(item);
+                }
+            });
+        }
+        return newSubList;
     };
 
     obj.fuseSubList = function (sublist) {
@@ -1517,16 +1557,12 @@
                 if (!result.status || result.status == 200) {
                     var blob = result.response;
                     var reader = new FileReader();
-                    reader.readAsText(blob, "UTF-8");
+                    reader.readAsText(blob, 'UTF-8');
                     reader.onload = function(e) {
                         var result = reader.result;
-                        if (result.indexOf("�") > -1 && !reader.markGBK) {
-                            reader.markGBK = true;
+                        if (result.indexOf("�") > -1 && !reader.mark) {
+                            reader.mark = true;
                             return reader.readAsText(blob, "GBK");
-                        }
-                        else if (result.indexOf("") > -1 && !reader.markBIG5) {
-                            reader.markBIG5 = true;
-                            return reader.readAsText(blob, "BIG5");
                         }
                         callback && callback(result);
                     };
@@ -1788,6 +1824,7 @@
         html += '</div></div><div class="ant-modal-footer"><div class="footer--1r-ur"><div class="buttons--nBPeo">';
         html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi appreciation">👍 点个赞</button>';
         html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi idm-download">IDM 导出文件</button>';
+        html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi m3u-download">M3U 导出文件</button>';
         html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi aria2-download">Aria2 推送</button>';
         html += '</div></div></div></div></div></div></div>';
         $("body").append(html);
@@ -1806,6 +1843,16 @@
 
         fileList = fileList.filter(function (item) {
             return item.type == "file";
+        });
+        var folder=$(".breadcrumb--1J7mk").children(":first").children(":last").attr('data-label');
+        $(".ant-modal-Link .m3u-download").on("click", function () {
+            if (fileList.length) {
+                var content = "#EXTM3U\r\n";
+                fileList.forEach(function (item, index) {
+                    content += ["#EXTINF:0,"+item.name, item.download_url].join("\r\n") + "\r\n";
+                });
+                obj.downloadFile(content, (folder||"M3U 导出文件")+".m3u");
+            }
         });
         $(".ant-modal-Link .idm-download").on("click", function () {
             if (fileList.length) {
