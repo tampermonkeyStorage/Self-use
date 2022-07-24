@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.1.5
+// @version      2.1.6
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持原生播放器优化，...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -321,7 +321,7 @@
             return;
         }
 
-        var quality = [], defaultQuality = 0;
+        var quality = [], defaultQuality, localQuality = localStorage.getItem("dplayer-quality");;
         var play_info = obj.video_page.play_info || {};
         var video_preview_play_info = play_info.video_preview_play_info || {};
         var task_list = video_preview_play_info.live_transcoding_task_list;
@@ -332,14 +332,16 @@
                 SD: "540 标清",
                 LD: "360 流畅"
             };
-            task_list.forEach(function (item) {
+            task_list.forEach(function (item, index) {
+                var name = pds[item.template_id];
+                localQuality ? localQuality == name && (defaultQuality = index) : defaultQuality = index;
                 quality.push({
-                    name: pds[item.template_id],
+                    name: name,
                     url: item.url || item.preview_url,
                     type: "hls"
                 });
             });
-            defaultQuality = task_list.length - 1;
+            defaultQuality == undefined && (defaultQuality = task_list.length - 1);
         }
         else {
             obj.showTipError("获取播放信息失败：请刷新网页重试");
@@ -347,7 +349,6 @@
         }
 
         if (obj.video_page.file_id == play_info.file_id) {
-            obj.hasMemoryDisplay = true;
             if (obj.video_page.dPlayer && obj.video_page.dPlayer.destroy) {
                 var video = obj.video_page.dPlayer.video;
                 obj.video_page.attributes = {
@@ -360,7 +361,6 @@
             }
         }
         else {
-            obj.hasMemoryDisplay = false;
             obj.offsettime = 0;
 
             obj.video_page.file_id = play_info.file_id;
@@ -427,6 +427,9 @@
                 player.notice("播放速度：" + player.video.playbackRate);
                 localStorage.getItem("dplayer-speed") == player.video.playbackRate || localStorage.setItem("dplayer-speed", player.video.playbackRate);
             });
+            player.on("quality_end", function () {
+                localStorage.setItem("dplayer-quality", player.quality.name);
+            });
 
             //默认全屏，回车切换网页全屏和浏览器全屏
             //player.fullScreen.request("web");
@@ -456,15 +459,16 @@
         }
         else {
             var html = '<div class="dplayer-icons dplayer-comment-box subtitle-setting-box" style="display: block; z-index: 111; position: absolute; bottom: 10px;left:auto; right: 400px !important;"><div class="dplayer-comment-setting-box dplayer-comment-setting-open" >';
-            html += '<div class="dplayer-comment-setting-color"><div class="dplayer-comment-setting-title">字幕颜色<span>　</span><input type="text" class="color-value" style="height: 16px;width: 110px;font-size: 13px;color: black;text-align: center;"></div><label><input type="radio" name="dplayer-danmaku-color-1" value="#fff" checked=""><span style="background: #fff;"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#e54256"><span style="background: #e54256"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#ffe133"><span style="background: #ffe133"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#64DD17"><span style="background: #64DD17"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#39ccff"><span style="background: #39ccff"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#D500F9"><span style="background: #D500F9"></span></label></div>';
+            html += '<div class="dplayer-comment-setting-color"><div class="dplayer-comment-setting-title">字幕颜色<input type="text" class="color-value" style="height: 16px;width: 70px;font-size: 14px;border: 1px solid #fff;border-radius: 3px;margin-left: 70px;color: black;text-align: center;"></div><label><input type="radio" name="dplayer-danmaku-color-1" value="#fff" checked=""><span style="background: #fff;"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#e54256"><span style="background: #e54256"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#ffe133"><span style="background: #ffe133"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#64DD17"><span style="background: #64DD17"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#39ccff"><span style="background: #39ccff"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#D500F9"><span style="background: #D500F9"></span></label></div>';
             html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">字幕位置</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>上移</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0" checked=""><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>下移</span></label></div>';
             html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">字幕大小</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>加大</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>减小</span></label></div>';
-            html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">字幕偏移<span class="offset-text" style="border: 0px;"></span>偏移量/s<input type="text" class="offset-value" style="height: 16px;width: 25px;font-size: 13px;color: black;text-align: center;"></div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>前移</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>后移</span></label></div>';
+            html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">字幕偏移<span class="offset-text" style="border: 0px;width: 54px;"></span>偏移量(S)：<input type="text" class="offset-value" style="height: 14px;width: 22px;font-size: 13px;border: 1px solid #fff;border-radius: 3px;color: black;text-align: center;"></div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>前移</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>后移</span></label></div>';
             html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">更多字幕功能</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>本地字幕</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>待定</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>网络字幕</span></label></div>';
             html += '</div></div>';
             $(".dplayer-controller").append(html);
+
             subSetBox = $(".subtitle-setting-box");
-            var colortxt=$(".color-value");
+            var colortxt = $(".color-value");
             colortxt.val(localStorage.getItem("dplayer-subtitle-color")||"#ffe133")
             colortxt.on('input propertychange', function(e) {
                 var color = colortxt.val();
@@ -479,7 +483,7 @@
                     $(".dplayer-subtitle").css("color", color);
                 }
             });
-            var txt=$(".offset-value");
+            var txt = $(".offset-value");
             txt.val("5");
             txt.on('input propertychange', function(e) {
                 var text = txt.val().replace(/[^\d]/g, "");
@@ -551,14 +555,14 @@
                         $(".offset-text").text("")
                     }
                     else{
-                        $(".offset-text").text(" ("+obj.offsettime+"s)")
+                        $(".offset-text").text("["+ obj.offsettime +"s]")
                     }
                     obj.subtitleOffset(textTracks);
                 }
             }
             else if ($name == "更多字幕功能") {
                 if (value == "0") {
-                    $this.next().text("。。。。");
+                    $this.next().text("暂无");
                     setTimeout (function () {
                         $this.next().text("待定")
                     }, 5000);
@@ -575,7 +579,7 @@
                     }, 5000);
                 }
                 else if (value == "2") {
-                    $this.next().text("。。。。");
+                    $this.next().text("暂无");
                     setTimeout (function () {
                         $this.next().text("网络字幕")
                     }, 5000);
@@ -658,6 +662,7 @@
 
     obj.memoryPlay = function () {
         if (obj.hasMemoryDisplay) return;
+        obj.hasMemoryDisplay = true;
 
         var jumpstart = obj.getPlayMemory("jumpstart") || "60"; // 默认跳过片头
         var jumpend = obj.getPlayMemory("jumpend") || "130"; // 默认跳过片尾
@@ -707,18 +712,18 @@
             if (document.visibilityState === "hidden") {
                 var currentTime = player.video.currentTime;
                 currentTime && obj.setPlayMemory(sign, currentTime, duration, jumpstart, jumpend);
-                obj.setPlayMemory("lastname", file.name);
+                obj.setPlayMemory("last_file_id", sign);
             }
         };
         window.onbeforeunload = function () {
             var currentTime = player.video.currentTime;
             currentTime && obj.setPlayMemory(sign, currentTime, duration, jumpstart, jumpend);
-            obj.setPlayMemory("lastname", file.name);
+            obj.setPlayMemory("last_file_id", sign);
         };
         $("[data-icon-type=PDSClose]").on("click", function () {
             var currentTime = player.video.currentTime;
             currentTime && obj.setPlayMemory(sign, currentTime, duration, jumpstart, jumpend);
-            obj.setPlayMemory("lastname", file.name);
+            obj.setPlayMemory("last_file_id", sign);
             obj.autoLastBtn();
         });
 
@@ -776,12 +781,10 @@
         //将片头片尾放在设置里 代码贡献：https://greasyfork.org/zh-CN/users/795227-星峰
         if ($(".dplayer-setting-skipstart").length) return;
 
-        var html = '<div class="dplayer-setting-item dplayer-setting-jumpend" style="display:none"><span class="dplayer-label">片尾(秒)</span><input type="text" name="dplayer-toggle" class="dplayer-toggle" style="height: 16px; font-size: 13px;"></div><div class="dplayer-setting-item dplayer-setting-jumpstart" style="display:none"><span class="dplayer-label">片头(秒)</span><input type="text" name="dplayer-toggle" class="dplayer-toggle" style="height: 16px; font-size: 13px;"></div><div class="dplayer-setting-item dplayer-setting-skipstart"><span class="dplayer-label">跳过片头片尾</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-skipstart" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
+        var html = '<div class="dplayer-setting-item dplayer-setting-jumpend" style="display:none"><span class="dplayer-label">片尾(秒)</span><input type="text" name="dplayer-toggle" class="dplayer-toggle" style="height: 15px; font-size: 13px;border: 1px solid #fff;border-radius: 15px;"></div><div class="dplayer-setting-item dplayer-setting-jumpstart" style="display:none"><span class="dplayer-label">片头(秒)</span><input type="text" name="dplayer-toggle" class="dplayer-toggle" style="height: 15px; font-size: 13px;border: 1px solid #fff;border-radius: 15px;"></div><div class="dplayer-setting-item dplayer-setting-skipstart"><span class="dplayer-label">跳过片头片尾</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-skipstart" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
         html += '<div class="dplayer-setting-item dplayer-setting-autoposition"><span class="dplayer-label">自动记忆播放</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-autoposition" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
         $(".dplayer-setting-origin-panel").prepend(html);
-        html=` <div class="dplayer-setting-item dplayer-setting-subtitle">
-                        <span class="dplayer-label">字幕设置</span></div>
-                    </div>`
+        html =` <div class="dplayer-setting-item dplayer-setting-subtitle"><span class="dplayer-label">字幕设置</span></div></div>`
         $(".dplayer-setting-origin-panel").append(html);
 
         $(".dplayer-setting-subtitle").on("click", function() {
@@ -830,7 +833,7 @@
             skipstart = !check.is(":checked");
             $(".dplayer-toggle-setting-input-skipstart").get(0).checked = skipstart;
             obj.setPlayMemory("skipstart", skipstart);
-            if ( skipstart) {
+            if (skipstart) {
                 $(".dplayer-setting-jumpstart").show()
                 $(".dplayer-setting-jumpend").show()
                 txt.val(jumpstart);
@@ -957,8 +960,7 @@
                 $this.css("opacity", "0.4");
                 $this.siblings().attr("data-is-current", "false");
                 $this.siblings().css("opacity", "1");
-                obj.setPlayMemory("lastname",videoList[$this.index()].name);
-                obj.playByScroll();
+                obj.playByFileId(videoList[$this.index()].file_id);
             }
         });
         $(".dplayer-mask").on("click",function() {
@@ -995,34 +997,63 @@
         else{
             playfiletmp = playfile[playfile.length - 1];
         }
-        playfiletmp ? obj.playByScroll(playfiletmp.name) : obj.video_page.dPlayer.notice((type == 'last' ? "上" : "下") + "一集已经没有了");
+        playfiletmp ? obj.playByFileId(playfiletmp.file_id) : obj.video_page.dPlayer.notice((type == 'last' ? "上" : "下") + "一集已经没有了");
     };
 
-    obj.playByScroll = function(lastplay){
+    obj.playByFileId = function(file_id){
+        file_id = file_id || obj.getPlayMemory("last_file_id");
+        if (file_id) {
+            obj.video_page.file_id = file_id;
+            obj.getVideoPreviewPlayInfo();
+            obj.video_page.dPlayer = null;
+            obj.hasMemoryDisplay = false;
+
+            var fileList = obj.file_page.items
+            , file = fileList.find(function (item, index) {
+                return item.file_id == file_id;
+            })
+            , name = file ? file.name : "";
+            name && $(".header-file-name--CN_fq, .text--2KGvI").text(name);
+        }
+    };
+
+    obj.playByScroll = function(){
         // 继续上次播放 代码贡献：https://greasyfork.org/zh-CN/users/795227-星峰
-        lastplay = lastplay || obj.getPlayMemory("lastname");
+        var last_file_id = obj.getPlayMemory("last_file_id");
+        var fileList = obj.file_page.items
+        , file = fileList.find(function (item, index) {
+            return item.file_id == last_file_id;
+        })
+        , lastplay = file ? file.name : "";
+
+        var soretype=$('.switch-wrapper--1yEfx .icon--d-ejA').attr("data-icon-type");
         var topp = 0;
-        var scrollerdiv = $(".scroller--2hMGk");
+        var scrollerdiv = $(".scroller--2hMGk,.grid-scroll--3o7hp");
         var he = 0;
         var url = location.href;
         if (url.indexOf(".aliyundrive.com/s/") > 0) {
-            he = $(".thead--JwBMm").next().children().height();
+            he = $(".thead--JwBMm,.top-element-wrapper--1iOwf").next().children().height();
         }
         else if (url.indexOf(".aliyundrive.com/drive") > 0) {
             he = scrollerdiv.children().children().height();
         }
         //通过文件列表定位上次播放文件
-        var fileList = obj.file_page.items
+        var rownum=1;
+        if(soretype=='PDSDrag'){//平铺模式
+            var lastbox=$(".grid-card-container.first-row-item--AGVET:last");
+            rownum=Number( lastbox.attr('data-index'))+1;
+        }
+
         for(var i = 0; i < fileList.length; i++) {
             var tmptext = fileList[i].name;
             if (tmptext == lastplay) {
-                topp = (i * (he / fileList.length));
+                topp = (parseInt(i/rownum) * (he / Math.ceil(fileList.length/rownum)));
             }
         }
         scrollerdiv.scrollTop(topp);
         //移动滚动条后点击上次播放文件
         setTimeout(() => {
-            $(".text-primary--3DHOJ").each( function () {
+            $(".text-primary--3DHOJ,.title--3x5k2").each( function () {
                 var tmptext = this.textContent;
                 if(tmptext == lastplay){
                     this.click();
@@ -1032,7 +1063,7 @@
     };
 
     obj.autoLastBtn = function () {
-        var lastplay = obj.getPlayMemory("lastname");
+        var lastplay = obj.getPlayMemory("last_file_id");
         if (lastplay) {
             $(".button-last--batch").show();
         }
@@ -1086,8 +1117,17 @@
         }
     };
 
+    obj.getVideoPreviewPlayInfo = function () {
+        if (obj.isHomePage()) {
+            obj.get_video_preview_play_info();
+        }
+        else {
+            obj.get_share_link_video_preview_play_info();
+        }
+    };
+
     obj.get_share_link_video_preview_play_info = function (callback) {
-        var token = obj.getItem("token") || {}, share_id = obj.getShareId(), file_id = obj.video_page.play_info.file_id;
+        var token = obj.getItem("token") || {}, share_id = obj.getShareId(), file_id = obj.video_page.file_id || obj.video_page.play_info.file_id;
         $.ajax({
             type: "post",
             url: "https://api.aliyundrive.com/v2/file/get_share_link_video_preview_play_info",
@@ -1141,7 +1181,7 @@
     };
 
     obj.get_video_preview_play_info = function (callback) {
-        var token = obj.getItem("token") || {}, file_id = obj.video_page.play_info.file_id;
+        var token = obj.getItem("token") || {}, file_id = obj.video_page.file_id || obj.video_page.play_info.file_id;
         $.ajax({
             type: "post",
             url: "https://api.aliyundrive.com/v2/file/get_video_preview_play_info",
