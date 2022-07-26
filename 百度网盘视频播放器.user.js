@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.2.3
+// @version      0.2.4
 // @description  播放器替换为DPlayer
 // @author       You
 // @match        https://pan.baidu.com/s/*
@@ -214,8 +214,6 @@
                 dPlayerNode.setAttribute("id", "dplayer");
                 dPlayerNode.setAttribute("style", "width: 100%; height: 100%;");
                 videoNode.parentNode.replaceChild(dPlayerNode, videoNode);
-                obj.getJquery()("#layoutMain").attr("style", "z-index: 42;");
-                obj.getJquery()(".header-box").remove();
             }
         }
         else {
@@ -240,13 +238,12 @@
                 quality: quality,
                 defaultQuality: defaultQuality
             },
-            autoPosition: false, // 记忆播放 如需自动跳转至上次播放位置，值设为 true
             autoplay: true,
             screenshot: true,
             hotkey: true,
             airplay: true,
             volume: 1.0,
-            playbackSpeed: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 4],
+            playbackSpeed: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3, 4],
             contextmenu: [
                 {
                     text: "作者加油",
@@ -257,14 +254,16 @@
         };
 
         try {
+            var $ = obj.getJquery();
+            $(dPlayerNode).nextAll().remove();
+            location.pathname == "/mbox/streampage" && $(dPlayerNode).css("height", "480px");
+            $("#layoutMain").attr("style", "z-index: 42;");
+            $(".header-box").remove();
+
             var dPlayer = new unsafeWindow.DPlayer(options);
-            obj.getJquery()(dPlayerNode).nextAll().remove();
-            location.pathname == "/mbox/streampage" && obj.getJquery()(dPlayerNode).css("height", "480px");
-
             dPlayer.on("loadstart", function () {
-                if (this.hasDurationDisplay) return;
-                this.hasDurationDisplay = true;
-
+                if (obj.hasDurationDisplay) return;
+                obj.hasDurationDisplay = true;
                 setTimeout(function () {
                     if (isNaN(dPlayer.video.duration)) {
                         location.reload();
@@ -273,6 +272,7 @@
             });
             dPlayer.on("durationchange", function () {
                 obj.memoryPlay(dPlayer);
+                obj.playSetting();
             });
 
             dPlayer.speed(localStorage.getItem("dplayer-speed") || 1);
@@ -284,11 +284,53 @@
                 localStorage.setItem("dplayer-quality", dPlayer.quality.name);
             });
 
+            if (localStorage.getItem("dplayer-isfullscreen") == "true") {
+                dPlayer.fullScreen.request("web");
+            }
+            dPlayer.on("fullscreen", function () {
+                localStorage.setItem("dplayer-isfullscreen", true);
+            });
+            dPlayer.on("fullscreen_cancel", function () {
+                dPlayer.fullScreen.isFullScreen("web") || localStorage.removeItem("dplayer-isfullscreen");
+            });
+            $(document).on("click", ".dplayer .dplayer-full", function(event) {
+                var isFullScreen = dPlayer.fullScreen.isFullScreen("web") || dPlayer.fullScreen.isFullScreen("browser");
+                localStorage.setItem("dplayer-isfullscreen", isFullScreen);
+            });
+
+            dPlayer.on("ended", function () {
+                obj.autoPlayNext();
+            });
+
             obj.resetPlayer();
             obj.msg("DPlayer 播放器创建成功");
         } catch (error) {
             obj.msg("播放器创建失败", "failure");
         }
+    };
+
+    obj.playSetting = function () {
+        var $ = obj.getJquery();
+        if ($(".dplayer-setting-autoposition").length) return;
+
+        var html = '<div class="dplayer-setting-item dplayer-setting-autoposition"><span class="dplayer-label">自动记忆播放</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-autoposition" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
+        html += '<div class="dplayer-setting-item dplayer-setting-autoplaynext"><span class="dplayer-label">自动连续播放</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-autoplaynext" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
+        $(".dplayer-setting-origin-panel").append(html);
+
+        localStorage.getItem("dplayer-autoposition") == "true" && ($(".dplayer-toggle-setting-input-autoposition").get(0).checked = true);
+        localStorage.getItem("dplayer-autoplaynext") || localStorage.setItem("dplayer-autoplaynext", true);
+        localStorage.getItem("dplayer-autoplaynext") == "true" && ($(".dplayer-toggle-setting-input-autoplaynext").get(0).checked = true);
+
+        $(".dplayer-setting-autoposition").on("click", function() {
+            var autoposition = !$(".dplayer-toggle-setting-input-autoposition").is(":checked");
+            $(".dplayer-toggle-setting-input-autoposition").get(0).checked = autoposition;
+            localStorage.setItem("dplayer-autoposition", autoposition);
+        });
+        $(".dplayer-setting-autoplaynext").on("click", function() {
+            var autoplaynext = !$(".dplayer-toggle-setting-input-autoplaynext").is(":checked");
+            $(".dplayer-toggle-setting-input-autoplaynext").get(0).checked = autoplaynext;
+            localStorage.setItem("dplayer-autoplaynext", autoplaynext);
+        });
     };
 
     obj.memoryPlay = function (player) {
@@ -300,14 +342,14 @@
         , sign = file.md5 || file.fs_id
         , memoryTime = getFilePosition(sign);
         if (memoryTime && parseInt(memoryTime)) {
-            var autoPosition = player.options.autoPosition;
+            var autoPosition = localStorage.getItem("dplayer-autoposition") == "true";
             if (autoPosition) {
                 player.seek(memoryTime);
             }
             else {
-                var formatTime = formatVideoTime(memoryTime)
+                var formatTime = formatVideoTime(memoryTime);
                 var $ = obj.getJquery();
-                $(player.container).after('<div class="memory-play-wrap" style="display: block;position: absolute;left: 30px;bottom: 60px;font-size: 15px;padding: 7px;border-radius: 3px;color: #fff;z-index:100;background: rgba(0,0,0,.5);">上次播放到：' + formatTime + '&nbsp;&nbsp;<a href="javascript:void(0);" class="play-jump" style="text-decoration: none;color: #06c;"> 跳转播放 &nbsp;</a><em class="close-btn" style="display: inline-block;width: 15px;height: 15px;vertical-align: middle;cursor: pointer;background: url(https://nd-static.bdstatic.com/m-static/disk-share/widget/pageModule/share-file-main/fileType/video/img/video-flash-closebtn_15f0e97.png) no-repeat;"></em></div>');
+                $(player.container).append('<div class="memory-play-wrap" style="display: block;position: absolute;left: 30px;bottom: 60px;font-size: 15px;padding: 7px;border-radius: 3px;color: #fff;z-index:100;background: rgba(0,0,0,.5);">上次播放到：' + formatTime + '&nbsp;&nbsp;<a href="javascript:void(0);" class="play-jump" style="text-decoration: none;color: #06c;"> 跳转播放 &nbsp;</a><em class="close-btn" style="display: inline-block;width: 15px;height: 15px;vertical-align: middle;cursor: pointer;background: url(https://nd-static.bdstatic.com/m-static/disk-share/widget/pageModule/share-file-main/fileType/video/img/video-flash-closebtn_15f0e97.png) no-repeat;"></em></div>');
                 var memoryTimeout = setTimeout(function () {
                     $(".memory-play-wrap").remove();
                 }, 15000);
@@ -349,6 +391,25 @@
             minute < 10 && (minute = "0" + minute);
             second < 10 && (second = "0" + second);
             return hour === 0 ? minute + ":" + second : hour + ":" + minute + ":" + second;
+        }
+    };
+
+    obj.autoPlayNext = function () {
+        var autoPlayNext = localStorage.getItem("dplayer-autoplaynext") == "true";
+        if (!autoPlayNext) return;
+
+        var listContainer = obj.getJquery()("#videoListView")
+        , currentplay = listContainer.find(".currentplay")
+        , nextSibling = currentplay.next();
+        if (nextSibling.length) {
+            var instanceForSystem = obj.require("system-core:context/context.js").instanceForSystem
+            , router = instanceForSystem.router
+            , path = router.query.get("path")
+            , t = router.query.get("t");
+
+            var title = nextSibling.attr("title")
+            , nextpath = path.split("/").slice(1, -1).concat(title).join("/");
+            location.href = "https://pan.baidu.com/play/video#/video?path=" + encodeURIComponent("/" + nextpath);
         }
     };
 
