@@ -6,7 +6,7 @@
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
 // @match        *://*/*
-// @icon         https://scpic.chinaz.net/Files/pic/icons128/7231/o4.png
+// @icon         https://img1.baidu.com/it/u=2180966356,3803679341&fm=253&fmt=auto&app=120&f=JPEG?w=500&h=375
 // @connect      baidu.com
 // @connect      fryaisjx.lc-cn-n1-shared.com
 // @require      https://cdn.staticfile.org/jquery/3.6.0/jquery.min.js
