@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.5.1
+// @version      0.5.2
 // @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云】 功能概述：【[1]：网盘页面增加资源搜索快捷方式】【[2]：[资源站点]自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地缓存数据库搜索】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -107,6 +107,9 @@
             var shareId = shareData.share_id;
             shareList[shareId] = shareData;
             GM_setValue("share_list", shareList);
+            shareData.share_name && !shareData.share_pwd && obj.storeSharePwd(Object.assign({}, shareData, {
+                share_source: shareData.share_source + "_share"
+            }));
         }
     };
 
@@ -681,38 +684,8 @@
                 },
                 // 《9》需要扫码
                 {
-                    name: "小马盘",
-                    link: "http://www.xiaomapan.com/#/main/search?kw=%s",
-                    type: 9,
-                },
-                {
-                    name: "大力盘",
-                    link: "http://www.dalipan.com/#/main/search?kw=%s",
-                    type: 9,
-                },
-                {
-                    name: "大圣盘",
-                    link: "http://www.dashengpan.com/#/main/search?kw=%s",
-                    type: 9,
-                },
-                {
-                    name: "白马盘",
-                    link: "https://www.baimapan.com/#/main/search?keyword=%s",
-                    type: 9,
-                },
-                {
-                    name: "玉白盘",
-                    link: "https://www.yubaipan.com/#/main/search?keyword=%s",
-                    type: 9,
-                },
-                {
                     name: "飞飞盘",
                     link: "http://www.feifeipan.com/#/main/search?kw=%s",
-                    type: 9,
-                },
-                {
-                    name: "飞猪盘",
-                    link: "http://www.feizhupan.com/#/main/search?keyword=%s",
                     type: 9,
                 },
                 {
@@ -908,7 +881,7 @@
     };
 
     baidu.storeSharePwd = function() {
-        unsafeWindow.require("base:widget/libs/jquerypacket.js")(document).ajaxComplete(function(event, xhr, options) {
+        unsafeWindow.$ && unsafeWindow.$(document).ajaxComplete(function(event, xhr, options) {
             var requestUrl = options.url;
             if (requestUrl.indexOf("/share/verify") >= 0) {
                 var response = xhr.responseJSON;
@@ -1234,15 +1207,12 @@
     };
 
     lanzous.storeSharePwd = function() {
-        unsafeWindow.$(document).ajaxComplete(function (event, xhr, options) {
+        unsafeWindow.$ && unsafeWindow.$(document).ajaxComplete(function (event, xhr, options) {
             var requestUrl = options.url;
             if (requestUrl.indexOf("/ajaxm.php") >= 0 || requestUrl.indexOf("/filemoreajax.php") >= 0) {
                 var response = JSON.parse(xhr.response);
                 if (response && response.zt == 1) {
                     var sharePwd = decodeURIComponent((options.data.match(/&pwd=([^&]+)/) || options.data.match(/&p=([^&]+)/) || [])[1] || "");
-                    if (!sharePwd) {
-                        return;
-                    }
                     var shareId = obj.getShareId();
                     var shareData = obj.getSharePwdLocal(shareId);
                     if (typeof shareData == "object" && shareData.share_name) {
@@ -1251,22 +1221,22 @@
                     shareData = Object.assign(shareData || {}, {
                         share_source: "lanzous",
                         share_id: shareId,
-                        share_pwd: sharePwd,
                         share_url: decodeURIComponent(location.href),
                         share_name: document.title || $("#name a").text()
                     });
+                    sharePwd && (shareData.share_pwd = sharePwd);
                     shareData.origin_url || !document.referrer || document.referrer.includes(location.host) || (shareData.origin_url = decodeURIComponent(document.referrer));
-                    obj.setSharePwdLocal(shareData);
                     obj.share_pwd == sharePwd || obj.storeSharePwd(shareData);
+                    obj.setSharePwdLocal(shareData);
                 }
             }
-        });
+        }) || setTimeout(lanzous.storeSharePwd, 500);
     };
 
     lanzous.autoPaddingPwd = function() {
+        lanzous.storeSharePwd();
         var shareId = obj.getShareId();
         if ($("#pwd").length) {
-            lanzous.storeSharePwd();
             obj.querySharePwd("lanzous", shareId, function (response) {
                 if (response instanceof Object) {
                     obj.showTipSuccess("查询密码成功");
@@ -1357,9 +1327,6 @@
                         return;
                     }
                     var sharePwd = (responseURL.match(/accessCode=([\w]{4})/) || [])[1];
-                    if (!sharePwd) {
-                        return;
-                    }
                     var shareId = obj.getShareId();
                     var shareData = obj.getSharePwdLocal(shareId);
                     if (typeof shareData == "object" && shareData.share_name) {
@@ -1368,13 +1335,16 @@
                     shareData = Object.assign(shareData || {}, {
                         share_source: "ty189",
                         share_id: shareId,
-                        share_pwd: sharePwd,
                         share_url: decodeURIComponent(location.href),
                         share_name: document.title.split("|")[0].replace(" 免费高速下载", "")
                     });
                     shareData.origin_url || !document.referrer || document.referrer.includes(location.host) || (shareData.origin_url = decodeURIComponent(document.referrer));
-                    obj.setSharePwdLocal(shareData);
+                    sharePwd && (shareData.share_pwd = sharePwd);
                     obj.share_pwd == sharePwd || obj.storeSharePwd(shareData);
+                    var getCookie = unsafeWindow._ux21cn.cookie.get;
+                    sharePwd = getCookie("share_" + shareId) || getCookie("shareId_" + shareId);
+                    sharePwd && (shareData.share_pwd = sharePwd);
+                    obj.setSharePwdLocal(shareData);
                 }
             });
             open.apply(this, arguments);
@@ -1399,7 +1369,6 @@
                     var shareId = obj.getShareId();
                     var shareIdCookie = getCookie("share_" + shareId) || getCookie("shareId_" + shareId);
                     if (!shareIdCookie) {
-                        ty189.storeSharePwd();
                         obj.querySharePwd("ty189", shareId, function(response) {
                             if (response instanceof Object) {
                                 obj.showTipSuccess("查询提取码成功");
@@ -1459,6 +1428,7 @@
         if (obj.isInArray(hosts)) {
             var url = window.location.href;
             if (url.indexOf("/web/share") > 0 || url.indexOf("/share.html") > 0) {
+                ty189.storeSharePwd();
                 ty189.autoPaddingPwd();
                 ty189.initButtonShare();
                 obj.initDialog();
@@ -1529,6 +1499,7 @@
                             }
                             aliyundrive.share_id = null;
                         }
+                        aliyundrive.initButtonShare();
                     }
                 }
             });
@@ -1607,7 +1578,6 @@
             if (url.indexOf(".aliyundrive.com/s/") > 0) {
                 aliyundrive.storeSharePwd();
                 aliyundrive.autoPaddingPwd();
-                aliyundrive.initButtonShare();
                 obj.initDialog();
             }
             else if (url.indexOf(".aliyundrive.com/drive") > 0) {
@@ -1635,10 +1605,6 @@
         $(document.body).one("DOMNodeInserted", ".share-file-list", function () {
             var shareId = obj.getShareId();
             var sharePwd = localStorage["share_passcode_" + shareId];
-            if (!sharePwd) {
-                return;
-            }
-
             var shareData = obj.getSharePwdLocal(shareId);
             if (typeof shareData == "object" && shareData.share_name) {
                 return;
@@ -1646,19 +1612,18 @@
             shareData = Object.assign(shareData || {}, {
                 share_source: "xunlei",
                 share_id: shareId,
-                share_pwd: sharePwd,
                 share_url: location.href.replace(location.search, ""),
                 share_name: $(".share-file-list").find("a:first").text()
             });
             shareData.origin_url || !document.referrer || document.referrer.includes(location.host) || (shareData.origin_url = decodeURIComponent(document.referrer));
-            obj.setSharePwdLocal(shareData);
+            sharePwd && (shareData.share_pwd = sharePwd);
             sharePwd == obj.share_pwd || obj.storeSharePwd(shareData);
+            obj.setSharePwdLocal(shareData);
         })
     };
 
     xunlei.autoPaddingPwd = function() {
         $(document).one("DOMNodeInserted", ".pass-body", function () {
-            xunlei.storeSharePwd();
             var shareId = obj.getShareId();
             obj.querySharePwd("xunlei", shareId, function(response) {
                 if (response instanceof Object) {
@@ -1710,6 +1675,7 @@
         var url = location.href;
         if (url.indexOf("pan.xunlei.com/") > 0) {
             if (url.indexOf("pan.xunlei.com/s/") > 0) {
+                xunlei.storeSharePwd();
                 xunlei.autoPaddingPwd();
                 xunlei.initButtonShare();
                 obj.initDialog();
@@ -1746,10 +1712,6 @@
                         return;
                     }
                     var sharePwd = (data.match(/pass=([^&]+)/) || [])[1];
-                    if (!sharePwd) {
-                        return;
-                    }
-
                     var shareId = obj.getShareId();
                     var shareData = obj.getSharePwdLocal(shareId);
                     if (typeof shareData == "object" && shareData.share_name) {
@@ -1758,7 +1720,6 @@
                     shareData = Object.assign(shareData || {}, {
                         share_source: "caiyun",
                         share_id: shareId,
-                        share_pwd: sharePwd,
                         share_url: decodeURIComponent(location.href),
                     });
                     if (response.data.caLst.outLinkCaInfo) {
@@ -1768,8 +1729,9 @@
                         shareData.share_name = Array.isArray(response.data.coLst.outLinkCoInfo) ? response.data.coLst.outLinkCoInfo[0].coName + "等" : response.data.coLst.outLinkCoInfo.coName;
                     }
                     shareData.origin_url || !document.referrer || document.referrer.includes(location.host) || (shareData.origin_url = decodeURIComponent(document.referrer));
-                    obj.setSharePwdLocal(shareData);
+                    sharePwd && (shareData.share_pwd = sharePwd);
                     sharePwd == obj.share_pwd || obj.storeSharePwd(shareData);
+                    obj.setSharePwdLocal(shareData);
                 }
             });
             send.apply(this, arguments);
@@ -1846,9 +1808,6 @@
                         return;
                     }
                     var sharePwd = response.data.rsp_body.RspMsg_body.pwd;
-                    if (!sharePwd) {
-                        return;
-                    }
                     var shareId = obj.getShareId();
                     var shareData = obj.getSharePwdLocal(shareId);
                     if (typeof shareData == "object" && shareData.share_name) {
@@ -1857,13 +1816,13 @@
                     shareData = Object.assign(shareData || {}, {
                         share_source: "weiyun",
                         share_id: shareId,
-                        share_pwd: sharePwd,
                         share_url: decodeURIComponent(location.href),
                         share_name: response.data.rsp_body.RspMsg_body.share_name
                     });
                     shareData.origin_url || !document.referrer || document.referrer.includes(location.host) || (shareData.origin_url = decodeURIComponent(document.referrer));
-                    obj.setSharePwdLocal(shareData);
+                    sharePwd && (shareData.share_pwd = sharePwd);
                     sharePwd == obj.share_pwd || obj.storeSharePwd(shareData);
+                    obj.setSharePwdLocal(shareData);
                 }
             }, false);
             open.apply(this, arguments);
@@ -1927,119 +1886,8 @@
             var originalClass = $(list[location.host] + " a:not([target])");
             if (originalClass.length) {
                 originalClass.attr("target", "_blank");
-                console.log("修改target 属性", originalClass.length);
             }
         }
-    };
-
-    /*=====================================================================================================================*/
-    var nuxt = {};
-
-    nuxt.getUrl = function(id, callback) {
-        $.ajax({
-            type: "get",
-            url: location.origin.replace("www", "api") + "/api/v1/pan/url",
-            data: {
-                t: Date.now(),
-                id: id
-            },
-            headers: {
-                "X-Authorization": localStorage.getItem("token") || ""
-            },
-            success: function(response) {
-                callback && callback(response);
-            },
-            error: function(error) {
-                console.error("getUrl获取链接 出错", error);
-                callback && callback("");
-            }
-        })
-    };
-
-    nuxt.getDetail = function(id, callback) {
-        $.ajax({
-            type: "get",
-            url: location.origin.replace("www", "api") + "/api/v1/pan/detail",
-            data: {
-                t: Date.now(),
-                id: id,
-                size: 15
-            },
-            headers: {
-                "X-Authorization": localStorage.getItem("token") || ""
-            },
-            success: function(response) {
-                callback && callback(response);
-            },
-            error: function() {
-                callback && callback("");
-            }
-        })
-    };
-
-    nuxt.apiJumpLink = function() {
-        var id = ((/[a-z\d]{32}/.exec(location.href) || [])[0]) || "";
-        if (!id) {
-            obj.showTipError("无法获取ID参数");
-            return;
-        }
-
-        nuxt.getUrl(id, function(response) {
-            if (response instanceof Object && response.code == 0 && response.data) {
-                var shareLink = response.data;
-
-                nuxt.getDetail(id, function(response) {
-                    if (response instanceof Object) {
-                        baidu.checkUrlValid(shareLink, response.pwd);
-                    }
-                    else {
-                        window.location.href = shareLink;
-                    }
-                })
-            }
-            else {
-                obj.showTipError("链接已失效");
-            }
-        })
-    };
-
-    nuxt.run = function() {
-        var hosts = [
-            "www.dalipan.com",
-            "www.dashengpan.com",
-            "www.xiaomapan.com",
-            "www.baimapan.com",
-            "www.yubaipan.com",
-            "www.feifeipan.com",
-            "www.feizhupan.com",
-            /*"www.luomapan.com",
-            "www.iizhi.cn",
-            "www.jnzy.pro",*/
-        ];
-
-        if (obj.isInArray(hosts)) {
-            var url = window.location.href;
-            if (url.indexOf("#/main/search") > 0) {
-                if (!localStorage.getItem("token")) {
-                    obj.showTipError("请先登录,否则无法自动跳转");
-                }
-                return true;
-            }
-            else if (url.indexOf("#/main/detail") > 0) {
-                if (document.readyState === "complete") {
-                    nuxt.apiJumpLink();
-                    return true;
-                }
-                else {
-                    setTimeout(nuxt.run, 500);
-                }
-            }
-            else { }
-        }
-        else {
-            return false;
-        }
-
     };
 
     /*=====================================================================================================================*/
@@ -2399,7 +2247,6 @@
             $('<meta name="script" content="run">').appendTo(document.head);
         }
 
-        console.log("管家婆 开始运行");
         var funcArr = [
             baidu.run,
             lanzous.run,
@@ -2409,7 +2256,6 @@
             caiyun.run,
             weiyun.run,
             target.run,
-            nuxt.run,
             b64Node.run,
             funcNode.run,
             dialog_fileId.run,
