@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.5.2
+// @version      0.5.3
 // @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云】 功能概述：【[1]：网盘页面增加资源搜索快捷方式】【[2]：[资源站点]自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地缓存数据库搜索】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -77,7 +77,7 @@
             return (/cloud\.189\.cn[a-z\d\/\?\.#]*(?:code=|\/t\/)([\w]{12})/.exec(shareLink) || [])[1];
         }
         else if (/[\w-]*\.?lanzou.?\.com/.test(shareLink)) {
-            return (/lanzou.?\.com\/[\w]+\/([\w]+)/.exec(shareLink) || /lanzou.?\.com\/([\w]+)/.exec(shareLink) || [])[1];
+            return (/lanzou.?\.com\/[\w]+\/([\w]+)/.exec(shareLink) || /lanzou.?\.com\/([\w]{3,})/.exec(shareLink) || [])[1];
         }
         else if (shareLink.indexOf("pan.xunlei.com") > 0) {
             return (/pan\.xunlei\.com\/s\/([\w-]+)/.exec(shareLink) || [])[1];
@@ -1207,7 +1207,7 @@
     };
 
     lanzous.storeSharePwd = function() {
-        unsafeWindow.$ && unsafeWindow.$(document).ajaxComplete(function (event, xhr, options) {
+        unsafeWindow.$ ? unsafeWindow.$(document).ajaxComplete(function (event, xhr, options) {
             var requestUrl = options.url;
             if (requestUrl.indexOf("/ajaxm.php") >= 0 || requestUrl.indexOf("/filemoreajax.php") >= 0) {
                 var response = JSON.parse(xhr.response);
@@ -1215,7 +1215,7 @@
                     var sharePwd = decodeURIComponent((options.data.match(/&pwd=([^&]+)/) || options.data.match(/&p=([^&]+)/) || [])[1] || "");
                     var shareId = obj.getShareId();
                     var shareData = obj.getSharePwdLocal(shareId);
-                    if (typeof shareData == "object" && shareData.share_name) {
+                    if (!shareId || (typeof shareData == "object" && shareData.share_name)) {
                         return;
                     }
                     shareData = Object.assign(shareData || {}, {
@@ -1226,11 +1226,11 @@
                     });
                     sharePwd && (shareData.share_pwd = sharePwd);
                     shareData.origin_url || !document.referrer || document.referrer.includes(location.host) || (shareData.origin_url = decodeURIComponent(document.referrer));
-                    obj.share_pwd == sharePwd || obj.storeSharePwd(shareData);
+                    shareData.share_pwd && (obj.share_pwd == sharePwd || obj.storeSharePwd(shareData));
                     obj.setSharePwdLocal(shareData);
                 }
             }
-        }) || setTimeout(lanzous.storeSharePwd, 500);
+        }) : setTimeout(lanzous.storeSharePwd, 500);
     };
 
     lanzous.autoPaddingPwd = function() {
