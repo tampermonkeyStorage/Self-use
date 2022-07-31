@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.5.3
+// @version      0.5.4
 // @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云】 功能概述：【[1]：网盘页面增加资源搜索快捷方式】【[2]：[资源站点]自动识别失效链接，自动跳转，防止手忙脚乱】【[3]：访问过的分享链接和密码自动记忆】【[4]：本地缓存数据库搜索】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -77,7 +77,7 @@
             return (/cloud\.189\.cn[a-z\d\/\?\.#]*(?:code=|\/t\/)([\w]{12})/.exec(shareLink) || [])[1];
         }
         else if (/[\w-]*\.?lanzou.?\.com/.test(shareLink)) {
-            return (/lanzou.?\.com\/[\w]+\/([\w]+)/.exec(shareLink) || /lanzou.?\.com\/([\w]{3,})/.exec(shareLink) || [])[1];
+            return (/lanzou.?\.com\/[\w]+\/([\w]+)/.exec(shareLink) || /lanzou.?\.com\/([\w]{2,})/.exec(shareLink) || [])[1];
         }
         else if (shareLink.indexOf("pan.xunlei.com") > 0) {
             return (/pan\.xunlei\.com\/s\/([\w-]+)/.exec(shareLink) || [])[1];
@@ -90,6 +90,9 @@
         }
         else if (shareLink.indexOf("share.weiyun.com") > 0) {
             return (/share\.weiyun\.com\/([a-zA-Z\d]+)/.exec(shareLink) || [])[1];
+        }
+        else if (shareLink.indexOf("pan.quark.cn") > 0) {
+            return (/pan\.quark\.cn\/s\/([\w]+)/.exec(shareLink) || [])[1];
         }
         else {
             return "";
@@ -129,12 +132,9 @@
             onload: function(result) {
                 if (!result.status || parseInt(result.status / 100) == 2) {
                     var response = result.response;
-                    try {
-                        response = JSON.parse(response);
-                    } catch(a) {};
+                    try { response = JSON.parse(response); } catch(a) {};
                     option.success && option.success(response);
                 } else {
-                    console.error("http返回错误", result);
                     option.error && option.error(result);
                 }
             },
@@ -763,6 +763,11 @@
             ],
             "aliyundrive": [
                 {
+                    name: "找资源",
+                    link: "https://zhaoziyuan.me/so?filename=%s",
+                    type: 1,
+                },
+                {
                     name: "咔帕搜索",
                     link: "https://www.cuppaso.fun/search?type=all&keyword=%s",
                     type: 1,
@@ -1157,8 +1162,8 @@
     baidu.initButtonNewHome = function () {
         if ($(".nd-upload-button").length) {
             if ($(".share-search").length == 0) {
-                var html = '<a class="nd-upload-button share-search"><button class="u-btn u-btn--small is-round"><i class="iconfont icon-search nd-file-list-toolbar__search-icon"></i><span>资源搜索</span></button></a>';
-                $(".nd-upload-button").after(html);
+                var html = '<div class="wp-s-agile-tool-bar__h-action is-need-left-sep is-list share-search"><button type="button" class="u-button wp-s-agile-tool-bar__h-action-button u-button--text u-button--small" title="资源搜索" style="height: 32px;"><i class="iconfont icon-search nd-file-list-toolbar__search-icon"></i><span>资源搜索</span></button></div>';
+                $(".wp-s-core-pan__header .wp-s-core-pan__header-tool-bar--action > div > div > div:nth-child(2) > div").prepend(html);
                 $(".share-search").click(function () {
                     $(".dialog-dialog").css({display: "flex"});
                 });
@@ -1872,6 +1877,83 @@
         return false;
     };
 
+    var quark = {};
+
+    quark.submitPwd = function(pwd) {
+        var input = document.querySelector("#ice-container input");
+        var event = new Event("input", {
+            bubbles: true,
+        });
+        var lastValue = input.value;
+        input.value = pwd;
+        var tracker = input._valueTracker;
+        if (tracker) { tracker.setValue(lastValue) };
+        input.dispatchEvent(event);
+
+        var $button = document.querySelector("#ice-container button");
+        $button && $button.click();
+    };
+
+    quark.storeSharePwd = function () {
+        var shareId = obj.getShareId();
+        var shareData = obj.getSharePwdLocal(shareId);
+        if (typeof shareData == "object" && shareData.share_name) {
+            return;
+        }
+        shareData = Object.assign(shareData || {}, {
+            share_source: "quark",
+            share_id: shareId,
+            share_url: decodeURIComponent(location.href),
+            share_name: $(".file-tit").text()
+        });
+        var share_code_cache = localStorage.share_code_cache;
+        if (share_code_cache) {
+            var current_code = JSON.parse(share_code_cache).find(function(item) {
+                return item.key == shareId;
+            });
+            if (current_code) {
+                shareData.share_pwd = current_code.code;
+            }
+        }
+        shareData.origin_url || !document.referrer || document.referrer.includes(location.host) || (shareData.origin_url = decodeURIComponent(document.referrer));
+        shareData.share_pwd && (shareData.share_pwd == obj.share_pwd || obj.storeSharePwd(shareData));
+        obj.setSharePwdLocal(shareData);
+    };
+
+    quark.autoPaddingPwd = function() {
+        var shareId = obj.getShareId();
+        if (document.querySelector("#ice-container .ant-input")) {
+            obj.querySharePwd("quark", shareId, function (response) {
+                if (response instanceof Object && response.share_pwd) {
+                    obj.share_pwd = response.share_pwd;
+                    quark.submitPwd(response.share_pwd);
+                    $(document).one("DOMNodeInserted", "#ice-container", obj.storeSharePwd);
+                }
+            });
+        }
+        else if (document.querySelector("#ice-container .file-list")) {
+            quark.storeSharePwd();
+        }
+        else if (document.querySelector("[class^=ShareError--content]")) {
+            obj.showTipSuccess("链接失效，此条存储信息已删除");
+            obj.removeSharePwdLocal(shareId);
+        }
+        else {
+            setTimeout(quark.autoPaddingPwd, 500);
+        }
+    };
+
+    quark.run = function() {
+        var url = location.href;
+        if (url.indexOf("pan.quark.cn") > 0) {
+            if (url.indexOf(".quark.cn/s/") > 0) {
+                quark.autoPaddingPwd();
+            }
+            return true;
+        }
+        return false;
+    };
+
     /*=====================================================================================================================*/
     var target = {};
 
@@ -2159,6 +2241,7 @@
             xunlei: /(https?:\/\/pan\.xunlei\.com\/s\/([\w-]{26}))([&\w=]*[^\w]*(?:提取|密)码[^\w]*([\w]{4}))?/gim,
             aliyundrive: /(https?:\/\/www\.aliyundrive\.com\/s\/([a-z\d]{11}))([^\w]*(?:提取|密)码[^\w]*([\w]{4}))?/gim,
             weiyun: /(https?:\/\/share\.weiyun\.com\/([a-z\d]{7,32}))([^\w]*(?:提取|访问|密)码[^\w]*([\w]{1,6}))?/gim,
+            quark: /(https?:\/\/pan\.quark\.cn\/s\/([a-z\d]{12,32}))([^\w]*(?:提取|访问|密)码[^\w]*([\w]{4}))?/gim,
             caiyun: /(https?:\/\/caiyun\.(?:139|feixin\.10086)\.(?:com|cn)\/(?:m\/i\?|dl\/)([a-z\d]{13,14}))([^\w]*(?:提取|密)码[^\w]*([a-z\d]{4}))?/gim,
         };
         var shareList = {};
@@ -2255,6 +2338,7 @@
             xunlei.run,
             caiyun.run,
             weiyun.run,
+            quark.run,
             target.run,
             b64Node.run,
             funcNode.run,
