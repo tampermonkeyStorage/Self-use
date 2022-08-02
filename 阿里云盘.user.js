@@ -1449,7 +1449,7 @@
             if (item.category == "video") {
                 videoList.push(item);
             }
-            return subExts.includes(item.file_extension.toLowerCase());
+            return item.type == "file" && subExts.includes(item.file_extension.toLowerCase());
         });
 
         if (subList.length) {
