@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.2.4
+// @version      0.2.5
 // @description  播放器替换为DPlayer
 // @author       You
 // @match        https://pan.baidu.com/s/*
@@ -20,6 +20,26 @@
             quality: [],
             adToken: ""
         }
+    };
+
+    obj.storageFileListSharePage = function () {
+        try {
+            var currentList = obj.require('system-core:context/context.js').instanceForSystem.list.getCurrentList();
+            if (currentList.length) {
+                window.sessionStorage.setItem("sharePageFileList", JSON.stringify(currentList));
+            }
+            else {
+                setTimeout(obj.storageFileListSharePage, 500);
+            }
+        }
+        catch (error) { };
+
+        window.onhashchange = function (e) {
+            setTimeout(obj.storageFileListSharePage, 500);
+        };
+        document.querySelector(".fufHyA").onclick = function () {
+            setTimeout(obj.storageFileListSharePage, 500);
+        };
     };
 
     obj.fetchVideoInfoHomePage = function (callback) {
@@ -67,7 +87,6 @@
         var file = obj.video_page.info[0], resolution = file.resolution;
         obj.getAdToken(getUrl("M3U8_AUTO_480"), function () {
             obj.addQuality(getUrl, resolution);
-
             obj.useDPlayer();
         });
     };
@@ -75,6 +94,7 @@
     obj.playVideoSharePage = function () {
         unsafeWindow.locals.get("file_list", "sign", "timestamp", "share_uk", "shareid", function(file_list, sign, timestamp, share_uk, shareid) {
             if (file_list.length > 1 || file_list[0].mediaType != "video") {
+                obj.storageFileListSharePage();
                 return;
             }
             obj.video_page.info = file_list;
@@ -86,7 +106,6 @@
 
             obj.getAdToken(getUrl("M3U8_AUTO_480"), function () {
                 obj.addQuality(getUrl, resolution);
-
                 obj.useDPlayer();
             });
         });
@@ -112,7 +131,6 @@
 
         obj.getAdToken(getUrl("M3U8_AUTO_480"), function () {
             obj.addQuality(getUrl, "width:1920,height:1080");
-
             obj.useDPlayer();
         });
     };
@@ -262,11 +280,14 @@
 
             var dPlayer = new unsafeWindow.DPlayer(options);
             dPlayer.on("loadstart", function () {
-                if (obj.hasDurationDisplay) return;
-                obj.hasDurationDisplay = true;
                 setTimeout(function () {
                     if (isNaN(dPlayer.video.duration)) {
-                        location.reload();
+                        var file = obj.video_page.info[0];
+                        var errnum = +sessionStorage.getItem("error_" + file.fs_id);
+                        if (++errnum <= 3) {
+                            location.reload();
+                        }
+                        sessionStorage.setItem("error_" + file.fs_id, errnum);
                     }
                 }, 5000);
             });
@@ -307,30 +328,6 @@
         } catch (error) {
             obj.msg("播放器创建失败", "failure");
         }
-    };
-
-    obj.playSetting = function () {
-        var $ = obj.getJquery();
-        if ($(".dplayer-setting-autoposition").length) return;
-
-        var html = '<div class="dplayer-setting-item dplayer-setting-autoposition"><span class="dplayer-label">自动记忆播放</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-autoposition" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
-        html += '<div class="dplayer-setting-item dplayer-setting-autoplaynext"><span class="dplayer-label">自动连续播放</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-autoplaynext" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
-        $(".dplayer-setting-origin-panel").append(html);
-
-        localStorage.getItem("dplayer-autoposition") == "true" && ($(".dplayer-toggle-setting-input-autoposition").get(0).checked = true);
-        localStorage.getItem("dplayer-autoplaynext") || localStorage.setItem("dplayer-autoplaynext", true);
-        localStorage.getItem("dplayer-autoplaynext") == "true" && ($(".dplayer-toggle-setting-input-autoplaynext").get(0).checked = true);
-
-        $(".dplayer-setting-autoposition").on("click", function() {
-            var autoposition = !$(".dplayer-toggle-setting-input-autoposition").is(":checked");
-            $(".dplayer-toggle-setting-input-autoposition").get(0).checked = autoposition;
-            localStorage.setItem("dplayer-autoposition", autoposition);
-        });
-        $(".dplayer-setting-autoplaynext").on("click", function() {
-            var autoplaynext = !$(".dplayer-toggle-setting-input-autoplaynext").is(":checked");
-            $(".dplayer-toggle-setting-input-autoplaynext").get(0).checked = autoplaynext;
-            localStorage.setItem("dplayer-autoplaynext", autoplaynext);
-        });
     };
 
     obj.memoryPlay = function (player) {
@@ -394,7 +391,63 @@
         }
     };
 
+    obj.playSetting = function () {
+        var $ = obj.getJquery();
+        if ($(".dplayer-setting-autoposition").length) return;
+
+        var html = '<div class="dplayer-setting-item dplayer-setting-autoposition"><span class="dplayer-label">自动记忆播放</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-autoposition" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
+        html += '<div class="dplayer-setting-item dplayer-setting-autoplaynext"><span class="dplayer-label">自动连续播放</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-autoplaynext" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
+        $(".dplayer-setting-origin-panel").append(html);
+
+        localStorage.getItem("dplayer-autoposition") == "true" && ($(".dplayer-toggle-setting-input-autoposition").get(0).checked = true);
+        localStorage.getItem("dplayer-autoplaynext") || localStorage.setItem("dplayer-autoplaynext", true);
+        localStorage.getItem("dplayer-autoplaynext") == "true" && ($(".dplayer-toggle-setting-input-autoplaynext").get(0).checked = true);
+
+        $(".dplayer-setting-autoposition").on("click", function() {
+            var autoposition = !$(".dplayer-toggle-setting-input-autoposition").is(":checked");
+            $(".dplayer-toggle-setting-input-autoposition").get(0).checked = autoposition;
+            localStorage.setItem("dplayer-autoposition", autoposition);
+        });
+        $(".dplayer-setting-autoplaynext").on("click", function() {
+            var autoplaynext = !$(".dplayer-toggle-setting-input-autoplaynext").is(":checked");
+            $(".dplayer-toggle-setting-input-autoplaynext").get(0).checked = autoplaynext;
+            localStorage.setItem("dplayer-autoplaynext", autoplaynext);
+        });
+    };
+
     obj.autoPlayNext = function () {
+        var path = location.pathname.split("/")[1];
+        if (path == "s") {
+            obj.playNextSharePage();
+        }
+        else if (path == "play") {
+            obj.playNextHomePage();
+        }
+        else if (path == "mbox") {
+        }
+    };
+
+    obj.playNextSharePage = function () {
+        var fileList = JSON.parse(sessionStorage.getItem("sharePageFileList") || "[]")
+        , videoList = fileList.filter(function (item, index) {
+            return item.category == 1;
+        })
+        , file = obj.video_page.info[0]
+        , fileIndex = videoList.findIndex(function (item, index) {
+            return item.fs_id == file.fs_id;
+        });
+        if (!(fileIndex > -1 && videoList.length)) return;
+
+        var nextvideo = videoList[fileIndex + 1];
+        if (nextvideo) {
+            location.href = "https://pan.baidu.com" + location.pathname + "?fid=" + nextvideo.fs_id;
+        }
+        else {
+            obj.msg("没有下一集了", "failure");
+        }
+    };
+
+    obj.playNextHomePage = function () {
         var autoPlayNext = localStorage.getItem("dplayer-autoplaynext") == "true";
         if (!autoPlayNext) return;
 
