@@ -462,7 +462,7 @@
 
             var title = nextSibling.attr("title")
             , nextpath = path.split("/").slice(1, -1).concat(title).join("/");
-            location.href = "https://pan.baidu.com/play/video#/video?path=" + encodeURIComponent("/" + nextpath);
+            location.hash = "#/video?path=" + encodeURIComponent("/" + nextpath);
         }
     };
 
