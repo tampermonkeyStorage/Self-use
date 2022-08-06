@@ -966,8 +966,8 @@
                 share_url: location.href.replace(location.hash, ""),
                 share_name: (/(.*)_/.exec(document.title) || [])[1]
             });
-            if (shareData.share_pwd || shareData.share_randsk) {
-                shareData.share_randsk || (shareData.share_randsk = unsafeWindow.currentSekey);
+            shareData.share_randsk || (shareData.share_randsk = unsafeWindow.currentSekey);
+            if (shareData.share_pwd) {
                 obj.storeSharePwd(shareData);
             }
             obj.setSharePwdLocal(shareData);
