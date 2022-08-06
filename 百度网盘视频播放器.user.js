@@ -440,7 +440,7 @@
 
         var nextvideo = videoList[fileIndex + 1];
         if (nextvideo) {
-            location.href = "https://pan.baidu.com" + location.pathname + "?fid=" + nextvideo.fs_id;
+            location.search = "?fid=" + nextvideo.fs_id;
         }
         else {
             obj.msg("没有下一集了", "failure");
