@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.2.0
+// @version      2.2.1
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -1749,6 +1749,10 @@
             },
             error: function (error) {
                 console.error("get_share_link_download_url 错误", error);
+                var errorCode = error.responseJSON ? error.responseJSON.code : "";
+                if ("InvalidParameterNotMatch.ShareId" === errorCode) {
+                    obj.showTipError("错误：参数不匹配，此错误可能是打开了另一个分享页面导致，请刷新", 10000);
+                }
                 callback && callback("");
             }
         });
@@ -1779,8 +1783,14 @@
                 }
             },
             error: function (error) {
-                console.error("get_download_url 错误", error);
-                callback && callback("");
+                var errorCode = error.responseJSON ? error.responseJSON.code : "";
+                if (errorCode == "TooManyRequests") {
+                    setTimeout(function () { obj.get_download_url(file_id, drive_id, callback); }, 500);
+                }
+                else {
+                    console.error("get_download_url 错误", error);
+                    callback && callback("");
+                }
             }
         });
     };
