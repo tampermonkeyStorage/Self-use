@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.2.1
-// @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，...
+// @version      2.2.2
+// @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（可自由切换，支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
 // @match        https://www.aliyundrive.com/drive*
@@ -30,14 +30,13 @@
             items: []
         },
         video_page: {
-            file_info: {},
             play_info: {},
             sub_info: {
                 index: 0
             },
             file_id: "",
             elevideo: "",
-            dPlayer: null,
+            player: null,
             attributes: {},
             media_num: 0
         }
@@ -54,11 +53,11 @@
     obj.dPlayerSupport = function (callback) {
         var urlArr = [
             [
-                "https://cdn.staticfile.org/hls.js/1.1.4/hls.min.js",
+                "https://cdn.staticfile.org/hls.js/1.2.1/hls.min.js",
                 "https://cdn.staticfile.org/dplayer/1.26.0/DPlayer.min.js",
             ],
             [
-                "https://cdn.bootcdn.net/ajax/libs/hls.js/1.1.4/hls.min.js",
+                "https://cdn.bootcdn.net/ajax/libs/hls.js/1.2.1/hls.min.js",
                 "https://cdn.bootcdn.net/ajax/libs/dplayer/1.26.0/DPlayer.min.js",
             ],
             [
@@ -100,11 +99,18 @@
                 dPlayerNode.setAttribute("style", "width: 100%; height: 100%;");
                 var videoParentNode = videoNode.parentNode.parentNode;
                 obj.video_page.elevideo = videoParentNode.parentNode.replaceChild(dPlayerNode, videoParentNode);
+
+                if (obj.video_page.player) {
+                    var video = obj.video_page.player.video;
+                    obj.video_page.attributes = {
+                        currentTime: video.currentTime,
+                        muted: video.muted
+                    };
+                }
             }
         }
         else {
-            setTimeout(obj.dPlayerStart, 500);
-            return;
+            return setTimeout(obj.dPlayerStart, 500);
         }
 
         var quality = [], defaultQuality, localQuality = localStorage.getItem("dplayer-quality");;
@@ -135,21 +141,16 @@
         }
 
         if (obj.video_page.file_id == play_info.file_id) {
-            if (obj.video_page.dPlayer && obj.video_page.dPlayer.destroy) {
-                var video = obj.video_page.dPlayer.video;
-                obj.video_page.attributes = {
-                    currentTime: video.currentTime,
-                    muted: video.muted
-                };
-
-                obj.video_page.dPlayer.destroy();
-                obj.video_page.dPlayer = null;
+            if (obj.video_page.player && Object.keys(obj.video_page.attributes).length == 0) {
+                return obj.playContinuously(quality);
             }
         }
         else {
             obj.suboffsettime = 0;
             obj.video_page.file_id = play_info.file_id;
             obj.video_page.attributes = {};
+            obj.hasMemoryDisplay = false;
+            obj.video_page.player = null;
         }
 
         var options = {
@@ -181,7 +182,7 @@
         };
 
         try {
-            var player = obj.video_page.dPlayer = new unsafeWindow.DPlayer(options);
+            var player = obj.video_page.player = new unsafeWindow.DPlayer(options);
 
             var attributes = obj.video_page.attributes;
             if (Object.keys(attributes).length) {
@@ -189,48 +190,93 @@
                 player.video.muted = attributes.muted;
             }
 
-            player.on("durationchange", function () {
-                options.hotkey || obj.dPlayerHotkey();
-
-                obj.playSetting();
-                obj.selectEpisode();
-
-                obj.memoryPlay();
-                obj.autoPlayNext();
-
-                obj.addCueVideoSubtitle(function (textTracks) {
-                    textTracks && obj.selectSubtitles(textTracks);
-                });
-            });
-
-            player.on("quality_end", function () {
-                obj.addCueVideoSubtitle(function (textTracks) {
-                    textTracks && obj.selectSubtitles(textTracks);
-                });
-            });
-
-            player.speed(localStorage.getItem("dplayer-speed") || 1);
-            player.on("ratechange", function () {
-                player.notice("播放速度：" + player.video.playbackRate);
-                localStorage.getItem("dplayer-speed") == player.video.playbackRate || localStorage.setItem("dplayer-speed", player.video.playbackRate);
-            });
-            player.on("quality_end", function () {
-                localStorage.setItem("dplayer-quality", player.quality.name);
-            });
-
-            //默认全屏，回车切换网页全屏和浏览器全屏
-            //player.fullScreen.request("web");
-            localStorage.getItem("dplayer-isfullscreen") == "true" && player.fullScreen.request("browser");
-            player.on("fullscreen", function () {
-                localStorage.setItem("dplayer-isfullscreen", true);
-            });
-            player.on("fullscreen_cancel", function () {
-                localStorage.removeItem("dplayer-isfullscreen");
-                player.fullScreen.request("web");
-            });
+            obj.dPlayerEvents(player);
         } catch (error) {
             console.error("播放器创建失败", error);
         }
+    };
+
+    obj.playContinuously = function (quality) {
+        var player = obj.video_page.player;
+        player.options.video.quality = quality;
+        player.quality = player.options.video.quality[player.qualityIndex];
+
+        const paused = player.video.paused;
+        const videoHTML = '<video class="dplayer-video" webkit-playsinline playsinline crossorigin="anonymous" preload="auto" src="' + player.quality.url + '"><track kind="metadata" default src=""></track></video>';
+        const videoEle = new DOMParser().parseFromString(videoHTML, 'text/html').body.firstChild;
+        player.template.videoWrap.insertBefore(videoEle, player.template.videoWrap.getElementsByTagName('div')[0]);
+        player.prevVideo = player.video;
+        player.video = videoEle;
+        player.initVideo(player.video, player.quality.type || player.options.video.type);
+        player.video.currentTime = player.prevVideo.currentTime + 1;
+
+        player.on('canplaythrough', () => {
+            if (player.prevVideo) {
+                if (player.video.currentTime !== player.prevVideo.currentTime) {
+                    player.video.currentTime = player.prevVideo.currentTime;
+                }
+                player.prevVideo.muted && (player.video.muted = player.prevVideo.muted);
+                player.template.videoWrap.removeChild(player.prevVideo);
+                player.video.classList.add('dplayer-video-current');
+                if (!paused) {
+                    const bezelswitch = player.bezel.switch;
+                    player.bezel.switch = () => {};
+                    const playedPromise = Promise.resolve(player.video.play());
+                    playedPromise.then(() => {
+                        player.controller.hide();
+                        setTimeout(() => {
+                            player.bezel.switch = bezelswitch;
+                            player.play(true);
+                        }, 500);
+                    });
+                    setTimeout(() => { player.controller.isShow() && player.play() }, 1000);
+                }
+                player.prevVideo = null;
+                obj.dPlayerEvents(player);
+            }
+        });
+    };
+
+    obj.dPlayerEvents = function (player) {
+        player = player || obj.video_page.player;
+        if (!(player && player.video && player.video.duration > 0)) {
+            return setTimeout(() => { obj.dPlayerEvents(player) }, 500);
+        }
+
+        player.options.hotkey || obj.dPlayerHotkey();
+
+        obj.videoFit();
+        obj.playSetting();
+        obj.selectEpisode();
+
+        obj.memoryPlay();
+        obj.autoPlayNext();
+
+        obj.addCueVideoSubtitle(function (textTracks) {
+            textTracks && obj.selectSubtitles(textTracks);
+        });
+
+        player.on("quality_end", function () {
+            localStorage.setItem("dplayer-quality", player.quality.name);
+            obj.addCueVideoSubtitle();
+        });
+
+        player.speed(localStorage.getItem("dplayer-speed") || 1);
+        player.on("ratechange", function () {
+            player.notice("播放速度：" + player.video.playbackRate);
+            localStorage.getItem("dplayer-speed") == player.video.playbackRate || localStorage.setItem("dplayer-speed", player.video.playbackRate);
+        });
+
+        //默认全屏，回车切换网页全屏和浏览器全屏
+        //player.fullScreen.request("web");
+        localStorage.getItem("dplayer-isfullscreen") == "true" && player.fullScreen.request("browser");
+        player.on("fullscreen", function () {
+            localStorage.setItem("dplayer-isfullscreen", true);
+        });
+        player.on("fullscreen_cancel", function () {
+            localStorage.removeItem("dplayer-isfullscreen");
+            player.fullScreen.request("web");
+        });
     };
 
     obj.dPlayerHotkey = function () {
@@ -238,7 +284,7 @@
         window.dPlayerHotkey = true;
 
         document.addEventListener("keydown", (function(e) {
-            var t = obj.video_page.dPlayer;
+            var t = obj.video_page.player;
             if (t && document.getElementById("dplayer")) {
                 var a = document.activeElement.tagName.toUpperCase()
                 , n = document.activeElement.getAttribute("contenteditable");
@@ -290,7 +336,8 @@
 
         document.addEventListener("wheel", function (event) {
             event = event || window.event;
-            var o, t = obj.video_page.dPlayer;
+            if ($(event.target).closest(".playlist-content").length) return;
+            var o, t = obj.video_page.player;
             if (event.deltaY < 0) {
                 o = t.volume() + .01;
                 t.volume(o);
@@ -299,6 +346,32 @@
                 t.volume(o);
             }
         })
+    };
+
+    obj.videoFit = function () {
+        var file_id = obj.video_page.play_info.file_id;
+        if ($(".dplayer-icons-right .btn-select-fit").length) {
+            var vfit = sessionStorage.getItem("object-fit-" + file_id);
+            if (vfit) {
+                document.querySelector("video").style["object-fit"] = vfit;
+                $(".btn-select-fit .dplayer-icon").text({
+                    none: "原始大小",
+                    cover: "自动裁剪",
+                    fill: "拉伸填充",
+                }[vfit]);
+            }
+            return
+        };
+
+        var html = '<div class="dplayer-quality btn-select-fit"><button class="dplayer-icon dplayer-quality-icon">画面模式</button><div class="dplayer-quality-mask"><div class="dplayer-quality-list"><div class="dplayer-quality-item" data-index="0">原始大小</div><div class="dplayer-quality-item" data-index="1">自动裁剪</div><div class="dplayer-quality-item" data-index="2">拉伸填充</div><div class="dplayer-quality-item" data-index="3">系统默认</div></div></div></div>';
+        $(".dplayer-icons-right").prepend(html);
+
+        $(".btn-select-fit .dplayer-quality-item").on("click", function() {
+            var vfit = ["none", "cover", "fill", ""][$(this).attr("data-index")];
+            document.querySelector("video").style["object-fit"] = vfit;
+            $(".btn-select-fit .dplayer-icon").text($(this).text());
+            sessionStorage.setItem("object-fit-" + file_id, vfit);
+        });
     };
 
     obj.playSetting = function () {
@@ -376,7 +449,7 @@
         });
 
         $(".dplayer-setting-jumpstart, .dplayer-setting-jumpend").on("dblclick", function() {
-            let currtime = 0, video = obj.video_page.dPlayer.video, duration = parseInt(video.duration), currentTime = parseInt(video.currentTime);
+            let currtime = 0, video = obj.video_page.player.video, duration = parseInt(video.duration), currentTime = parseInt(video.currentTime);
             if($(this).hasClass("dplayer-setting-jumpstart")){
                 currtime = currentTime;
                 obj.setPlayMemory("jumpstart", currtime);
@@ -406,7 +479,7 @@
 
     obj.selectEpisode = function () {
         //选集 代码贡献：https://greasyfork.org/zh-CN/users/795227-星峰
-        if ($(".dplayer-icons-right #btn-video-select").length) return;
+        if ($(".dplayer-icons-right #btn-select-episode").length) return;
 
         var fileList = obj.file_page.items
         , videoList = fileList.filter(function (item, index) {
@@ -421,60 +494,66 @@
         var elevideo = "";
         videoList.forEach(function (item, index) {
             if (fileIndex == index) {
-                elevideo += '<li class="drawer-item--2cNtQ" style="opacity: 0.4"; data-is-current="true"><div class="meta--3-qtu"><p class="title--2vewu" title="'+ item.name +'"><span class="filename--3hcxw">'+ item.name +'</span></p></div></li>';
+                elevideo += '<div class="video-item active" title="' + item.name + '" style="background-color: rgba(0,0,0,.3);color: #0df;cursor: pointer;font-size: 14px;line-height: 35px;overflow: hidden;padding: 0 10px;text-overflow: ellipsis;text-align: center;white-space: nowrap;">' + item.name + '</div>';
             }
             else {
-                elevideo += '<li class="drawer-item--2cNtQ"; data-is-current="false"><div class="meta--3-qtu"><p class="title--2vewu" title="'+ item.name +'"><span class="filename--3hcxw">'+ item.name +'</span></p></div></li>';
+                elevideo += '<div class="video-item" title="' + item.name + '" style="color: #fff;cursor: pointer;font-size: 14px;line-height: 35px;overflow: hidden;padding: 0 10px;text-overflow: ellipsis;text-align: center;white-space: nowrap;">' + item.name + '</div>';
             }
         });
 
         var svg = '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 32 32"><path d="M22 16l-10.105-10.6-1.895 1.987 8.211 8.613-8.211 8.612 1.895 1.988 8.211-8.613z"></path></svg>'
-        var html = '<button class="dplayer-icon dplayer-play-icon left-icon" style="transform: rotate(-180deg)" title="上一集">'+ svg +'</button>';
-        html += '<div class="dplayer-setting"><button id="btn-video-select" class="dplayer-icon dplayer-quality-icon" title="选集">选集</button><div class="drawer-container--1M9Iy" data-open="true" data-is-current="true" style="left:-135px; display:none; width: 315px;height: 345px;bottom: 60px;"><div class="drawer-wrapper--3Yfpw" style="height: 345px;"><header class="header--2Y80e"><p class="title--CbV-V">选集</p><div class="btn-close--TihlS"><span data-role="icon" data-render-as="svg" data-icon-type="PDSChevronDown" class="icon--tTxIr icon--d-ejA " style="transform: rotate(90deg)">'+svg+'</span></div></header><section class="scroll-container--Ho4ra" style="height: 280px;"><div class="scroll-wrapper--zw1q2"><ul class="drawer-list--JYzyI">'+ elevideo +'</ul></div></section></div></div></div>';
-        html += '<button class="dplayer-icon dplayer-play-icon right-icon" title="下一集">'+ svg +'</button>';
+        var html = '<button class="dplayer-icon dplayer-play-icon prev-icon" style="transform: rotate(-180deg)" title="上一集">'+ svg +'</button>';
+        html += '<button id="btn-select-episode" class="dplayer-icon dplayer-quality-icon" title="选集">选集</button> <div class="playlist-content" style="max-width: 80%;max-height: 330px;width: auto;height: auto;box-sizing: border-box;overflow: hidden;position: absolute;left: 0;transition: all .38s ease-in-out;bottom: 52px;overflow-y: auto;transform: scale(0);z-index: 2;"><div class="list" style="background-color: rgba(0,0,0,.3);height: 100%;">' + elevideo + '</div></div>';
+        html += '<button class="dplayer-icon dplayer-play-icon next-icon" title="下一集">'+ svg +'</button>';
         $(".dplayer-icons-right").prepend(html);
 
-        var speed = 800;
-        $(".dplayer-icons-right #btn-video-select").on("click", function() {
-            var ele = $(this).next();
-            if(ele.css("display")== "none") {
-                ele.fadeToggle(speed);
-                $(".dplayer-mask").addClass("dplayer-mask-show");
-                var itemheight = $(".dplayer-icons-right .drawer-container--1M9Iy ul li")[0].offsetHeight;
-                var allitemheight = $(".scroll-container--Ho4ra").height();
-                $(".scroll-container--Ho4ra").scrollTop((fileIndex + 1) * itemheight - (allitemheight) / 2);
+        $("#btn-select-episode").on("click", function() {
+            var eleEpisode = $(".playlist-content");
+            if (eleEpisode.css("transform").match(/\d+/) > 0) {
+                eleEpisode.css("transform", "scale(0)");
             }
             else {
-                ele.fadeToggle(speed)
+                eleEpisode.css("transform", "scale(1)");
+                $(".dplayer-mask").addClass("dplayer-mask-show");
+
+                var singleheight = $(".dplayer-icons-right .video-item")[0].offsetHeight;
+                var totalheight = $(".dplayer-icons-right .playlist-content").height();
+                $(".dplayer-icons-right .playlist-content").scrollTop((fileIndex + 1) * singleheight - totalheight / 2);
             }
         });
-        $(".dplayer-icons-right .btn-close--TihlS").on("click", function() {
-            $(".dplayer-icons-right .drawer-container--1M9Iy").fadeToggle(speed);
-            $(".dplayer-mask").removeClass("dplayer-mask-show")
-        });
-        $(".dplayer-icons-right .drawer-container--1M9Iy ul li").on("click", function() {
-            var $this = $(this);
-            if ($this.attr("data-is-current") == "false") {
-                $this.attr("data-is-current", "true");
-                $this.css("opacity", "0.4");
-                $this.siblings().attr("data-is-current", "false");
-                $this.siblings().css("opacity", "1");
-                obj.playByFile(videoList[$this.index()]);
-            }
-        });
-        $(".dplayer-mask").on("click",function () {
-            if ($(".dplayer-icons-right .drawer-container--1M9Iy").css("display") != "none") {
-                $(".dplayer-icons-right .drawer-container--1M9Iy").fadeToggle(speed);
+        $(".dplayer-mask").on("click",function() {
+            var eleEpisode = $(".playlist-content");
+            if (eleEpisode.css("transform").match(/\d+/) > 0) {
+                eleEpisode.css("transform", "scale(0)");
                 $(this).removeClass("dplayer-mask-show");
             }
         });
 
+        $(".playlist-content .video-item").on("click", function() {
+            var $this = $(this);
+            if ($this.hasClass("active")) return;
+            $(".dplayer-mask").removeClass("dplayer-mask-show");
+
+            var oldele = $(".video-item.active");
+            oldele.removeClass("active");
+            oldele.css({"background-color": "", "color": "#fff"});
+
+            $this.addClass("active");
+            $this.css({"background-color": "rgba(0,0,0,.3)", "color": "#0df"});
+
+            var file = videoList[$this.index()];
+            obj.video_page.play_info.file_id = file.file_id;
+            obj.getVideoPreviewPlayInfo(function () {
+                $(".header-file-name--CN_fq, .text--2KGvI").text(file.name);
+            });
+        });
+
         // 上下集
-        $(".left-icon").on("click", function () {
+        $(".prev-icon").on("click", function () {
             var file = videoList[fileIndex - 1];
             file ? obj.playByFile(file) : obj.showTipError("没有上一集了");
         });
-        $(".right-icon").on("click",function(){
+        $(".next-icon").on("click",function(){
             var file = videoList[fileIndex + 1];
             file ? obj.playByFile(file) : obj.showTipError("没有下一集了");
         });
@@ -489,7 +568,7 @@
         var skipstart = obj.getPlayMemory("skipstart");
         typeof skipstart == "boolean" || (skipstart = true); //默认开启跳过片头片尾
 
-        var player = obj.video_page.dPlayer;
+        var player = obj.video_page.player;
         var playInfo = obj.video_page.play_info;
         var fileList = obj.file_page.items
         , file = fileList.find(function (item, index) {
@@ -575,29 +654,33 @@
         })
         , sign = file ? file.file_id : ""
 
-        var player = obj.video_page.dPlayer;
-        var video = player.video, duration = video.duration;
+        var player = obj.video_page.player, video = player.video, currentTime = video.currentTime, duration = video.duration;
         player.on("timeupdate", function () {
             if (!this.autonext && skipstart && jumpend) {
-                var currentTime = video.currentTime;
+                currentTime = video.currentTime;
                 if (duration - currentTime <= parseInt(jumpend) + 10 * video.playbackRate) {
                     this.autonext = true;
                     obj.setPlayMemory(sign, currentTime + 20 * video.playbackRate, duration, jumpstart, jumpend);
-                    $(player.container).append('<div class="memory-play-wrap" style="display: block;position: absolute;left: 33px;bottom: 66px;font-size: 15px;padding: 7px;border-radius: 3px;color: #fff;z-index:100;background: rgba(0,0,0,.5);">10秒后自动下一集&nbsp;&nbsp;<a href="javascript:void(0);" class="play-jump" style="text-decoration: none;color: #06c;"> 取消 &nbsp;</a><em class="close-btn" style="display: inline-block;width: 15px;height: 15px;vertical-align: middle;cursor: pointer;background: url(https://nd-static.bdstatic.com/m-static/disk-share/widget/pageModule/share-file-main/fileType/video/img/video-flash-closebtn_15f0e97.png) no-repeat;"></em></div>');
-                    var memoryTimeout = setTimeout(function () {
-                        var file = videoList[fileIndex + 1];
-                        file ? obj.playByFile(file) : obj.showTipError("没有下一集了");
 
-                        $(".memory-play-wrap").remove();
-                    }, 10000);
-                    $(".memory-play-wrap .close-btn").click(function () {
-                        clearTimeout(memoryTimeout);
-                        $(".memory-play-wrap").remove();
-                    });
-                    $(".memory-play-wrap .play-jump").click(function () {
-                        clearTimeout(memoryTimeout);
-                        $(".memory-play-wrap").remove();
-                    });
+                    var fileNext = videoList[fileIndex + 1];
+                    if (fileNext) {
+                        $(player.container).append('<div class="memory-play-wrap" style="display: block;position: absolute;left: 33px;bottom: 66px;font-size: 15px;padding: 7px;border-radius: 3px;color: #fff;z-index:100;background: rgba(0,0,0,.5);">10秒后自动下一集&nbsp;&nbsp;<a href="javascript:void(0);" class="play-jump" style="text-decoration: none;color: #06c;"> 取消 &nbsp;</a><em class="close-btn" style="display: inline-block;width: 15px;height: 15px;vertical-align: middle;cursor: pointer;background: url(https://nd-static.bdstatic.com/m-static/disk-share/widget/pageModule/share-file-main/fileType/video/img/video-flash-closebtn_15f0e97.png) no-repeat;"></em></div>');
+                        var memoryTimeout = setTimeout(function () {
+                            obj.playByFile(fileNext);
+                            $(".memory-play-wrap").remove();
+                        }, 10000);
+                        $(".memory-play-wrap .close-btn").click(function () {
+                            clearTimeout(memoryTimeout);
+                            $(".memory-play-wrap").remove();
+                        });
+                        $(".memory-play-wrap .play-jump").click(function () {
+                            clearTimeout(memoryTimeout);
+                            $(".memory-play-wrap").remove();
+                        });
+                    }
+                    else {
+                        obj.showTipError("没有下一集了");
+                    }
                 }
             }
         });
@@ -651,7 +734,7 @@
     obj.playByFile = function(file){
         obj.video_page.play_info.file_id = file.file_id;
         obj.getVideoPreviewPlayInfo(function () {
-            obj.video_page.dPlayer = null;
+            obj.video_page.player = null;
             obj.hasMemoryDisplay = false;
             $(".header-file-name--CN_fq, .text--2KGvI").text(file.name);
         });
@@ -1016,7 +1099,7 @@
                     var textTracks = video.textTracks;
                     for (let i = 0; i < textTracks.length; i++) {
                         textTracks[i].mode = "hidden" || (textTracks[i].mode = "hidden");
-                        if (textTracks[i].cues && textTracks[0].cues.length) {
+                        if (textTracks[i].cues && textTracks[i].cues.length) {
                             for(let ii = textTracks[i].cues.length - 1; ii >= 0; ii--) {
                                 textTracks[i].removeCue(textTracks[i].cues[ii]);
                             }
@@ -1075,7 +1158,8 @@
         obj.subtitleLocalFile(function (sublist) {
             if (Array.isArray(sublist) && sublist[0]) {
                 currSubList = currSubList.concat(sublist);
-                currSubList = obj.sortSubList(sublist);
+                currSubList = obj.sortSubList(currSubList);
+                sub_info[fileId] = currSubList;
                 callback && callback(currSubList);
             }
         });
@@ -1115,9 +1199,9 @@
                 fileList.forEach(function (item, index) {
                     item.language || (item.language = "chi");
                     item.label || (item.label = obj.langCodeTransform(item.language));
-                    item.ext = item.file_extension.toLowerCase();
-                    obj.surlRequest(item.download_url || item.url, function (text) {
-                        var sarr = obj.subtitleParser(text, item.ext);
+                    item.sext = item.file_extension.toLowerCase();
+                    obj.surlRequest(item.download_url || item.url, function (stext) {
+                        var sarr = obj.subtitleParser(stext, item.sext);
                         if (Array.isArray(sarr)) {
                             sarr = obj.fuseSubArr(sarr);
                             item.sarr = sarr;
@@ -1200,10 +1284,10 @@
     obj.subtitleLocalFile = function (callback) {
         obj.localFileForText(function (fileInfo) {
             if (fileInfo.stext) {
-                fileInfo.sarr = obj.subtitleParser(fileInfo.stext, fileInfo.file_extension);
+                fileInfo.sarr = obj.subtitleParser(fileInfo.stext, fileInfo.sext);
                 if (fileInfo.sarr.length) {
-                    fileInfo.language = obj.langdetect(fileInfo.sarr);
-                    fileInfo.label = obj.labeldetect(fileInfo.language);
+                    fileInfo.language = obj.langDetectSarr(fileInfo.sarr);
+                    fileInfo.label = obj.langCodeTransform(fileInfo.language);
                     callback && callback([ fileInfo ]);
                 }
                 else {
@@ -1221,9 +1305,9 @@
         $(document).on("change", "#addsubtitle", function(event) {
             if (this.files.length) {
                 var file = this.files[0];
-                var file_extension = file.name.split(".").pop().toLowerCase();
-                var sexts = Object.keys(obj.subtitleParser());
-                if (!(file_extension && sexts.includes(file_extension))) {
+                var file_ext = file.name.split(".").pop().toLowerCase();
+                var sexts = ["webvtt", "vtt", "srt", "ssa", "ass"];
+                if (!(file_ext && sexts.includes(file_ext))) {
                     obj.showTipError("暂不支持此类型文件");
                     return callback && callback("");
                 }
@@ -1238,7 +1322,7 @@
                     else if (result.indexOf("") > -1) {
                         return reader.readAsText(file, "BIG5");
                     }
-                    callback && callback({file_extension: file_extension, stext: result});
+                    callback && callback({sext: file_ext, stext: result});
                 };
                 reader.onerror = function(e) {
                     callback && callback("");
