@@ -227,8 +227,8 @@
                         setTimeout(() => {
                             player.bezel.switch = bezelswitch;
                             player.play(true);
-                        }, 1000);
-                        setTimeout(() => { player.controller.isShow() && player.play() }, 1500);
+                        }, 500);
+                        setTimeout(() => { player.controller.isShow() && player.play() }, 1000);
                     });
                 }
                 player.prevVideo = null;
