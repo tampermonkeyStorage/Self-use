@@ -223,13 +223,12 @@
                     player.bezel.switch = () => {};
                     const playedPromise = Promise.resolve(player.video.play());
                     playedPromise.then(() => {
-                        while(player.controller.isShow()){
-                            player.controller.hide();
-                        }
+                        player.controller.hide();
                         setTimeout(() => {
                             player.bezel.switch = bezelswitch;
                             player.play(true);
                         }, 1000);
+                        setTimeout(() => { player.controller.isShow() && player.play() }, 1500);
                     });
                 }
                 player.prevVideo = null;
