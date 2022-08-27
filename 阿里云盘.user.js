@@ -188,6 +188,7 @@
             if (Object.keys(attributes).length) {
                 player.seek(attributes.currentTime - 1);
                 player.video.muted = attributes.muted;
+                obj.video_page.attributes = {};
             }
 
             obj.dPlayerEvents(player);
@@ -216,20 +217,14 @@
                     player.video.currentTime = player.prevVideo.currentTime;
                 }
                 player.prevVideo.muted && (player.video.muted = player.prevVideo.muted);
+                player.prevVideo.pause();
                 player.template.videoWrap.removeChild(player.prevVideo);
                 player.video.classList.add('dplayer-video-current');
                 if (!paused) {
                     const bezelswitch = player.bezel.switch;
                     player.bezel.switch = () => {};
-                    const playedPromise = Promise.resolve(player.video.play());
-                    playedPromise.then(() => {
-                        player.controller.hide();
-                        setTimeout(() => {
-                            player.bezel.switch = bezelswitch;
-                            player.play(true);
-                        }, 500);
-                        setTimeout(() => { player.controller.isShow() && player.play() }, 1000);
-                    });
+                    player.video.play();
+                    setTimeout(() => { player.bezel.switch = bezelswitch; }, 1000);
                 }
                 player.prevVideo = null;
                 obj.dPlayerEvents(player);
@@ -1256,7 +1251,7 @@
                     else {
                         vname = vname.split(".").slice(0, -1).join(".");
                         if (vname) {
-                            getSubList();
+                            return getSubList();
                         }
                         else {
                             return "";
@@ -1740,7 +1735,7 @@
     obj.getShareLinkDownloadUrlAll = function (fileList, callback) {
         var fileListLen = fileList.length;
         fileList.forEach(function (item, index) {
-            item.download_url && (obj.isExpires(item) || (item.download_url = ""));
+            !item.download_url || (obj.isExpires(item) || (item.download_url = ""));
             if (item.download_url || item.type == "folder") {
                 if (-- fileListLen == 0) {
                     callback && callback(fileList);
@@ -1760,7 +1755,7 @@
     obj.getHomeLinkDownloadUrlAll = function (fileList, callback) {
         var fileListLen = fileList.length;
         fileList.forEach(function (item, index) {
-            item.download_url && (obj.isExpires(item) || (item.download_url = ""));
+            !item.download_url || (obj.isExpires(item) || (item.download_url = ""));
             if (item.download_url || item.type == "folder") {
                 if (-- fileListLen == 0) {
                     callback && callback(fileList);
