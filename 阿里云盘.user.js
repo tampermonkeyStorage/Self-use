@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.2.2
+// @version      2.2.3
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -178,7 +178,7 @@
                     link: "https://pc-index-skin.cdn.bcebos.com/6cb0bccb31e49dc0dba6336167be0a18.png",
                 },
             ],
-            theme: "#b7daff"
+            theme: obj.getRandomColor()
         };
 
         try {
@@ -224,6 +224,7 @@
                     const bezelswitch = player.bezel.switch;
                     player.bezel.switch = () => {};
                     player.video.play();
+                    player.controller.hide();
                     setTimeout(() => { player.bezel.switch = bezelswitch; }, 1000);
                 }
                 player.prevVideo = null;
@@ -1491,7 +1492,7 @@
         if ($("#root [class^=banner] [class^=right]").length) {
             var html = '';
             html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-last--batch" style="margin-right: 28px;">继续上次播放</button>';
-            html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-search--batch" style="margin-right: 28px;">网盘资源搜索</button>';
+            html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-search--batch" style="margin-right: 28px;background: '+ obj.getRandomColor() +';">网盘资源搜索</button>';
             html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-download--batch" style="margin-right: 28px;">显示链接</button>';
             $("#root [class^=banner] [class^=right]").prepend(html);
 
@@ -1500,7 +1501,12 @@
                 obj.playByScroll();
             });
             $(".button-search--batch").on("click", function () {
-                window.open("https://www.niceso.fun/", "_blank");
+                $(this).css("background", obj.getRandomColor());
+                var folderName = "", fileInfo = obj.file_page.file_info;
+                if (fileInfo.type == "folder") {
+                    folderName = fileInfo.name;
+                }
+                window.open("https://www.niceso.fun/search/?q=" + folderName, "_blank");
             });
         }
         else {
@@ -1515,12 +1521,17 @@
         if ($("#root header").length) {
             var html = '';
             html += '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi button-last--batch">继续上次播放</button>';
-            html += '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi button-search--batch">网盘资源搜索</button>';
+            html += '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi button-search--batch" style="background: '+ obj.getRandomColor() +';">网盘资源搜索</button>';
             html += '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi button-download--batch">显示链接</button>';
             $("#root header:eq(0)").append(html);
             $(".button-download--batch").on("click", obj.showDownloadHomePage);
             $(".button-search--batch").on("click", function () {
-                window.open("https://www.niceso.fun/", "_blank");
+                $(this).css("background", obj.getRandomColor());
+                var folderName = "", fileInfo = obj.file_page.file_info;
+                if (fileInfo.type == "folder") {
+                    folderName = fileInfo.name;
+                }
+                window.open("https://www.niceso.fun/search/?q=" + folderName, "_blank");
             });
             $(".button-last--batch").on("click", function () {
                 obj.playByScroll();
@@ -2173,6 +2184,10 @@
         var url = location.href;
         var match = url.match(/aliyundrive\.com\/s\/([a-zA-Z\d]+)/);
         return match ? match[1] : null;
+    };
+
+    obj.getRandomColor = function() {
+        return "#" + ("00000" + (Math.random() * 0x1000000 << 0).toString(16)).substr(- 6);
     };
 
     obj.isHomePage = function () {
