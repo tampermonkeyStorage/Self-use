@@ -424,7 +424,7 @@
 
         $(".dplayer-setting-skipstart").on("click", function() {
             var check = $(".dplayer-toggle-setting-input-skipstart");
-            skipstart = !check.is(":checked");
+            var skipstart = !check.is(":checked");
             $(".dplayer-toggle-setting-input-skipstart").get(0).checked = skipstart;
             obj.setPlayMemory("skipstart", skipstart);
             if (skipstart) {
@@ -636,7 +636,6 @@
     obj.autoPlayNext = function () {
         var jumpstart = obj.getPlayMemory("jumpstart") || 60; // 默认跳过片头
         var jumpend = obj.getPlayMemory("jumpend") || 120; // 默认跳过片尾
-        var skipstart = obj.getPlayMemory("skipstart");
 
         var playInfo = obj.video_page.play_info;
         var fileList = obj.file_page.items
@@ -651,7 +650,8 @@
 
         var player = obj.video_page.player, video = player.video, currentTime = video.currentTime, duration = video.duration;
         player.on("timeupdate", function () {
-            if (!this.autonext && skipstart && jumpend) {
+            var skipstart = obj.getPlayMemory("skipstart");
+            if (!this.autonext && skipstart) {
                 currentTime = video.currentTime;
                 if (duration - currentTime <= parseInt(jumpend) + 10 * video.playbackRate) {
                     this.autonext = true;
