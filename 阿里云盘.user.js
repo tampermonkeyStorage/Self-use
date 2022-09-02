@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.2.3
+// @version      2.2.4
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -119,6 +119,8 @@
         var task_list = video_preview_play_info.live_transcoding_task_list;
         if (Array.isArray(task_list)) {
             var pds = {
+                UHD: "4K 超清",
+                QHD: "2K 超清",
                 FHD: "1080 全高清",
                 HD: "720 高清",
                 SD: "540 标清",
@@ -389,10 +391,9 @@
                 $(this).removeClass("dplayer-mask-show");
             }
         });
-        var jumpstart = obj.getPlayMemory("jumpstart") || "60"; // 默认跳过片头
-        var jumpend = obj.getPlayMemory("jumpend") || "130"; // 默认跳过片尾
+        var jumpstart = obj.getPlayMemory("jumpstart") || 60; // 默认跳过片头
+        var jumpend = obj.getPlayMemory("jumpend") || 120; // 默认跳过片尾
         var skipstart = obj.getPlayMemory("skipstart");
-        typeof skipstart == "boolean" || (skipstart = true); //默认开启跳过片头片尾
         if (skipstart) {
             $(".dplayer-toggle-setting-input-skipstart").get(0).checked = true;
             $(".dplayer-setting-jumpstart").show();
@@ -559,10 +560,9 @@
         if (obj.hasMemoryDisplay) return;
         obj.hasMemoryDisplay = true;
 
-        var jumpstart = obj.getPlayMemory("jumpstart") || "60"; // 默认跳过片头
-        var jumpend = obj.getPlayMemory("jumpend") || "130"; // 默认跳过片尾
+        var jumpstart = obj.getPlayMemory("jumpstart") || 60; // 默认跳过片头
+        var jumpend = obj.getPlayMemory("jumpend") || 120; // 默认跳过片尾
         var skipstart = obj.getPlayMemory("skipstart");
-        typeof skipstart == "boolean" || (skipstart = true); //默认开启跳过片头片尾
 
         var player = obj.video_page.player;
         var playInfo = obj.video_page.play_info;
@@ -634,10 +634,9 @@
     };
 
     obj.autoPlayNext = function () {
-        var jumpstart = obj.getPlayMemory("jumpstart") || "60"; // 默认跳过片头
-        var jumpend = obj.getPlayMemory("jumpend") || "130"; // 默认跳过片尾
+        var jumpstart = obj.getPlayMemory("jumpstart") || 60; // 默认跳过片头
+        var jumpend = obj.getPlayMemory("jumpend") || 120; // 默认跳过片尾
         var skipstart = obj.getPlayMemory("skipstart");
-        typeof skipstart == "boolean" || (skipstart = true); //默认开启跳过片头片尾
 
         var playInfo = obj.video_page.play_info;
         var fileList = obj.file_page.items
@@ -684,6 +683,9 @@
 
     obj.selectSubtitles = function (textTracks) {
         if (textTracks.length <= 1) return;
+        if ($(".dplayer-subtitle-btn .dplayer-quality-mask").length) {
+            $(".dplayer-subtitle-btn .dplayer-quality-mask").remove();
+        }
 
         var subbtn = $(".dplayer-subtitle-btn")
         subbtn.addClass("dplayer-quality");
@@ -698,9 +700,9 @@
         var html = '<div class="dplayer-quality-mask"><div class="dplayer-quality-list subtitle-select"> '+ eleSub +'</div></div>'
         subbtn.append(html);
 
-        $(".subtitle-select .subtitle-item").on("click", function() {
+        $(".subtitle-select .subtitle-item").off("click").on("click", function() {
             var $this = $(this), index = $this.attr("data-index");
-            if ($this.css("opacity") == 1) {
+            if ($this.css("opacity") != .4) {
                 $this.css("opacity", .4);
                 $this.siblings().css("opacity", "");
 
@@ -1971,16 +1973,6 @@
         return file;
     };
 
-    obj.goldlogSpm = function () {
-        unsafeWindow.goldlog = {};
-        Object.defineProperty(unsafeWindow.goldlog, "_$",{
-            value: {},
-            configurable: false
-        });
-        var key = obj.getItem("APLUS_LS_KEY");
-        key && key != "/**/" && obj.setItem(key[0], "/**/");
-    };
-
     obj.newTabOpen = function () {
         var open = unsafeWindow.open;
         unsafeWindow.open = function (url, name, specs, replace) {
@@ -2379,8 +2371,6 @@
     };
 
     obj.run = function() {
-        obj.goldlogSpm();
-
         obj.addPageFileList();
 
         var url = location.href;
