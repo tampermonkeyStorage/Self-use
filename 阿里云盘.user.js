@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.2.4
+// @version      2.2.5
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -651,7 +651,7 @@
         var player = obj.video_page.player, video = player.video, currentTime = video.currentTime, duration = video.duration;
         player.on("timeupdate", function () {
             var skipstart = obj.getPlayMemory("skipstart");
-            if (!this.autonext && skipstart) {
+            if (!this.autonext && skipstart && jumpend > 0) {
                 currentTime = video.currentTime;
                 if (duration - currentTime <= parseInt(jumpend) + 10 * video.playbackRate) {
                     this.autonext = true;
@@ -1986,58 +1986,64 @@
             XMLHttpRequest.prototype.open = function() {
                 if (!this._hooked) {
                     this._hooked = true;
-                    Object.defineProperty(this, "response", {
-                        get: function () {
-                            delete this.response;
-                            var responseURL = this.responseURL, response = this.response;
-                            if (responseURL.includes("/file/list")) {
-                                try { response = JSON.parse(response) } catch (error) { };
-                                response.items && response.items.forEach(function (item) {
-                                    if (item.category == "video") {
-                                        if (["ts"].includes(item.file_extension)) {
-                                            item.file_extension = "mp4";
-                                        }
-                                    }
-                                    else if (item.category == "audio") {
-                                        if (["ape"].includes(item.file_extension)) {
-                                            item.file_extension = "mp3";
-                                        }
-                                    }
-                                });
-                            }
-                            return response;
-                        },
-                        configurable: true
-                    });
+                    setupHook(this);
                 }
                 open.apply(this, arguments);
             }
         })(XMLHttpRequest.prototype.open);
+
+        function setupHook(xhr) {
+            (function setup() {
+                Object.defineProperty(xhr, "response", {
+                    get: function () {
+                        delete xhr.response;
+                        var responseURL = xhr.responseURL, response = xhr.response;
+                        if (responseURL.includes("/file/list") || responseURL.includes("/file/search")) {
+                            if (response && response.items && response.items.length > 1 && window.parent_file_id != response.items[0].parent_file_id) {
+                                response.items.sort(obj.sortByName);
+                                document.querySelector("#root") && (document.querySelector("#root").onclick = function () {
+                                    document.querySelector("#root").onclick = null;
+                                    window.parent_file_id = response.items[0].parent_file_id;
+                                });
+                            }
+
+                            response && response.items && response.items.forEach(function (item) {
+                                if (item.category == "video") {
+                                    if (["ts", "f4v", "asf"].includes(item.file_extension)) {
+                                        item.file_extension = "mp4";
+                                    }
+                                }
+                                else if (item.category == "audio") {
+                                    if (["ape"].includes(item.file_extension)) {
+                                        item.file_extension = "mp3";
+                                    }
+                                }
+                            });
+                        }
+                        else if (responseURL.includes("/file/get")) {
+                            if (response && response.category == "video") {
+                                if (["ts", "f4v", "asf"].includes(response.file_extension)) {
+                                    response.file_extension = "mp4";
+                                }
+                            }
+                        }
+                        setup();
+                        return response;
+                    },
+                    set: function () { },
+                    configurable: true
+                });
+            })();
+        }
     };
 
-    obj.switchViewArrow = function () {
-        var parent_file_id = ((location.href.match(/\/folder\/(\w+)/) || [])[1]) || "root";
-        if (window.parent_file_id != parent_file_id) {
-            window.parent_file_id = parent_file_id;
-            var dragDom = document.querySelector("[data-icon-type=PDSDrag]");
-            dragDom && dragDom.click();
-            var arrowDown = document.querySelector("[data-icon-type=PDSArrowDown]");
-            arrowDown && arrowDown.click();
+    obj.sortByName = function (n, i) {
+        const a = n.name.split(".").slice(0, -1).join(".").match(/(\d+)/g);
+        const b = i.name.split(".").slice(0, -1).join(".").match(/(\d+)/g);
+        if (a && b) {
+            return +a[0] > +b[0] ? 1 : +b[0] > +a[0] ? -1 : +a[1] > +b[1] ? 1 : +b[1] > +a[1] ? -1 : +a[2] > +b[2] ? 1 : +b[2] > +a[2] ? -1 : 0;
         }
-
-        var listViewType = obj.getItem("listViewType");
-        if (listViewType) {
-            var iconDom = listViewType == "PDSDrag" ? document.querySelector("[data-icon-type=PDSDrag]") : document.querySelector("[data-icon-type=PDSSquareGrid]");
-            iconDom && iconDom.click();
-        }
-
-        $(document).off("click", "[class^=switch-wrapper]").on("click", "[class^=switch-wrapper]", function() {
-            var iconType = this.firstChild.getAttribute("data-icon-type");
-            if (iconType) {
-                obj.setItem("listViewType", iconType);
-                obj.showTipSuccess("切换默认视图为：" + {PDSDrag: "列表模式", PDSSquareGrid: "图标模式"}[iconType], 5000);
-            }
-        });
+        return n > i ? 1 : i > n ? -1 : 0;
     };
 
     obj.customSharePwd = function () {
@@ -2321,7 +2327,6 @@
                                     obj.initDownloadHomePage();
                                 }
                                 else {
-                                    obj.switchViewArrow();
                                     obj.initDownloadSharePage();
                                 }
 
@@ -2371,13 +2376,13 @@
     };
 
     obj.run = function() {
+        obj.tidyPageFileList();
         obj.addPageFileList();
 
         var url = location.href;
         if (url.indexOf(".aliyundrive.com/s/") > 0) {
             obj.newTabOpen();
             obj.filterNotice();
-            obj.tidyPageFileList();
         }
         else if (url.indexOf(".aliyundrive.com/drive") > 0) {
             obj.customSharePwd();
