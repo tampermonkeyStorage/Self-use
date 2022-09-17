@@ -426,7 +426,6 @@
             obj.selectEpisodeHomePage();
         }
         else if (path == "mbox") {
-            // 群组
         }
     };
 
