@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.2.5
+// @version      0.2.6
 // @description  播放器替换为DPlayer
 // @author       You
 // @match        https://pan.baidu.com/s/*
@@ -37,9 +37,9 @@
         window.onhashchange = function (e) {
             setTimeout(obj.storageFileListSharePage, 500);
         };
-        document.querySelector(".fufHyA").onclick = function () {
+        document.querySelector(".fufHyA") && (document.querySelector(".fufHyA").onclick = function () {
             setTimeout(obj.storageFileListSharePage, 500);
-        };
+        });
     };
 
     obj.fetchVideoInfoHomePage = function (callback) {
@@ -264,7 +264,7 @@
             playbackSpeed: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3, 4],
             contextmenu: [
                 {
-                    text: "作者加油",
+                    text: "喜欢吗 👍 一个吧",
                     link: "https://pc-index-skin.cdn.bcebos.com/6cb0bccb31e49dc0dba6336167be0a18.png",
                 },
             ],
@@ -294,6 +294,8 @@
             dPlayer.on("durationchange", function () {
                 obj.memoryPlay(dPlayer);
                 obj.playSetting();
+                obj.autoPlayEpisode();
+                obj.appreciation(dPlayer);
             });
 
             dPlayer.speed(localStorage.getItem("dplayer-speed") || 1);
@@ -415,6 +417,201 @@
         });
     };
 
+    obj.autoPlayEpisode = function () {
+        var path = location.pathname.split("/")[1];
+        if (path == "s") {
+            obj.selectEpisodeSharePage();
+        }
+        else if (path == "play") {
+            obj.selectEpisodeHomePage();
+        }
+        else if (path == "mbox") {
+            // 群组
+        }
+    };
+
+    obj.selectEpisodeSharePage = function () {
+        var $ = obj.getJquery();
+        if ($(".dplayer-icons-right #btn-select-episode").length) return;
+
+        var fileList = JSON.parse(sessionStorage.getItem("sharePageFileList") || "[]")
+        , videoList = fileList.filter(function (item, index) {
+            return item.category == 1;
+        })
+        , file = obj.video_page.info[0]
+        , fileIndex = videoList.findIndex(function (item, index) {
+            return item.fs_id == file.fs_id;
+        });
+        if (!(fileIndex > -1 && videoList.length > 1)) return;
+
+        var eleitem = "";
+        videoList.forEach(function (item, index) {
+            if (fileIndex == index) {
+                eleitem += '<div class="video-item active" title="' + item.server_filename + '" style="background-color: rgba(0,0,0,.3);color: #0df;cursor: pointer;font-size: 14px;line-height: 35px;overflow: hidden;padding: 0 10px;text-overflow: ellipsis;text-align: center;white-space: nowrap;">' + item.server_filename + '</div>';
+            }
+            else {
+                eleitem += '<div class="video-item" title="' + item.server_filename + '" style="color: #fff;cursor: pointer;font-size: 14px;line-height: 35px;overflow: hidden;padding: 0 10px;text-overflow: ellipsis;text-align: center;white-space: nowrap;">' + item.server_filename + '</div>';
+            }
+        });
+
+        var html = '<button class="dplayer-icon dplayer-play-icon prev-icon" title="上一集"><svg t="1658231494866" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="22734" width="128" height="128" xmlns:xlink="http://www.w3.org/1999/xlink"><defs><style type="text/css"></style></defs><path d="M757.527273 190.138182L382.510545 490.123636a28.020364 28.020364 0 0 0 0 43.752728l375.016728 299.985454a28.020364 28.020364 0 0 0 45.474909-21.876363V212.014545a28.020364 28.020364 0 0 0-45.474909-21.876363zM249.949091 221.509818a28.020364 28.020364 0 0 0-27.973818 27.973818v525.032728a28.020364 28.020364 0 1 0 55.994182 0V249.483636a28.020364 28.020364 0 0 0-28.020364-27.973818zM747.054545 270.242909v483.514182L444.834909 512l302.173091-241.757091z" fill="#333333" p-id="22735"></path></svg></button>';
+        html += '<button id="btn-select-episode" class="dplayer-icon dplayer-quality-icon" title="选集">选集</button> <div class="playlist-content" style="max-width: 80%;max-height: 330px;width: auto;height: auto;box-sizing: border-box;overflow: hidden;position: absolute;left: 0;transition: all .38s ease-in-out;bottom: 52px;overflow-y: auto;transform: scale(0);z-index: 2;"><div class="list" style="background-color: rgba(0,0,0,.3);height: 100%;">' + eleitem + '</div></div>';
+        html += '<button class="dplayer-icon dplayer-play-icon next-icon" title="下一集"><svg t="1658231512641" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="23796" xmlns:xlink="http://www.w3.org/1999/xlink" width="128" height="128"><defs><style type="text/css"></style></defs><path d="M248.506182 190.138182l374.970182 299.985454a28.020364 28.020364 0 0 1 0 43.752728L248.552727 833.861818a28.020364 28.020364 0 0 1-45.521454-21.876363V212.014545c0-23.505455 27.182545-36.538182 45.521454-21.876363z m507.485091 31.371636c15.453091 0 28.020364 12.567273 28.020363 27.973818v525.032728a28.020364 28.020364 0 1 1-55.994181 0V249.483636c0-15.453091 12.520727-27.973818 27.973818-27.973818zM258.978909 270.242909v483.514182L561.198545 512 258.978909 270.242909z" fill="#333333" p-id="23797"></path></svg></button>';
+        $(".dplayer-icons-right").prepend(html);
+
+        $("#btn-select-episode").on("click", function() {
+            var eleEpisode = $(".playlist-content");
+            if (eleEpisode.css("transform").match(/\d+/) > 0) {
+                eleEpisode.css("transform", "scale(0)");
+            }
+            else {
+                eleEpisode.css("transform", "scale(1)");
+                $(".dplayer-mask").addClass("dplayer-mask-show");
+
+                var singleheight = $(".dplayer-icons-right .video-item")[0].offsetHeight;
+                var totalheight = $(".dplayer-icons-right .playlist-content").height();
+                $(".dplayer-icons-right .playlist-content").scrollTop((fileIndex + 1) * singleheight - totalheight / 2);
+            }
+        });
+        $(".dplayer-mask").on("click",function() {
+            var eleEpisode = $(".playlist-content");
+            if (eleEpisode.css("transform").match(/\d+/) > 0) {
+                eleEpisode.css("transform", "scale(0)");
+                $(this).removeClass("dplayer-mask-show");
+            }
+        });
+
+        $(".playlist-content .video-item").on("click", function() {
+            var $this = $(this);
+            if ($this.hasClass("active")) return;
+            $(".dplayer-mask").removeClass("dplayer-mask-show");
+
+            var oldele = $(".video-item.active");
+            oldele.removeClass("active");
+            oldele.css({"background-color": "", "color": "#fff"});
+
+            $this.addClass("active");
+            $this.css({"background-color": "rgba(0,0,0,.3)", "color": "#0df"});
+
+            location.href = "https://pan.baidu.com" + location.pathname + "?fid=" + videoList[$this.index()].fs_id;
+        });
+        // 上下集
+        $(".prev-icon").on("click",function () {
+            var prevvideo = videoList[fileIndex - 1];
+            if (prevvideo) {
+                location.href = "https://pan.baidu.com" + location.pathname + "?fid=" + prevvideo.fs_id;
+            }
+            else {
+                obj.showTipError("没有上一集了");
+            }
+        });
+        $(".next-icon").on("click",function () {
+            var nextvideo = videoList[fileIndex + 1];
+            if (nextvideo) {
+                location.href = "https://pan.baidu.com" + location.pathname + "?fid=" + nextvideo.fs_id;
+            }
+            else {
+                obj.showTipError("没有下一集了");
+            }
+        });
+    };
+
+    obj.selectEpisodeHomePage = function () {
+        var $ = obj.getJquery();
+        if ($(".dplayer-icons-right #btn-select-episode").length) return;
+
+        var videoList = [];
+        $("#videoListView").find(".video-item").each(function () {
+            videoList.push({
+                server_filename: this.title
+            })
+        });
+
+        var currpath = obj.require("system-core:context/context.js").instanceForSystem.router.query.get("path");
+        var server_filename = currpath.split("/").pop()
+        , fileIndex = videoList.findIndex(function (item, index) {
+            return item.server_filename == server_filename;
+        });
+        if (!(fileIndex > -1 && videoList.length > 1)) return;
+
+        var eleitem = "";
+        videoList.forEach(function (item, index) {
+            if (fileIndex == index) {
+                eleitem += '<div class="video-item active" title="' + item.server_filename + '" style="background-color: rgba(0,0,0,.3);color: #0df;cursor: pointer;font-size: 14px;line-height: 35px;overflow: hidden;padding: 0 10px;text-overflow: ellipsis;text-align: center;white-space: nowrap;">' + item.server_filename + '</div>';
+            }
+            else {
+                eleitem += '<div class="video-item" title="' + item.server_filename + '" style="color: #fff;cursor: pointer;font-size: 14px;line-height: 35px;overflow: hidden;padding: 0 10px;text-overflow: ellipsis;text-align: center;white-space: nowrap;">' + item.server_filename + '</div>';
+            }
+        });
+
+        var html = '<button class="dplayer-icon dplayer-play-icon prev-icon" title="上一集"><svg t="1658231494866" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="22734" width="128" height="128" xmlns:xlink="http://www.w3.org/1999/xlink"><defs><style type="text/css"></style></defs><path d="M757.527273 190.138182L382.510545 490.123636a28.020364 28.020364 0 0 0 0 43.752728l375.016728 299.985454a28.020364 28.020364 0 0 0 45.474909-21.876363V212.014545a28.020364 28.020364 0 0 0-45.474909-21.876363zM249.949091 221.509818a28.020364 28.020364 0 0 0-27.973818 27.973818v525.032728a28.020364 28.020364 0 1 0 55.994182 0V249.483636a28.020364 28.020364 0 0 0-28.020364-27.973818zM747.054545 270.242909v483.514182L444.834909 512l302.173091-241.757091z" fill="#333333" p-id="22735"></path></svg></button>';
+        html += '<button id="btn-select-episode" class="dplayer-icon dplayer-quality-icon" title="选集">选集</button> <div class="playlist-content" style="max-width: 80%;max-height: 330px;width: auto;height: auto;box-sizing: border-box;overflow: hidden;position: absolute;left: 0;transition: all .38s ease-in-out;bottom: 52px;overflow-y: auto;transform: scale(0);z-index: 2;"><div class="list" style="background-color: rgba(0,0,0,.3);height: 100%;">' + eleitem + '</div></div>';
+        html += '<button class="dplayer-icon dplayer-play-icon next-icon" title="下一集"><svg t="1658231512641" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="23796" xmlns:xlink="http://www.w3.org/1999/xlink" width="128" height="128"><defs><style type="text/css"></style></defs><path d="M248.506182 190.138182l374.970182 299.985454a28.020364 28.020364 0 0 1 0 43.752728L248.552727 833.861818a28.020364 28.020364 0 0 1-45.521454-21.876363V212.014545c0-23.505455 27.182545-36.538182 45.521454-21.876363z m507.485091 31.371636c15.453091 0 28.020364 12.567273 28.020363 27.973818v525.032728a28.020364 28.020364 0 1 1-55.994181 0V249.483636c0-15.453091 12.520727-27.973818 27.973818-27.973818zM258.978909 270.242909v483.514182L561.198545 512 258.978909 270.242909z" fill="#333333" p-id="23797"></path></svg></button>';
+        $(".dplayer-icons-right").prepend(html);
+
+        $("#btn-select-episode").on("click", function() {
+            var eleEpisode = $(".playlist-content");
+            if (eleEpisode.css("transform").match(/\d+/) > 0) {
+                eleEpisode.css("transform", "scale(0)");
+            }
+            else {
+                eleEpisode.css("transform", "scale(1)");
+                $(".dplayer-mask").addClass("dplayer-mask-show");
+
+                var singleheight = $(".dplayer-icons-right .video-item")[0].offsetHeight;
+                var totalheight = $(".dplayer-icons-right .playlist-content").height();
+                $(".dplayer-icons-right .playlist-content").scrollTop((fileIndex + 1) * singleheight - totalheight / 2);
+            }
+        });
+        $(".dplayer-mask").on("click",function() {
+            var eleEpisode = $(".playlist-content");
+            if (eleEpisode.css("transform").match(/\d+/) > 0) {
+                eleEpisode.css("transform", "scale(0)");
+                $(this).removeClass("dplayer-mask-show");
+            }
+        });
+
+        $(".playlist-content .video-item").on("click", function() {
+            var $this = $(this);
+            if ($this.hasClass("active")) return;
+            $(".dplayer-mask").removeClass("dplayer-mask-show");
+
+            var oldele = $(".video-item.active");
+            oldele.removeClass("active");
+            oldele.css({"background-color": "", "color": "#fff"});
+
+            $this.addClass("active");
+            $this.css({"background-color": "rgba(0,0,0,.3)", "color": "#0df"});
+
+            var t = $this.index();
+            var path = currpath.split("/").slice(0, -1).concat(videoList[t].server_filename).join("/");
+            location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + t;
+        });
+        // 上下集
+        $(".prev-icon").on("click",function () {
+            var prevvideo = videoList[fileIndex - 1];
+            if (prevvideo) {
+                var t = fileIndex - 1;
+                var path = currpath.split("/").slice(0, -1).concat(videoList[t].server_filename).join("/");
+                location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + t;
+            }
+            else {
+                obj.showTipError("没有上一集了");
+            }
+        });
+        $(".next-icon").on("click",function () {
+            var nextvideo = videoList[fileIndex + 1];
+            if (nextvideo) {
+                var t = fileIndex + 1;
+                var path = currpath.split("/").slice(0, -1).concat(videoList[t].server_filename).join("/");
+                location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + t;
+            }
+            else {
+                obj.showTipError("没有下一集了");
+            }
+        });
+    };
+
     obj.autoPlayNext = function () {
         var path = location.pathname.split("/")[1];
         if (path == "s") {
@@ -497,6 +694,21 @@
             });
         }
         return window.instances[src];
+    };
+
+    obj.appreciation = function (dPlayer) {
+        if (this.contextmenu_show) return;
+        this.contextmenu_show = true;
+        localStorage.getItem("appreciation_show") || localStorage.setItem("appreciation_show", Date.now());
+        if (Date.now() - localStorage.getItem("appreciation_show") > 86400000 * 7) {
+            setTimeout(() => {
+                dPlayer.contextmenu.show(dPlayer.container.offsetWidth / 2.5, dPlayer.container.offsetHeight / 3);
+            }, dPlayer.video.duration / 10 * 1000);
+        }
+        document.querySelector("#dplayer .dplayer-menu-item").addEventListener('click', () => {
+            dPlayer.contextmenu.hide();
+            localStorage.setItem("appreciation_show", Date.now());
+        });
     };
 
     obj.require = function (name) {
