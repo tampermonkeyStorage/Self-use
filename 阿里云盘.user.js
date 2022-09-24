@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.2.5
+// @version      2.2.6
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -176,7 +176,7 @@
             playbackSpeed: [0.5, 0.75, 1, 1.25, 1.5, 2],
             contextmenu: [
                 {
-                    text: "支持作者",
+                    text: "👍喜欢吗👍赞一个👍",
                     link: "https://pc-index-skin.cdn.bcebos.com/6cb0bccb31e49dc0dba6336167be0a18.png",
                 },
             ],
@@ -194,6 +194,7 @@
             }
 
             obj.dPlayerEvents(player);
+            obj.appreciation(player);
         } catch (error) {
             console.error("播放器创建失败", error);
         }
@@ -252,6 +253,10 @@
 
         obj.addCueVideoSubtitle(function (textTracks) {
             textTracks && obj.selectSubtitles(textTracks);
+            obj.suboffsettime && obj.subtitleOffset();
+            player.subtitle.container.style.bottom = (localStorage.getItem("dplayer-subtitle-bottom") || 10) + "%";
+            player.subtitle.container.style.color = localStorage.getItem("dplayer-subtitle-color") || "#ffd821";
+            player.subtitle.container.style.fontSize = (localStorage.getItem("dplayer-subtitle-fontSize") || 5) + "vh";
         });
 
         player.on("quality_end", function () {
@@ -274,6 +279,21 @@
         player.on("fullscreen_cancel", function () {
             localStorage.removeItem("dplayer-isfullscreen");
             player.fullScreen.request("web");
+        });
+    };
+
+    obj.appreciation = function (player) {
+        if (this.contextmenu_show) return;
+        this.contextmenu_show = true;
+        localStorage.getItem("appreciation_show") || localStorage.setItem("appreciation_show", Date.now());
+        if (Date.now() - localStorage.getItem("appreciation_show") > 86400000 * 10) {
+            setTimeout(() => {
+                player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
+            }, 60 * 1000);
+        }
+        document.querySelector("#dplayer .dplayer-menu-item").addEventListener('click', () => {
+            player.contextmenu.hide();
+            localStorage.setItem("appreciation_show", Date.now());
         });
     };
 
@@ -729,7 +749,7 @@
         index && $(".subtitle-select .subtitle-item").eq(index).click();
     };
 
-    obj.playByFile = function(file){
+    obj.playByFile = function(file) {
         obj.video_page.play_info.file_id = file.file_id;
         obj.getVideoPreviewPlayInfo(function () {
             obj.video_page.player = null;
@@ -738,7 +758,7 @@
         });
     };
 
-    obj.playByScroll = function(){
+    obj.playByScroll = function() {
         // 继续上次播放 代码贡献：https://greasyfork.org/zh-CN/users/795227-星峰
         var last_file_id = obj.getPlayMemory("last_file_id");
         var fileList = obj.file_page.items
@@ -932,13 +952,14 @@
         });
     };
 
-    obj.subtitleOffset = function (){
+    obj.subtitleOffset = function () {
         var video = document.querySelector("video");
         if (video) {
             var textTracks = video.textTracks;
             if (!(textTracks[0].cues && textTracks[0].cues.length)) return;
 
             var offsettime = obj.subOffsettime || 0;
+            if (!offsettime) return;
             var fileId = obj.video_page.play_info.file_id
             , sub_info = obj.video_page.sub_info
             , subList = sub_info[fileId];
@@ -1615,14 +1636,15 @@
         });
         $(".ant-modal-Link .m3u-download").on("click", function () {
             if (fileList.length) {
-                var folder = $(".breadcrumb--1J7mk").children(":first").children(":last").attr('data-label');
+                var folderName = $(".breadcrumb-wrap--2iqqe,.breadcrumb--1J7mk").children(":first").children(":last").attr('data-label');
                 var content = "#EXTM3U\r\n";
+                content += "#EXTVLCOPT:http-referrer=https://www.aliyundrive.com/\r\n";
                 fileList.forEach(function (item, index) {
                     if (item.category == "video") {
-                        content += ["#EXTINF:0," + item.name, item.download_url].join("\r\n") + "\r\n";
+                        content += [ "#EXTINF:0," + item.name, item.download_url ].join("\r\n") + "\r\n";
                     }
                 });
-                obj.downloadFile(content, (folder||"M3U 导出文件")+".m3u");
+                obj.downloadFile(content, (folderName || "M3U 导出文件") + ".m3u");
             }
         });
         $(".ant-modal-Link .idm-download").on("click", function () {
