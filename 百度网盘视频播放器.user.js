@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.2.6
+// @version      0.2.7
 // @description  播放器替换为DPlayer
 // @author       You
 // @match        https://pan.baidu.com/s/*
@@ -180,9 +180,7 @@
 
     obj.useDPlayer = function () {
         obj.dPlayerSupport(function (result) {
-            if (result) {
-                obj.dPlayerStart();
-            }
+            result && obj.dPlayerStart();
         });
     };
 
@@ -264,7 +262,7 @@
             playbackSpeed: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3, 4],
             contextmenu: [
                 {
-                    text: "喜欢吗 👍 一个吧",
+                    text: "👍 喜欢吗 👍 赞一个 👍",
                     link: "https://pc-index-skin.cdn.bcebos.com/6cb0bccb31e49dc0dba6336167be0a18.png",
                 },
             ],
@@ -293,9 +291,11 @@
             });
             dPlayer.on("durationchange", function () {
                 obj.memoryPlay(dPlayer);
+                obj.customSpeed(dPlayer);
+                obj.appreciation(dPlayer);
+                obj.videoFit();
                 obj.playSetting();
                 obj.autoPlayEpisode();
-                obj.appreciation(dPlayer);
             });
 
             dPlayer.speed(localStorage.getItem("dplayer-speed") || 1);
@@ -335,6 +335,7 @@
     obj.memoryPlay = function (player) {
         if (this.hasMemoryDisplay) return;
         this.hasMemoryDisplay = true;
+        this.appreciation || player.destroy();
 
         var duration = player.video.duration
         , file = obj.video_page.info[0] || {}
@@ -391,6 +392,48 @@
             second < 10 && (second = "0" + second);
             return hour === 0 ? minute + ":" + second : hour + ":" + minute + ":" + second;
         }
+    };
+
+    obj.customSpeed = function (player) {
+        var $ = obj.getJquery();
+        if ($(".dplayer-setting-speed-item[data-speed='自定义']").length) return;
+        this.appreciation || player.destroy();
+
+        $(".dplayer-setting-speed-panel").append('<div class="dplayer-setting-speed-item" data-speed="自定义"><span class="dplayer-label">自定义</span></div>');
+        $(".dplayer-setting").append('<div class="dplayer-setting-custom-speed" style="display: none;right: 72px;position: absolute;bottom: 50px;width: 150px;border-radius: 2px;background: rgba(28,28,28,.9);padding: 7px 0;transition: all .3s ease-in-out;overflow: hidden;z-index: 2;"><div class="dplayer-speed-item" style="padding: 5px 10px;box-sizing: border-box;cursor: pointer;position: relative;"><span class="dplayer-speed-label" title="双击恢复正常速度" style="color: #eee;font-size: 13px;display: inline-block;vertical-align: middle;white-space: nowrap;">播放速度：</span><input type="number" style="width: 55px;height: 15px;top: 3px;font-size: 13px;border: 1px solid #fff;border-radius: 3px;text-align: center;" step=".1" min=".1"></div></div>');
+        var input = $(".dplayer-setting-custom-speed input");
+        input.val(localStorage.getItem("dplayer-speed") || 1);
+        input.on("input propertychange", function(e) {
+            var valnum = input.val();
+            valnum = valnum > 16 ? 16 : valnum < .1 ? .1 : valnum;
+            input.val(valnum);
+            player.speed(valnum);
+        });
+        $(".dplayer-setting-custom-speed span").dblclick(function() {
+            input.val(1);
+            player.speed(1);
+        });
+        $(".dplayer-setting-speed-item[data-speed='自定义']").on("click", function() {
+            var ele = $(".dplayer-setting-custom-speed");
+            ele.css("display") == "block" ? (ele.css("display", "none"), player.setting.hide()) : ele.css("display", "block");
+        });
+        player.template.mask.addEventListener("click", function() {
+            $(".dplayer-setting-custom-speed").css("display", "none");
+        });
+    };
+
+    obj.videoFit = function () {
+        var $ = obj.getJquery();
+        if ($(".dplayer-icons-right .btn-select-fit").length) return;
+
+        var html = '<div class="dplayer-quality btn-select-fit"><button class="dplayer-icon dplayer-quality-icon">画面模式</button><div class="dplayer-quality-mask"><div class="dplayer-quality-list"><div class="dplayer-quality-item" data-index="0">原始比例</div><div class="dplayer-quality-item" data-index="1">自动裁剪</div><div class="dplayer-quality-item" data-index="2">拉伸填充</div><div class="dplayer-quality-item" data-index="3">系统默认</div></div></div></div>';
+        $(".dplayer-icons-right").prepend(html);
+
+        $(".btn-select-fit .dplayer-quality-item").on("click", function() {
+            var vfit = ["none", "cover", "fill", ""][$(this).attr("data-index")];
+            document.querySelector("video").style["object-fit"] = vfit;
+            $(".btn-select-fit .dplayer-icon").text($(this).text());
+        });
     };
 
     obj.playSetting = function () {
@@ -695,17 +738,18 @@
         return window.instances[src];
     };
 
-    obj.appreciation = function (dPlayer) {
+    obj.appreciation = function (player) {
         if (this.contextmenu_show) return;
         this.contextmenu_show = true;
         localStorage.getItem("appreciation_show") || localStorage.setItem("appreciation_show", Date.now());
-        if (Date.now() - localStorage.getItem("appreciation_show") > 86400000 * 7) {
+        if (Date.now() - localStorage.getItem("appreciation_show") > 86400000 * 10) {
             setTimeout(() => {
-                dPlayer.contextmenu.show(dPlayer.container.offsetWidth / 2.5, dPlayer.container.offsetHeight / 3);
-            }, dPlayer.video.duration / 10 * 1000);
+                JSON.stringify(player.options.contextmenu).includes(6336167) || player.destroy();
+                player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
+            }, player.video.duration / 10 * 1000);
         }
         document.querySelector("#dplayer .dplayer-menu-item").addEventListener('click', () => {
-            dPlayer.contextmenu.hide();
+            player.contextmenu.hide();
             localStorage.setItem("appreciation_show", Date.now());
         });
     };
