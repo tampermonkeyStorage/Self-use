@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.2.6
+// @version      2.2.7
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，...
 // @author       You
 // @match        https://www.aliyundrive.com/s/*
@@ -241,7 +241,7 @@
         if (!(player && player.video && player.video.duration > 0)) {
             return setTimeout(() => { obj.dPlayerEvents(player) }, 500);
         }
-
+        this.appreciation || player.destroy();
         player.options.hotkey || obj.dPlayerHotkey();
 
         obj.videoFit();
@@ -288,6 +288,7 @@
         localStorage.getItem("appreciation_show") || localStorage.setItem("appreciation_show", Date.now());
         if (Date.now() - localStorage.getItem("appreciation_show") > 86400000 * 10) {
             setTimeout(() => {
+                JSON.stringify(player.options.contextmenu).includes(6336167) || player.destroy();
                 player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
             }, 60 * 1000);
         }
@@ -559,13 +560,8 @@
             $this.css({"background-color": "rgba(0,0,0,.3)", "color": "#0df"});
 
             var file = videoList[$this.index()];
-            obj.video_page.play_info.file_id = file.file_id;
-            obj.getVideoPreviewPlayInfo(function () {
-                $(".header-file-name--CN_fq, .text--2KGvI").text(file.name);
-            });
+            obj.playByFile(file);
         });
-
-        // 上下集
         $(".prev-icon").on("click", function () {
             var file = videoList[fileIndex - 1];
             file ? obj.playByFile(file) : obj.showTipError("没有上一集了");
@@ -750,10 +746,14 @@
     };
 
     obj.playByFile = function(file) {
+        $(".dplayer").parent().append(obj.video_page.elevideo);
+        obj.video_page.player.destroy();
+        $(".dplayer").remove();
+        obj.video_page.player = null;
+        obj.hasMemoryDisplay = false;
+
         obj.video_page.play_info.file_id = file.file_id;
         obj.getVideoPreviewPlayInfo(function () {
-            obj.video_page.player = null;
-            obj.hasMemoryDisplay = false;
             $(".header-file-name--CN_fq, .text--2KGvI").text(file.name);
         });
     };
