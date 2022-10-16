@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.3.1
+// @version      2.3.2
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -155,6 +155,7 @@
             obj.video_page.attributes = {};
             obj.hasMemoryDisplay = false;
             obj.video_page.player = null;
+            obj.contextmenu_show = null;
         }
 
         var options = {
@@ -560,7 +561,6 @@
             player.contextmenu && player.contextmenu.destroy && player.contextmenu.destroy();
             player.controller && player.controller.destroy && player.controller.destroy();
             player.timer && player.timer.destroy && player.timer.destroy();
-            player.events.trigger('destroy');
         } catch (error) { };
         obj.video_page.play_info.file_id = file.file_id;
         obj.getVideoPreviewPlayInfo(function () {
