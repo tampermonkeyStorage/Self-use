@@ -1,19 +1,14 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.3.0
+// @version      2.3.1
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，...
 // @author       You
-// @match        https://www.aliyundrive.com/s/*
-// @match        https://www.aliyundrive.com/drive*
+// @match        https://www.aliyundrive.com/*
 // @icon         https://gw.alicdn.com/imgextra/i3/O1CN01aj9rdD1GS0E8io11t_!!6000000000620-73-tps-16-16.ico
 // @require      https://cdn.staticfile.org/jquery/3.6.0/jquery.min.js
 // @run-at       document-body
-// @connect      aliyundrive.com
-// @connect      alicloudccp.com
-// @connect      aliyuncs.com
 // @grant        unsafeWindow
-// @grant        GM_xmlhttpRequest
 // ==/UserScript==
 
 (function() {
@@ -46,7 +41,6 @@
         obj.dPlayerSupport(function (result) {
             if (result) {
                 if (unsafeWindow.DPlayer.version === "1.27.0") {
-                    /* v1.27.0 */
                     var notice = unsafeWindow.DPlayer.prototype.notice;
                     unsafeWindow.DPlayer.prototype.notice = function () {
                         arguments.length > 1 && typeof arguments[1] == "number" && arguments[1] < 0 && (arguments[1] = 2000);
@@ -608,7 +602,6 @@
             }
         }
         scrollerdiv.scrollTop(topp);
-        //移动滚动条后点击上次播放文件
         setTimeout(() => {
             $(".text-primary--3DHOJ,.title--3x5k2").each( function () {
                 var tmptext = this.textContent;
@@ -1155,7 +1148,7 @@
 
     obj.addCueVideoSubtitle = function (callback) {
         obj.getSubList(function (sublist) {
-            if (sublist && sublist.length) {
+            if (sublist && sublist.length && sublist[0]) {
                 var video = document.querySelector("video");
                 if (video) {
                     var textTracks = video.textTracks;
@@ -1396,41 +1389,35 @@
     };
 
     obj.surlRequest = function (url, callback) {
-        GM_xmlhttpRequest({
-            method: "get",
-            url : url,
-            headers: {
-                referer: "https://www.aliyundrive.com/"
-            },
-            responseType: "blob",
-            onload: function(result) {
-                if (result.status && parseInt(result.status / 100) == 2) {
-                    var blob = result.response;
-                    var reader = new FileReader();
-                    reader.readAsText(blob, "UTF-8");
-                    reader.onload = function(e) {
-                        var result = reader.result;
-                        if (result.indexOf("�") > -1 && !reader.markGBK) {
-                            reader.markGBK = true;
-                            return reader.readAsText(blob, "GBK");
-                        }
-                        else if (result.indexOf("") > -1 && !reader.markBIG5) {
-                            reader.markBIG5 = true;
-                            return reader.readAsText(blob, "BIG5");
-                        }
-                        callback && callback(result);
-                    };
-                    reader.onerror = function(e) {
-                        callback && callback("");
-                    };
+        fetch(url, {
+            referrer: "https://www.aliyundrive.com/",
+            referrerPolicy: "origin",
+            body: null,
+            method: "GET",
+            mode: "cors",
+            credentials: "omit"
+        }).then(data => data.blob()).then(blob => {
+            var reader = new FileReader();
+            reader.readAsText(blob, "UTF-8");
+            reader.onload = function(e) {
+                var result = reader.result;
+                if (result.indexOf("�") > -1 && !reader.markGBK) {
+                    reader.markGBK = true;
+                    return reader.readAsText(blob, "GBK");
                 }
-                else {
-                    callback && callback("");
+                else if (result.indexOf("") > -1 && !reader.markBIG5) {
+                    reader.markBIG5 = true;
+                    return reader.readAsText(blob, "BIG5");
                 }
-            },
-            onerror: function (error) {
+                callback && callback(result);
+            };
+            reader.onerror = function(e) {
+                console.error("reader.onerror", e);
                 callback && callback("");
-            }
+            };
+        }).catch(function(error) {
+            console.error("obj.surlRequest fetch error", error);
+            callback && callback("");
         });
     };
 
