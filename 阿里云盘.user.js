@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.3.2
+// @version      2.3.3
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -1645,39 +1645,34 @@
         html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi appreciation">👍 点个赞</button>';
         html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi idm-download">IDM 导出文件</button>';
         html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi m3u-download">M3U 导出文件</button>';
-        html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi aria2-download">Aria2 推送</button>';
+        html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi aria2-download">Aria2 推送</button><button class="button--2Aa4u primary--3AJe5 aria2-set" style="margin-left: 0;width: auto;border: 0 solid transparent;">⚙️</button>';
         html += '</div></div></div></div></div></div></div>';
         $("body").append(html);
 
-        $(".icon-wrapper--3dbbo").one("click", function () {
+        $(".ant-modal-Link .icon-wrapper--3dbbo").one("click", function () {
             $(".ant-modal-Link").remove();
         });
-        $(".ant-modal-wrap").on("click", function (event) {
+        $(".ant-modal-Link .ant-modal-wrap").on("click", function (event) {
             if ($(event.target).closest(".ant-modal-content").length == 0) {
                 $(".ant-modal-Link").remove();
             }
         });
         $(".ant-modal-Link .appreciation").on("click", function () {
+            $(".ant-modal-Link .idm-download").text("IDM 导出文件");
+            $(".ant-modal-Link .m3u-download").text("M3U 导出文件");
+            $(".ant-modal-Link .aria2-download").text("Aria2 推送");
+            localStorage.setItem("appreciation_show", Date.now());
             window.open("https://pc-index-skin.cdn.bcebos.com/6cb0bccb31e49dc0dba6336167be0a18.png", "_blank");
         });
 
         fileList = fileList.filter(function (item) {
             return item.type == "file";
         });
-        $(".ant-modal-Link .m3u-download").on("click", function () {
-            if (fileList.length) {
-                var folderName = $(".breadcrumb-wrap--2iqqe,.breadcrumb--1J7mk").children(":first").children(":last").attr('data-label');
-                var content = "#EXTM3U\r\n";
-                content += "#EXTVLCOPT:http-referrer=https://www.aliyundrive.com/\r\n";
-                fileList.forEach(function (item, index) {
-                    if (item.category == "video") {
-                        content += [ "#EXTINF:0," + item.name, item.download_url ].join("\r\n") + "\r\n";
-                    }
-                });
-                obj.downloadFile(content, (folderName || "M3U 导出文件") + ".m3u");
-            }
-        });
         $(".ant-modal-Link .idm-download").on("click", function () {
+            localStorage.getItem("appreciation_show") || localStorage.setItem("appreciation_show", Date.now());
+            if (Date.now() - localStorage.getItem("appreciation_show") > 86400000 * 10) {
+                return $(this).text("⮜⮜" + $(".ant-modal-Link .appreciation:eq(0)").text());
+            }
             if (fileList.length) {
                 var content = "", referer = "https://www.aliyundrive.com/", userAgent = navigator.userAgent;
                 fileList.forEach(function (item, index) {
@@ -1686,7 +1681,34 @@
                 obj.downloadFile(content, "IDM 导出文件.ef2");
             }
         });
+        $(".ant-modal-Link .m3u-download").on("click", function () {
+            localStorage.getItem("appreciation_show") || localStorage.setItem("appreciation_show", Date.now());
+            if (Date.now() - localStorage.getItem("appreciation_show") > 86400000 * 10) {
+                return $(this).text("⮜⮜" + $(".ant-modal-Link .appreciation:eq(0)").text());
+            }
+            if (fileList.length) {
+                var videofileList = fileList.filter(function (item) {
+                    return item.category == "video";
+                });
+                if (videofileList.length) {
+                    var folderName = $(".breadcrumb-wrap--2iqqe,.breadcrumb--1J7mk").children(":first").children(":last").attr('data-label');
+                    var content = "#EXTM3U\r\n";
+                    content += "#EXTVLCOPT:http-referrer=https://www.aliyundrive.com/\r\n";
+                    videofileList.forEach(function (item, index) {
+                        content += [ "#EXTINF:0," + item.name, item.download_url ].join("\r\n") + "\r\n";
+                    });
+                    obj.downloadFile(content, (folderName || "M3U 导出文件") + ".m3u");
+                }
+                else {
+                    obj.showTipError("未发现可播放文件");
+                }
+            }
+        });
         $(".ant-modal-Link .aria2-download").on("click", function () {
+            localStorage.getItem("appreciation_show") || localStorage.setItem("appreciation_show", Date.now());
+            if (Date.now() - localStorage.getItem("appreciation_show") > 86400000 * 10) {
+                return $(this).text("⮜⮜" + $(".ant-modal-Link .appreciation:eq(0)").text());
+            }
             if (fileList.length) {
                 var $this = $(this), $text = $this.text();
                 $this.text("正在推送");
@@ -1702,11 +1724,11 @@
                         jsonrpc: "2.0",
                         method: "aria2.addUri",
                         params:[
-                            //"token:你的RPC密钥", // 替换你的RPC密钥
+                            "token:" + (obj.getItem("aria-token") || ""), // 替换你的RPC密钥
                             [ item.download_url ],
                             {
                                 out: item.name,
-                                dir: "D:\/aliyundriveDownload" + (folderName ? "\/" + folderName : ""), // 下载路径
+                                dir: (obj.getItem("aria-dir") || "D:\/aliyundriveDownloads") + (folderName ? "\/" + folderName : ""), // 下载路径
                                 referer: "https://www.aliyundrive.com/",
                                 "user-agent": navigator.userAgent
                             }
@@ -1725,6 +1747,9 @@
                 })
             }
         });
+        $(".ant-modal-Link .aria2-set").on("click", function () {
+            obj.aria2Set();
+        });
     };
 
     obj.downloadFile = function (content, filename) {
@@ -1739,7 +1764,7 @@
 
     obj.aria2RPC = function (downData, callback) {
         var urls = ["http://127.0.0.1:6800/jsonrpc", "http://localhost:16800/jsonrpc"];
-        var url = sessionStorage.getItem("aria-url");
+        var url = obj.getItem("aria-url");
         $.ajax({
             type: "POST",
             url: url || urls[0],
@@ -1748,27 +1773,51 @@
             processData: false,
             contentType: "application/json",
             success: function(result){
-                url || sessionStorage.setItem("aria-url", this.url);
+                url || obj.setItem("aria-url", this.url);
                 callback && callback(result);
             },
             error: function (error) {
                 var index = urls.indexOf(this.url);
                 if (url) {
                     if (index < urls.length - 1) {
-                        sessionStorage.setItem("aria-url", urls[index + 1]);
+                        obj.setItem("aria-url", urls[index + 1]);
                         setTimeout(function() { obj.aria2RPC(downData, callback) }, 500);
                     }
                     else {
                         console.error("Aria2 推送服务 错误：", error, this.url);
-                        sessionStorage.removeItem("aria-url");
+                        obj.removeItem("aria-url");
                         callback && callback("");
                     }
                 }
                 else {
-                    sessionStorage.setItem("aria-url", urls[index + 1]);
+                    obj.setItem("aria-url", urls[index + 1]);
                     setTimeout(function() { obj.aria2RPC(downData, callback) }, 500);
                 }
             }
+        });
+    };
+
+    obj.aria2Set = function () {
+        if ($(".ant-aria2-set-box").length) return;
+        var html = '<div class="ant-modal-root ant-aria2-set-box"><div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap" role="dialog" style=""><div role="document" class="ant-modal modal-wrapper--2yJKO" style="width: 340px;transform-origin: -14px 195px;"><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle2">Aria2 设置</div></div><div class="ant-modal-body"><div class="icon-wrapper--3dbbo"><span data-role="icon" data-render-as="svg" data-icon-type="PDSClose" class="close-icon--33bP0 icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSClose"></use></svg></span></div><div>推送链接：</div><div class="content-wrapper--1_WJv"><input class="ant-input ant-input-borderless input--3oFR6" type="text"></div><div>推送路径：</div><div class="content-wrapper--1_WJv"><input class="ant-input ant-input-borderless input--3oFR6" type="text"></div><div>RPC密钥：</div><div class="content-wrapper--1_WJv"><input class="ant-input ant-input-borderless input--3oFR6" type="text"></div></div><div class="ant-modal-footer"><div class="footer--3Q0je"><button class="button--2Aa4u primary--3AJe5 small---B8mi">确定</button></div></div></div></div></div></div>';
+        $("body").append(html);
+        var $url = $(".ant-aria2-set-box input:eq(0)"), $dir = $(".ant-aria2-set-box input:eq(1)"), $token = $(".ant-aria2-set-box input:eq(2)");
+        $url.val(obj.getItem("aria-url") || "");
+        $dir.val(obj.getItem("aria-dir") || "D:\/aliyundriveDownloads");
+        $token.val(obj.getItem("aria-token") || "");
+
+        $(".ant-aria2-set-box .icon-wrapper--3dbbo").one("click", function () {
+            $(".ant-aria2-set-box").remove();
+        });
+        $(".ant-aria2-set-box button:eq(-1)").one("click", function () {
+            var url = $url.val();
+            url && obj.setItem("aria-url", url);
+            var dir = $dir.val();
+            dir && dir.replace(/\/$/, "");
+            dir && obj.setItem("aria-dir", dir);
+            var token = $token.val();
+            token && obj.setItem("aria-token", token);
+            $(".ant-aria2-set-box").remove();
         });
     };
 
