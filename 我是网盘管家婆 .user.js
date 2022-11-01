@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.5.5
+// @version      0.5.6
 // @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云.夸克】 功能概述：【网盘页面增加资源搜索快捷方式，访问过的分享链接和密码自动记忆，本地缓存数据库搜索】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -411,7 +411,7 @@
         if ($(".dialog-dialog .web-items .item").length == 0) {
             var searchList = obj.searchList();
             Object.keys(searchList).forEach(function(shareSource) {
-                var sourceName = {baidu: "百度", lanzous: "蓝奏", ty189: "天翼", xunlei: "迅雷", aliyundrive: "阿里", caiyun: "彩云", weiyun: "微云"}[shareSource] + "资源搜索引擎";
+                var sourceName = {baidu: "百度", lanzous: "蓝奏", ty189: "天翼", xunlei: "迅雷", aliyundrive: "阿里", caiyun: "彩云", weiyun: "微云", "": "更多"}[shareSource] + "资源搜索引擎";
                 $(".dialog-dialog .web-items").append('<span><em>[ ' + sourceName + ' ]</em></span><br/>');
 
                 searchList[shareSource].forEach(function(item, index) {
@@ -499,62 +499,15 @@
                     type: 2,
                 },
                 {
-                    name: "淘易搜",
-                    link: "http://www.taoyisou.com/s?k=%s",
-                    type: 3,
-                },
-                {
-                    name: "易搜盘",
-                    link: "http://www.yisopan.com/s?key=%s",
-                    type: 3,
-                },
-                {
-                    name: "V盘搜",
-                    link: "http://www.vpansou.com/query?wd=%s",
-                    type: 3,
-                },
-                {
-                    name: "微盘搜索",
-                    link: "http://www.vpanso.com/s?wd=%s",
-                    type: 3,
-                },
-                {
-                    name: "坑搜网",
-                    link: "http://www.kengso.com/s?wd=%s",
-                    type: 3,
-                },
-                {
-                    name: "热盘搜",
-                    link: "http://www.repanso.com/q?wd=%s",
-                    type: 3,
-                },
-                {
-                    name: "西瓜搜搜",
-                    link: "http://www.xgsoso.com/s?wd=%s",
-                    type: 3,
-                },
-                {
-                    name: "乐乐搜索",
-                    link: "http://www.lele360.com/search?word=%s",
-                    type: 3,
-                },
-                /*
-                {
-                    name: "大漠盘搜",
-                    link: "http://www.dmpans.com/search?wd=%s",
-                    type: 3,
-                },
-                {
                     name: "盘么么",
                     link: "http://www.panmeme.com/query?key=%s",
                     type: 3,
                 },
                 {
-                    name: "Pan58",
-                    link: "http://www.pan58.com/s?wd=%s",
+                    name: "大漠盘搜",
+                    link: "http://www.dmpans.com/search?wd=%s",
                     type: 3,
                 },
-                */
                 {
                     name: "58网盘",
                     link: "http://www.58wangpan.com/search/kw%s",
@@ -618,6 +571,11 @@
                     type: 7,
                 },
                 {
+                    name: "优聚搜",
+                    link: "https://jujuso.com/#/main/common?q=%s",
+                    type: 7,
+                },
+                {
                     name: "99搜索",
                     link: "http://www.99baiduyun.com/baidu/%s",
                     type: 7,
@@ -673,13 +631,6 @@
                     link: "http://xiaobeizi.2kongjiang.com/s/%s",
                     type: 8,
                 },
-
-                //不能直接搜索
-                {
-                    name: "云盘狗",
-                    link: "http://www.yunpangou.com",
-                    type: 8,
-                },
                 // 《9》需要扫码
                 {
                     name: "飞飞盘",
@@ -710,6 +661,12 @@
                     name: "兄弟盘",
                     link: "https://www.xiongdipan.com/search?k=%s",
                     type: 10,
+                },
+                //不能直接搜索
+                {
+                    name: "云盘狗",
+                    link: "http://www.yunpangou.com",
+                    type: 8,
                 },
                 {
                     name: "猪猪盘",
@@ -791,16 +748,6 @@
                     type: 1,
                 },
                 {
-                    name: "资源星球",
-                    link: "https://aliyunpanso.cn/?s=%s",
-                    type: 1,
-                },
-                {
-                    name: "我的小站",
-                    link: "https://newxiaozhan.com/?q=%s",
-                    type: 1,
-                },
-                {
                     name: "网盘资源社",
                     link: "https://www.wpzys.com/search.htm?keyword=%s",
                     type: 1,
@@ -843,8 +790,23 @@
                     type: 1,
                 },
                 {
-                    name: "乐享",
-                    link: "https://www.lxapk.com/?s=%s",
+                    name: "分享者",
+                    link: "https://www.sharerw.com/search.php?q=%s",
+                    type: 1,
+                },
+                {
+                    name: "果核剥壳",
+                    link: "https://www.ghxi.com/?s=%s",
+                    type: 1,
+                },
+                {
+                    name: "芊芊精典",
+                    link: "https://myqqjd.com/?s=%s",
+                    type: 1,
+                },
+                {
+                    name: "发烧友绿软",
+                    link: "https://fsylr.com/?s=%s",
                     type: 1,
                 },
             ],
@@ -857,6 +819,13 @@
                 {
                     name: "奇它博客",
                     link: "https://www.qitabbs.com/?type=circle&s=%s",
+                    type: 1,
+                },
+            ],
+            "": [
+                {
+                    name: "打赏作者",
+                    link: "https://pc-index-skin.cdn.bcebos.com/6cb0bccb31e49dc0dba6336167be0a18.png",
                     type: 1,
                 },
             ],
@@ -976,7 +945,7 @@
             });
             shareData.share_randsk || (shareData.share_randsk = unsafeWindow.currentSekey);
             shareData.share_pwd || (shareData.share_pwd = obj.getParam("pwd"));
-            if (shareData.share_pwd) {
+            if (shareData.share_pwd && shareData.share_pwd.match(/^[a-z\d]{4}$/i)) {
                 obj.storeSharePwd(shareData);
             }
             obj.setSharePwdLocal(shareData);
