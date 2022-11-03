@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.3.3
+// @version      2.3.4
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -200,7 +200,6 @@
             obj.dPlayerInitAspectRatio();
             obj.autoSkipPlayNext();
             obj.appreciation(player);
-            player.subtitle.container.style.textShadow = "1px 0 1px #000, 0 1px 1px #000, -1px 0 1px #000, 0 -1px 1px #000, 1px 1px 1px #000, -1px -1px 1px #000, 1px -1px 1px #000, -1px 1px 1px #000";
         } catch (error) {
             console.error("播放器创建失败", error);
         }
@@ -256,11 +255,10 @@
         obj.selectEpisode();
 
         obj.addCueVideoSubtitle(function (textTracks) {
-            textTracks && obj.selectSubtitles(textTracks);
-            obj.suboffsettime && obj.subtitleOffset();
-            player.subtitle.container.style.bottom = (localStorage.getItem("dplayer-subtitle-bottom") || 10) + "%";
-            player.subtitle.container.style.color = localStorage.getItem("dplayer-subtitle-color") || "#ffd821";
-            player.subtitle.container.style.fontSize = (localStorage.getItem("dplayer-subtitle-fontSize") || 5) + "vh";
+            if (textTracks) {
+                obj.selectSubtitles(textTracks);
+                obj.dPlayerSubtitleStyle();
+            }
         });
 
         player.on("quality_end", function () {
@@ -849,6 +847,24 @@
         index && $(".subtitle-select .subtitle-item").eq(index).click();
     };
 
+    obj.dPlayerSubtitleStyle = function () {
+        const player = obj.video_page.player;
+        const { subtitle: { container: { style } } } = player;
+        const bottom = localStorage.getItem("dplayer-subtitle-bottom")
+        , color = localStorage.getItem("dplayer-subtitle-color")
+        , fontSize = localStorage.getItem("dplayer-subtitle-fontSize");
+        style.fontSize == fontSize + "vh" || (style.fontSize = fontSize + "vh");
+        style.bottom == bottom + "%" || (style.bottom = bottom + "%");
+        style.color == color || (style.color = color);
+        style.textShadow || (style.textShadow = "1px 0 1px #000, 0 1px 1px #000, -1px 0 1px #000, 0 -1px 1px #000, 1px 1px 1px #000, -1px -1px 1px #000, 1px -1px 1px #000, -1px 1px 1px #000");
+
+        if (!style.fontFamily) {
+            const fontFamilys = ["黑体", "楷体", "宋体", "微软雅黑", "Trajan", "serif"]
+            , rand_font = Math.floor(Math.random() * fontFamilys.length);
+            style.fontFamily = fontFamilys[rand_font];
+        }
+    };
+
     obj.subtitleSetting = function () {
         var subSetBox = $(".subtitle-setting-box");
         if (subSetBox.length) {
@@ -995,7 +1011,6 @@
             if (!(textTracks[0].cues && textTracks[0].cues.length)) return;
 
             var offsettime = obj.subOffsettime || 0;
-            if (!offsettime) return;
             var fileId = obj.video_page.play_info.file_id
             , sub_info = obj.video_page.sub_info
             , subList = sub_info[fileId];
@@ -1229,7 +1244,7 @@
                 item.label || (item.label = obj.langCodeTransform(item.language));
                 obj.surlRequest(item.url, function (text) {
                     var sarr = obj.subtitleParser(text, "vtt");
-                    if (Array.isArray(sarr)) {
+                    if (Array.isArray(sarr) && sarr.length) {
                         sarr = obj.fuseSubArr(sarr);
                         item.sarr = sarr;
                     }
@@ -1545,7 +1560,7 @@
         if ($("#root [class^=banner] [class^=right]").length) {
             var html = '';
             html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-last--batch" style="margin-right: 28px;">继续上次播放</button>';
-            html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-search--batch" style="margin-right: 28px;background: '+ obj.getRandomColor() +';">网盘资源搜索</button>';
+            html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-search--batch" style="margin-right: 28px;background: '+ obj.getRandomColor() +';">更多功能请期待</button>';
             html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-download--batch" style="margin-right: 28px;">显示链接</button>';
             $("#root [class^=banner] [class^=right]").prepend(html);
 
@@ -1555,11 +1570,6 @@
             });
             $(".button-search--batch").on("click", function () {
                 $(this).css("background", obj.getRandomColor());
-                var folderName = "", fileInfo = obj.file_page.file_info;
-                if (fileInfo.type == "folder") {
-                    folderName = fileInfo.name;
-                }
-                window.open("https://www.niceso.fun/search/?q=" + folderName, "_blank");
             });
         }
         else {
@@ -1574,17 +1584,12 @@
         if ($("#root header").length) {
             var html = '';
             html += '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi button-last--batch">继续上次播放</button>';
-            html += '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi button-search--batch" style="background: '+ obj.getRandomColor() +';">网盘资源搜索</button>';
+            html += '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi button-search--batch" style="background: '+ obj.getRandomColor() +';">更多功能请期待</button>';
             html += '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi button-download--batch">显示链接</button>';
             $("#root header:eq(0)").append(html);
             $(".button-download--batch").on("click", obj.showDownloadHomePage);
             $(".button-search--batch").on("click", function () {
                 $(this).css("background", obj.getRandomColor());
-                var folderName = "", fileInfo = obj.file_page.file_info;
-                if (fileInfo.type == "folder") {
-                    folderName = fileInfo.name;
-                }
-                window.open("https://www.niceso.fun/search/?q=" + folderName, "_blank");
             });
             $(".button-last--batch").on("click", function () {
                 obj.playByScroll();
