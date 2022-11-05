@@ -766,7 +766,7 @@
                         localStorage.setItem("appreciation_show", Date.now() + 86400000 * 10);
                     }
                     else {
-                        alert("\u672c\u811a\u672c\u672a\u5728\u4efb\u4f55\u5e73\u53f0\u76f4\u63a5\u51fa\u552e\u8fc7\u0020\u6709\u4e9b\u7802\u7eb8\u5728\u5012\u5356\u0020\u6709\u4e9b\u7802\u7eb8\u778e\u773c\u4e70\u0020\u5982\u679c\u89c9\u5f97\u559c\u6b22\u591a\u8c22\u60a8\u7684\u8d5e\u8d4f");
+                        data.notice ? alert(data.notice) : alert("\u672c\u811a\u672c\u672a\u5728\u4efb\u4f55\u5e73\u53f0\u76f4\u63a5\u51fa\u552e\u8fc7\u0020\u6709\u4e9b\u7802\u7eb8\u5728\u5012\u5356\u0020\u6709\u4e9b\u7802\u7eb8\u778e\u773c\u4e70\u0020\u5982\u679c\u89c9\u5f97\u559c\u6b22\u591a\u8c22\u60a8\u7684\u8d5e\u8d4f");
                         player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
                     }
                 });
