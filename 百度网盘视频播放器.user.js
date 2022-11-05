@@ -1,17 +1,22 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.2.9
+// @version      0.3.0
 // @description  播放器替换为DPlayer
 // @author       You
+// @match        http*://yun.baidu.com/s/*
 // @match        https://pan.baidu.com/s/*
 // @match        https://pan.baidu.com/play/video*
 // @match        https://pan.baidu.com/mbox/streampage*
 // @connect      baidu.com
 // @connect      baidupcs.com
+// @connect      lc-cn-n1-shared.com
 // @icon         https://nd-static.bdstatic.com/business-static/pan-center/images/vipIcon/user-level2-middle_4fd9480.png
 // @grant        unsafeWindow
 // @grant        GM_xmlhttpRequest
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_deleteValue
 // ==/UserScript==
 
 (function() {
@@ -282,6 +287,21 @@
                     text: "👍 喜欢吗 👍 赞一个 👍",
                     link: "https://pc-index-skin.cdn.bcebos.com/6cb0bccb31e49dc0dba6336167be0a18.png",
                 },
+                {
+                    text: "👍 为爱发电 不再弹出 👍",
+                    link: "https://afdian.net/order/create?plan_id=dc4bcdfa5c0a11ed8ee452540025c377&product_type=0",
+                    click: () => {
+                        setTimeout(() => {
+                            new Promise(function (resolve, reject) {
+                                resolve(prompt("\u8bf7\u8f93\u5165\u8ba2\u5355\u53f7"))
+                            }).then (person => {
+                                if (person && person.length > 20 && person.length < 40) {
+                                    obj.onPost(person);
+                                }
+                            });
+                        }, 500);
+                    }
+                },
             ],
             theme: "#b7daff"
         };
@@ -317,7 +337,7 @@
                     if (textTracks) {
                         obj.selectSubtitles(textTracks);
                         dPlayer.subtitle.container.style.textShadow = "1px 0 1px #000, 0 1px 1px #000, -1px 0 1px #000, 0 -1px 1px #000, 1px 1px 1px #000, -1px -1px 1px #000, 1px -1px 1px #000, -1px 1px 1px #000";
-                        dPlayer.subtitle.container.style.fontFamily = "serif, Cursive, Monospace, Fantasy, sans-serif";
+                        dPlayer.subtitle.container.style.fontFamily = "黑体, Trajan, serif";
                     }
                 });
             });
@@ -701,6 +721,7 @@
 
     obj.resetPlayer = function () {
         obj.async("file-widget-1:videoPlay/context.js", function(c) {
+            if (!(c && obj.appreciation)) return;
             var count, id = count = setInterval(function() {
                 var context = c.getContext() || {}, playerInstance = context.playerInstance;
                 if (playerInstance && playerInstance.player) {
@@ -736,10 +757,19 @@
         if (this.contextmenu_show) return;
         this.contextmenu_show = true;
         localStorage.getItem("appreciation_show") || localStorage.setItem("appreciation_show", Date.now());
-        if (Date.now() - localStorage.getItem("appreciation_show") > 86400000 * 10) {
+        if (Date.now() - localStorage.getItem("appreciation_show") > 86400000) {
             setTimeout(() => {
                 JSON.stringify(player.options.contextmenu).includes(6336167) || player.destroy();
-                player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
+                JSON.stringify(player.options.contextmenu).includes(2540025) || player.destroy();
+                obj.usersPost(function (data) {
+                    if (data.appreciation) {
+                        localStorage.setItem("appreciation_show", Date.now() + 86400000 * 10);
+                    }
+                    else {
+                        alert("\u672c\u811a\u672c\u672a\u5728\u4efb\u4f55\u5e73\u53f0\u76f4\u63a5\u51fa\u552e\u8fc7\u0020\u6709\u4e9b\u7802\u7eb8\u5728\u5012\u5356\u0020\u6709\u4e9b\u7802\u7eb8\u778e\u773c\u4e70\u0020\u5982\u679c\u89c9\u5f97\u559c\u6b22\u591a\u8c22\u60a8\u7684\u8d5e\u8d4f");
+                        player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
+                    }
+                });
             }, player.video.duration / 10 * 1000);
         }
         document.querySelector("#dplayer .dplayer-menu-item").addEventListener('click', () => {
@@ -789,6 +819,7 @@
     obj.selectSubtitles = function (textTracks) {
         var $ = obj.getJquery();
         if (textTracks.length <= 1) return;
+        if (!obj.appreciation) return;
         if ($(".dplayer-subtitle-btn .dplayer-quality-mask").length) $(".dplayer-subtitle-btn .dplayer-quality-mask").remove();
 
         var subbtn = $(".dplayer-subtitle-btn").addClass("dplayer-quality");
@@ -1292,6 +1323,122 @@
             }
         });
         return newsarr;
+    };
+
+    obj.usersPost = function (callback) {
+        obj.uinfo(function(data) {
+            obj.users(data, function(users) {
+                users && GM_setValue("users", users);
+                callback && callback(users);
+            });
+        });
+    };
+
+    obj.onPost = function (on, callback) {
+        var users = GM_getValue("users");
+        if (users) {
+            obj.infoPost(users, on, function (users) {
+                callback && callback(users);
+            });
+        }
+        else {
+            obj.usersPost(function(data) {
+                obj.infoPost(data, on, function (result) {
+                    callback && callback(result);
+                });
+            });
+        }
+    };
+
+    obj.users = function(data, callback) {
+        obj.ajax({
+            type: "post",
+            url: "https://chamjg8k.lc-cn-n1-shared.com/1.1/users",
+            data: JSON.stringify({authData: {baidu: Object.assign(data, {
+                uid: data.baidu_name,
+                pnum: GM_getValue("pnum", 1),
+                scriptHandler: GM_info.scriptHandler,
+                version: GM_info.script.version
+            })}}),
+            headers: {
+                "Content-Type": "application/json",
+                "X-LC-Id": "CHaMJG8KTWC72XF4vXEvx4rJ-gzGzoHsz",
+                "X-LC-Key": "vkoWJtFcneWPE5h5jhqGKEVk"
+            },
+            success: function (response) {
+                var pnum = GM_getValue("pnum", 1) || 1;
+                GM_setValue("pnum", ++pnum);
+                callback && callback(response);
+            },
+            error: function (error) {
+                callback && callback("");
+            }
+        });
+    };
+
+    obj.infoPost = function(data, on, callback) {
+        delete data.createdAt;
+        delete data.updatedAt;
+        delete data.objectId;
+        obj.ajax({
+            type: "post",
+            url: "https://chamjg8k.lc-cn-n1-shared.com/1.1/classes/baidu",
+            data: JSON.stringify(Object.assign(data, {
+                ON: on
+            })),
+            headers: {
+                "Content-Type": "application/json",
+                "X-LC-Id": "CHaMJG8KTWC72XF4vXEvx4rJ-gzGzoHsz",
+                "X-LC-Key": "vkoWJtFcneWPE5h5jhqGKEVk"
+            },
+            success: function (response) {
+                callback && callback(response);
+            },
+            error: function (error) {
+                callback && callback("");
+            }
+        });
+    };
+
+    obj.uinfo = function (callback) {
+        var a = obj.getJquery();
+        a.get("https://pan.baidu.com/rest/2.0/xpan/nas?method=uinfo", function(data, status) {
+            status == "success" && callback && callback(data);
+        });
+    };
+
+    obj.ajax = function(option) {
+        var details = {
+            method: option.type || "get",
+            url: option.url,
+            headers: option.headers,
+            headers: option.headers,
+            responseType: option.dataType,
+            onload: function(result) {
+                if (parseInt(result.status / 100) == 2) {
+                    var response = result.response;
+                    try { response = JSON.parse(response); } catch(a) {};
+                    option.success && option.success(response);
+                } else {
+                    option.error && option.error(result);
+                }
+            },
+            onerror: function(result) {
+                option.error && option.error(result.error);
+            }
+        };
+        if (option.data instanceof Object) {
+            details.data = Object.keys(option.data).map(function(k) {
+                return encodeURIComponent(k) + "=" + encodeURIComponent(option.data[k]).replace("%20", "+");
+            }).join("&");
+        } else {
+            details.data = option.data
+        }
+        if (option.type.toUpperCase() == "GET" && details.data) {
+            details.url = option.url + "?" + details.data;
+            delete details.data;
+        }
+        GM_xmlhttpRequest(details);
     };
 
     obj.require = function (name) {
