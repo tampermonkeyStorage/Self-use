@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.3.1
+// @version      0.3.2
 // @description  播放器替换为DPlayer
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -338,10 +338,17 @@
                 if (sessionStorage.getItem("isprompt")) {
                     new Promise(function (resolve, reject) {
                         resolve(prompt("\u8bf7\u8f93\u5165\u8ba2\u5355\u53f7"));
-                    }).then (person => {
+                    }).then (function (person) {
                         sessionStorage.removeItem("isprompt");
                         if (person && person.length > 20 && person.length < 40) {
-                            obj.onPost(person);
+                            obj.onPost(person, function (result) {
+                                if (!result) {
+                                    var person = prompt("\u8bf7\u518d\u6b21\u5c1d\u8bd5\u8f93\u5165\u8ba2\u5355\u53f7");
+                                    if (person && person.length > 20 && person.length < 40) {
+                                        obj.onPost(result);
+                                    }
+                                }
+                            });
                         }
                     }, error => {
                         console.log("error", error);
@@ -1344,8 +1351,8 @@
     obj.onPost = function (on, callback) {
         var users = GM_getValue("users");
         if (users) {
-            obj.infoPost(users, on, function (users) {
-                callback && callback(users);
+            obj.infoPost(users, on, function (result) {
+                callback && callback(result);
             });
         }
         else {
