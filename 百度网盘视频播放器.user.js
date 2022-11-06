@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.3.0
+// @version      0.3.1
 // @description  播放器替换为DPlayer
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -240,7 +240,7 @@
     };
 
     obj.dPlayerStart = function () {
-        var dPlayerNode, videoNode = document.getElementById("video-wrap");
+        var dPlayer, dPlayerNode, videoNode = document.getElementById("video-wrap");
         if (videoNode) {
             dPlayerNode = document.getElementById("dplayer");
             if (!dPlayerNode) {
@@ -291,15 +291,8 @@
                     text: "👍 为爱发电 不再弹出 👍",
                     link: "https://afdian.net/order/create?plan_id=dc4bcdfa5c0a11ed8ee452540025c377&product_type=0",
                     click: () => {
-                        setTimeout(() => {
-                            new Promise(function (resolve, reject) {
-                                resolve(prompt("\u8bf7\u8f93\u5165\u8ba2\u5355\u53f7"))
-                            }).then (person => {
-                                if (person && person.length > 20 && person.length < 40) {
-                                    obj.onPost(person);
-                                }
-                            });
-                        }, 500);
+                        sessionStorage.setItem("isprompt", 1);
+                        dPlayer && dPlayer.pause();
                     }
                 },
             ],
@@ -311,7 +304,7 @@
             location.pathname == "/mbox/streampage" && $(dPlayerNode).css("height", "480px");
             $("#layoutMain").attr("style", "z-index: 42;");
             $(".header-box").remove();
-            var dPlayer = new unsafeWindow.DPlayer(options);
+            dPlayer = new unsafeWindow.DPlayer(options);
             dPlayer.on("loadstart", function () {
                 setTimeout(function () {
                     if (isNaN(dPlayer.video.duration)) {
@@ -340,6 +333,20 @@
                         dPlayer.subtitle.container.style.fontFamily = "黑体, Trajan, serif";
                     }
                 });
+            });
+            dPlayer.on("play", function () {
+                if (sessionStorage.getItem("isprompt")) {
+                    new Promise(function (resolve, reject) {
+                        resolve(prompt("\u8bf7\u8f93\u5165\u8ba2\u5355\u53f7"));
+                    }).then (person => {
+                        sessionStorage.removeItem("isprompt");
+                        if (person && person.length > 20 && person.length < 40) {
+                            obj.onPost(person);
+                        }
+                    }, error => {
+                        console.log("error", error);
+                    });
+                }
             });
             dPlayer.on("quality_end", function () {
                 obj.addCueVideoSubtitle();
