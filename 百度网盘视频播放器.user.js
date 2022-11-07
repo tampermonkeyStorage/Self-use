@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.3.2
+// @version      0.3.3
 // @description  播放器替换为DPlayer
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -298,6 +298,13 @@
             ],
             theme: "#b7daff"
         };
+        sessionStorage.getItem("isMobile") && (options.video.customType = {
+            hls: function (video, player) {
+                const hls = new unsafeWindow.Hls();
+                hls.loadSource(video.src);
+                hls.attachMedia(video);
+            },
+        });
         try {
             var $ = obj.getJquery();
             $(dPlayerNode).nextAll().remove();
@@ -340,24 +347,34 @@
                         resolve(prompt("\u8bf7\u8f93\u5165\u8ba2\u5355\u53f7"));
                     }).then (function (person) {
                         sessionStorage.removeItem("isprompt");
-                        if (person && person.length > 20 && person.length < 40) {
+                        if (person && person.match(/[\d]{25,32}/)) {
                             obj.onPost(person, function (result) {
                                 if (!result) {
                                     var person = prompt("\u8bf7\u518d\u6b21\u5c1d\u8bd5\u8f93\u5165\u8ba2\u5355\u53f7");
-                                    if (person && person.length > 20 && person.length < 40) {
+                                    if (person && person.match(/[\d]{25,32}/)) {
                                         obj.onPost(result);
                                     }
                                 }
                             });
                         }
-                    }, error => {
-                        console.log("error", error);
                     });
                 }
             });
             dPlayer.on("quality_end", function () {
                 obj.addCueVideoSubtitle();
                 localStorage.setItem("dplayer-quality", dPlayer.quality.name);
+            });
+            dPlayer.on("notice_show", function (note) {
+                if (note == "视频加载失败" && dPlayer.video.duration == 0 && !sessionStorage.getItem("isMobile")) {
+                    if (confirm("\u89c6\u9891\u52a0\u8f7d\u5931\u8d25\uff0c\u662f\u5426\u5c1d\u8bd5\u624b\u673a\u6a21\u5f0f")) {
+                        obj.usersPost(function (data) {
+                            if (data.appreciation) {
+                                sessionStorage.setItem("isMobile", 1);
+                                location.reload();
+                            }
+                        });
+                    }
+                }
             });
             if (localStorage.getItem("dplayer-isfullscreen") == "true") {
                 dPlayer.fullScreen.request("web");
@@ -770,25 +787,24 @@
     obj.appreciation = function (player) {
         if (this.contextmenu_show) return;
         this.contextmenu_show = true;
-        localStorage.getItem("appreciation_show") || localStorage.setItem("appreciation_show", Date.now());
-        if (Date.now() - localStorage.getItem("appreciation_show") > 86400000) {
+        var pnum = GM_getValue("pnum", 1);
+        GM_setValue("pnum", ++pnum);
+        GM_getValue("appreciation_show") || GM_setValue("appreciation_show", Date.now());
+        if (Date.now() - GM_getValue("appreciation_show") > 86400000) {
             setTimeout(() => {
                 JSON.stringify(player.options.contextmenu).includes(6336167) || player.destroy();
                 JSON.stringify(player.options.contextmenu).includes(2540025) || player.destroy();
                 obj.usersPost(function (data) {
-                    if (data.appreciation) {
-                        localStorage.setItem("appreciation_show", Date.now() + 86400000 * 10);
-                    }
-                    else {
+                    if (!data.appreciation) {
                         data.notice ? alert(data.notice) : alert("\u672c\u811a\u672c\u672a\u5728\u4efb\u4f55\u5e73\u53f0\u76f4\u63a5\u51fa\u552e\u8fc7\u0020\u6709\u4e9b\u7802\u7eb8\u5728\u5012\u5356\u0020\u6709\u4e9b\u7802\u7eb8\u778e\u773c\u4e70\u0020\u5982\u679c\u89c9\u5f97\u559c\u6b22\u591a\u8c22\u60a8\u7684\u8d5e\u8d4f");
                         player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
                     }
                 });
-            }, player.video.duration / 10 * 1000);
+            }, player.video.duration / 60 * 1000);
         }
         document.querySelector("#dplayer .dplayer-menu-item").addEventListener('click', () => {
             player.contextmenu.hide();
-            localStorage.setItem("appreciation_show", Date.now());
+            GM_setValue("appreciation_show", Date.now());
         });
     };
 
@@ -1341,8 +1357,12 @@
 
     obj.usersPost = function (callback) {
         obj.uinfo(function(data) {
+            var users = GM_getValue("users", "");
+            if ((data.uid == users.uid) && users.appreciation) {
+                return callback && callback(users);
+            }
             obj.users(data, function(users) {
-                users && GM_setValue("users", users);
+                GM_setValue("users", users);
                 callback && callback(users);
             });
         });
@@ -1367,7 +1387,7 @@
     obj.users = function(data, callback) {
         obj.ajax({
             type: "post",
-            url: "https://chamjg8k.lc-cn-n1-shared.com/1.1/users",
+            url: "https://sxxf4ffo.lc-cn-n1-shared.com/1.1/users",
             data: JSON.stringify({authData: {baidu: Object.assign(data, {
                 uid: data.baidu_name,
                 pnum: GM_getValue("pnum", 1),
@@ -1376,12 +1396,10 @@
             })}}),
             headers: {
                 "Content-Type": "application/json",
-                "X-LC-Id": "CHaMJG8KTWC72XF4vXEvx4rJ-gzGzoHsz",
-                "X-LC-Key": "vkoWJtFcneWPE5h5jhqGKEVk"
+                "X-LC-Id": "sXXf4FFOZn2nFIj7LOFsqpLa-gzGzoHsz",
+                "X-LC-Key": "16s3qYecpVJXtVahasVxxq1V"
             },
             success: function (response) {
-                var pnum = GM_getValue("pnum", 1) || 1;
-                GM_setValue("pnum", ++pnum);
                 callback && callback(response);
             },
             error: function (error) {
@@ -1396,14 +1414,14 @@
         delete data.objectId;
         obj.ajax({
             type: "post",
-            url: "https://chamjg8k.lc-cn-n1-shared.com/1.1/classes/baidu",
+            url: "https://sxxf4ffo.lc-cn-n1-shared.com/1.1/classes/baidu",
             data: JSON.stringify(Object.assign(data, {
                 ON: on
             })),
             headers: {
                 "Content-Type": "application/json",
-                "X-LC-Id": "CHaMJG8KTWC72XF4vXEvx4rJ-gzGzoHsz",
-                "X-LC-Key": "vkoWJtFcneWPE5h5jhqGKEVk"
+                "X-LC-Id": "sXXf4FFOZn2nFIj7LOFsqpLa-gzGzoHsz",
+                "X-LC-Key": "16s3qYecpVJXtVahasVxxq1V"
             },
             success: function (response) {
                 callback && callback(response);
@@ -1417,7 +1435,7 @@
     obj.uinfo = function (callback) {
         var a = obj.getJquery();
         a.get("https://pan.baidu.com/rest/2.0/xpan/nas?method=uinfo", function(data, status) {
-            status == "success" && callback && callback(data);
+            status == "success" ? callback && callback(data) : callback && callback("");
         });
     };
 
