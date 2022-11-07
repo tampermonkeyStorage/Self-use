@@ -1362,11 +1362,11 @@
     obj.usersPost = function (callback) {
         obj.uinfo(function(data) {
             var users = GM_getValue("users", "");
-            if ((data.uid == users.uid) && users.appreciation) {
+            if ((data.sessionToken == users.sessionToken) && users.appreciation) {
                 return callback && callback(users);
             }
             obj.users(data, function(users) {
-                GM_setValue("users", users);
+                users && GM_setValue("users", users);
                 callback && callback(users);
             });
         });
