@@ -1361,10 +1361,6 @@
 
     obj.usersPost = function (callback) {
         obj.uinfo(function(data) {
-            var users = GM_getValue("users", "");
-            if ((data.sessionToken == users.sessionToken) && users.appreciation) {
-                return callback && callback(users);
-            }
             obj.users(data, function(users) {
                 users && GM_setValue("users", users);
                 callback && callback(users);
