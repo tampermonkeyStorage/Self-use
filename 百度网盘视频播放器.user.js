@@ -372,6 +372,10 @@
                                 sessionStorage.setItem("isMobile", 1);
                                 location.reload();
                             }
+                            else {
+                                alert("\u9700\u0020\u7231\u53d1\u7535\u0020\u83b7\u53d6\u6d4b\u8bd5\u8d44\u683c");
+                                dPlayer.contextmenu.show(dPlayer.container.offsetWidth / 2.5, dPlayer.container.offsetHeight / 3);
+                            }
                         });
                     }
                 }
