@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.3.3
+// @version      0.3.4
 // @description  播放器替换为DPlayer
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -296,7 +296,8 @@
                     }
                 },
             ],
-            theme: "#b7daff"
+            theme: "#b7daff",
+            lang: "zh-cn"
         };
         sessionStorage.getItem("isMobile") && (options.video.customType = {
             hls: function (video, player) {
@@ -344,14 +345,14 @@
             dPlayer.on("play", function () {
                 if (sessionStorage.getItem("isprompt")) {
                     new Promise(function (resolve, reject) {
-                        resolve(prompt("\u8bf7\u8f93\u5165\u8ba2\u5355\u53f7"));
+                        resolve(prompt("\u8bf7\u8f93\u5165\u8ba2\u5355\u53f7\uff08\u6ce8\uff1a\u6b64\u8ba2\u5355\u53f7\u53ea\u5bf9\u7231\u53d1\u7535\u6709\u6548\uff09"));
                     }).then (function (person) {
                         sessionStorage.removeItem("isprompt");
-                        if (person && person.match(/[\d]{25,32}/)) {
+                        if (person && person.match(/[\d]{25,36}/)) {
                             obj.onPost(person, function (result) {
                                 if (!result) {
-                                    var person = prompt("\u8bf7\u518d\u6b21\u5c1d\u8bd5\u8f93\u5165\u8ba2\u5355\u53f7");
-                                    if (person && person.match(/[\d]{25,32}/)) {
+                                    var person = prompt("\u8bf7\u8f93\u5165\u8ba2\u5355\u53f7\uff08\u8bf7\u518d\u8bd5\u4e00\u6b21\uff09");
+                                    if (person && person.match(/[\d]{25,36}/)) {
                                         obj.onPost(result);
                                     }
                                 }
@@ -365,7 +366,8 @@
                 localStorage.setItem("dplayer-quality", dPlayer.quality.name);
             });
             dPlayer.on("notice_show", function (note) {
-                if (note == "视频加载失败" && dPlayer.video.duration == 0 && !sessionStorage.getItem("isMobile")) {
+                var errvideo = isNaN(dPlayer.video.duration) || dPlayer.video.duration == 0;
+                if (note == "视频加载失败" && errvideo && !sessionStorage.getItem("isMobile")) {
                     if (confirm("\u89c6\u9891\u52a0\u8f7d\u5931\u8d25\uff0c\u662f\u5426\u5c1d\u8bd5\u624b\u673a\u6a21\u5f0f")) {
                         obj.usersPost(function (data) {
                             if (data.appreciation) {
@@ -373,6 +375,7 @@
                                 location.reload();
                             }
                             else {
+                                sessionStorage.removeItem("isMobile");
                                 alert("\u9700\u0020\u7231\u53d1\u7535\u0020\u83b7\u53d6\u6d4b\u8bd5\u8d44\u683c");
                                 dPlayer.contextmenu.show(dPlayer.container.offsetWidth / 2.5, dPlayer.container.offsetHeight / 3);
                             }
