@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.3.4
+// @version      0.3.5
 // @description  播放器替换为DPlayer
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -26,7 +26,6 @@
         video_page: {
             info: [],
             quality: [],
-            sub_info: [],
             adToken: ""
         }
     };
@@ -67,10 +66,29 @@
         });
     };
 
+    obj.playVideoSharePage = function () {
+        unsafeWindow.locals.get("file_list", "sign", "timestamp", "share_uk", "shareid", function(file_list, sign, timestamp, share_uk, shareid) {
+            if (file_list.length > 1 || file_list[0].mediaType != "video") {
+                obj.storageFileListSharePage();
+                obj.fileForcePreviewSharePage();
+                return;
+            }
+            obj.video_page.info = file_list;
+            var file = file_list[0], resolution = file.resolution, fid = file.fs_id, vip = obj.getVip();
+            function getUrl(i) {
+                return location.protocol + "//" + location.host + "/share/streaming?channel=chunlei&uk=" + share_uk + "&fid=" + fid + "&sign=" + sign + "&timestamp=" + timestamp + "&shareid=" + shareid + "&type=" + i + "&vip=" + vip + "&jsToken=" + unsafeWindow.jsToken
+            }
+            obj.getAdToken(getUrl("M3U8_AUTO_480"), function () {
+                obj.addQuality(getUrl, resolution);
+                obj.useDPlayer();
+            });
+        });
+    };
+
     obj.fetchVideoInfoHomePage = function (callback) {
-        var instanceForSystem = obj.require("system-core:context/context.js").instanceForSystem
-        , router = instanceForSystem.router
-        , uk = instanceForSystem.locals.get("uk")
+        var context = obj.require("system-core:context/context.js").instanceForSystem
+        , router = context.router
+        , uk = context.locals.get("uk")
         , path = router.query.get("path");
         var jQuery = obj.getJquery()
         , target = jQuery.stringify([path]);
@@ -98,9 +116,9 @@
     };
 
     obj.playVideoHomePage = function () {
-        var instanceForSystem = obj.require("system-core:context/context.js").instanceForSystem
-        , router = instanceForSystem.router
-        , uk = instanceForSystem.locals.get("uk")
+        var context = obj.require("system-core:context/context.js").instanceForSystem
+        , router = context.router
+        , uk = context.locals.get("uk")
         , path = router.query.get("path")
         , vip = obj.getVip();
         function getUrl (i) {
@@ -110,25 +128,6 @@
         obj.getAdToken(getUrl("M3U8_AUTO_480"), function () {
             obj.addQuality(getUrl, resolution);
             obj.useDPlayer();
-        });
-    };
-
-    obj.playVideoSharePage = function () {
-        unsafeWindow.locals.get("file_list", "sign", "timestamp", "share_uk", "shareid", function(file_list, sign, timestamp, share_uk, shareid) {
-            if (file_list.length > 1 || file_list[0].mediaType != "video") {
-                obj.storageFileListSharePage();
-                obj.fileForcePreviewSharePage();
-                return;
-            }
-            obj.video_page.info = file_list;
-            var file = file_list[0], resolution = file.resolution, fid = file.fs_id, vip = obj.getVip();
-            function getUrl(i) {
-                return location.protocol + "//" + location.host + "/share/streaming?channel=chunlei&uk=" + share_uk + "&fid=" + fid + "&sign=" + sign + "&timestamp=" + timestamp + "&shareid=" + shareid + "&type=" + i + "&vip=" + vip + "&jsToken=" + unsafeWindow.jsToken
-            }
-            obj.getAdToken(getUrl("M3U8_AUTO_480"), function () {
-                obj.addQuality(getUrl, resolution);
-                obj.useDPlayer();
-            });
         });
     };
 
@@ -198,13 +197,31 @@
     };
 
     obj.useDPlayer = function () {
-        obj.dPlayerSupport(function (result) {
+        obj.playerSupported(function (result) {
             result && obj.dPlayerStart();
         });
     };
 
-    obj.dPlayerSupport = function (callback) {
-        var urlArr = [
+    obj.playerSupported = function (callback) {
+        (function laodcdn(urlArr, index) {
+            var arr = urlArr[index];
+            if (arr) {
+                var promises = [];
+                arr.forEach(function (url, index) {
+                    promises.push(loadScript(url));
+                });
+                Promise.all(promises).then(function(results) {
+                    setTimeout(function () {
+                        callback && callback(unsafeWindow.DPlayer);
+                    }, 0);
+                }).catch(function (error) {
+                    laodcdn(urlArr, ++index);
+                });
+            }
+            else {
+                callback && callback(unsafeWindow.DPlayer);
+            }
+        })([
             [
                 "https://cdn.staticfile.org/hls.js/1.1.5/hls.min.js",
                 "https://cdn.staticfile.org/dplayer/1.26.0/DPlayer.min.js",
@@ -217,30 +234,27 @@
                 "https://cdn.jsdelivr.net/npm/hls.js/dist/hls.min.js",
                 "https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.js",
             ],
-        ];
-        (function laodcdn(urlArr, index = 0) {
-            var arr = urlArr[index];
-            if (arr) {
-                var promises = [];
-                arr.forEach(function (url, index) {
-                    promises.push(obj.loadScript(url));
-                });
-                Promise.all(promises).then(function(results) {
-                    setTimeout(function () {
-                        callback && callback(unsafeWindow.DPlayer);
-                    }, 0);
-                }).catch(function(error) {
-                    laodcdn(urlArr, ++index);
+        ], 0);
+        function loadScript (src) {
+            if (!window.instances) {
+                window.instances = {};
+            }
+            if (!window.instances[src]) {
+                window.instances[src] = new Promise((resolve, reject) => {
+                    const script = document.createElement("script")
+                    script.src = src;
+                    script.type = "text/javascript";
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
                 });
             }
-            else {
-                callback && callback(unsafeWindow.DPlayer);
-            }
-        })(urlArr);
+            return window.instances[src];
+        };
     };
 
     obj.dPlayerStart = function () {
-        var dPlayer, dPlayerNode, videoNode = document.getElementById("video-wrap");
+        var dPlayerNode, videoNode = document.getElementById("video-wrap");
         if (videoNode) {
             dPlayerNode = document.getElementById("dplayer");
             if (!dPlayerNode) {
@@ -280,130 +294,177 @@
             screenshot: true,
             hotkey: true,
             airplay: true,
-            volume: 1.0,
-            playbackSpeed: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3, 4],
             contextmenu: [
                 {
                     text: "👍 喜欢吗 👍 赞一个 👍",
-                    link: "https://pc-index-skin.cdn.bcebos.com/6cb0bccb31e49dc0dba6336167be0a18.png",
+                    link: "https://pc-index-skin.cdn.bcebos.com/6cb0bccb31e49dc0dba6336167be0a18.png"
                 },
                 {
                     text: "👍 为爱发电 不再弹出 👍",
                     link: "https://afdian.net/order/create?plan_id=dc4bcdfa5c0a11ed8ee452540025c377&product_type=0",
                     click: () => {
-                        sessionStorage.setItem("isprompt", 1);
-                        dPlayer && dPlayer.pause();
+                        new Promise(function (resolve, reject) {
+                            const fn = function () {
+                                if (!document.hidden) {
+                                    window.removeEventListener("visibilitychange", fn);
+                                    resolve(prompt("\u8bf7\u8f93\u5165\u8ba2\u5355\u53f7\uff08\u6ce8\uff1a\u6b64\u8ba2\u5355\u53f7\u53ea\u5bf9\u7231\u53d1\u7535\u6709\u6548\uff09"));
+                                }
+                            }
+                            window.addEventListener("visibilitychange", fn); // 感谢党
+                        }).then(function (person) {
+                            if (person && person.match(/[\d]{25,32}/)) {
+                                GM_setValue("appreciation_show", Date.now());
+                                obj.sessionSet("users", {appreciation: true});
+                                obj.onPost(person);
+                            }
+                            else {
+                                obj.msg("\u6b64\u8ba2\u5355\u53f7\u4e0d\u5408\u89c4\u8303\uff0c\u8bf7\u53f3\u952e\u6253\u5f00\u91cd\u8bd5\uff0c\u8bf7\u8054\u7cfb\u4f5c\u8005", "failure");
+                            }
+                        });
                     }
                 },
             ],
             theme: "#b7daff",
             lang: "zh-cn"
         };
-        sessionStorage.getItem("isMobile") && (options.video.customType = {
-            hls: function (video, player) {
-                const hls = new unsafeWindow.Hls();
-                hls.loadSource(video.src);
-                hls.attachMedia(video);
-            },
-        });
-        try {
-            var $ = obj.getJquery();
-            $(dPlayerNode).nextAll().remove();
-            location.pathname == "/mbox/streampage" && $(dPlayerNode).css("height", "480px");
-            $("#layoutMain").attr("style", "z-index: 42;");
-            $(".header-box").remove();
-            dPlayer = new unsafeWindow.DPlayer(options);
-            dPlayer.on("loadstart", function () {
-                setTimeout(function () {
-                    if (isNaN(dPlayer.video.duration)) {
-                        var file = obj.video_page.info[0];
-                        var errnum = +sessionStorage.getItem("error_" + file.fs_id);
-                        if (++errnum <= 3) {
-                            location.reload();
-                        }
-                        sessionStorage.setItem("error_" + file.fs_id, errnum);
-                    }
-                }, 5000);
-            });
-            dPlayer.on("durationchange", function () {
-                if (dPlayer.isReady) return;
-                dPlayer.isReady = true;
-                obj.memoryPlay(dPlayer);
-                obj.customSpeed(dPlayer);
-                obj.appreciation(dPlayer);
-                obj.videoFit();
-                obj.playSetting();
-                obj.autoPlayEpisode();
-                obj.addCueVideoSubtitle(function (textTracks) {
-                    if (textTracks) {
-                        obj.selectSubtitles(textTracks);
-                        dPlayer.subtitle.container.style.textShadow = "1px 0 1px #000, 0 1px 1px #000, -1px 0 1px #000, 0 -1px 1px #000, 1px 1px 1px #000, -1px -1px 1px #000, 1px -1px 1px #000, -1px 1px 1px #000";
-                        dPlayer.subtitle.container.style.fontFamily = "黑体, Trajan, serif";
-                    }
-                });
-            });
-            dPlayer.on("play", function () {
-                if (sessionStorage.getItem("isprompt")) {
-                    new Promise(function (resolve, reject) {
-                        resolve(prompt("\u8bf7\u8f93\u5165\u8ba2\u5355\u53f7\uff08\u6ce8\uff1a\u6b64\u8ba2\u5355\u53f7\u53ea\u5bf9\u7231\u53d1\u7535\u6709\u6548\uff09"));
-                    }).then (function (person) {
-                        sessionStorage.removeItem("isprompt");
-                        if (person && person.match(/[\d]{25,36}/)) {
-                            obj.onPost(person, function (result) {
-                                if (!result) {
-                                    var person = prompt("\u8bf7\u8f93\u5165\u8ba2\u5355\u53f7\uff08\u8bf7\u518d\u8bd5\u4e00\u6b21\uff09");
-                                    if (person && person.match(/[\d]{25,36}/)) {
-                                        obj.onPost(result);
-                                    }
-                                }
-                            });
-                        }
-                    });
-                }
-            });
-            dPlayer.on("quality_end", function () {
-                obj.addCueVideoSubtitle();
-                localStorage.setItem("dplayer-quality", dPlayer.quality.name);
-            });
-            dPlayer.on("notice_show", function (note) {
-                var errvideo = isNaN(dPlayer.video.duration) || dPlayer.video.duration == 0;
-                if (note == "视频加载失败" && errvideo && !sessionStorage.getItem("isMobile")) {
-                    if (confirm("\u89c6\u9891\u52a0\u8f7d\u5931\u8d25\uff0c\u662f\u5426\u5c1d\u8bd5\u624b\u673a\u6a21\u5f0f")) {
-                        obj.usersPost(function (data) {
-                            if (data.appreciation) {
-                                sessionStorage.setItem("isMobile", 1);
-                                location.reload();
-                            }
-                            else {
-                                sessionStorage.removeItem("isMobile");
-                                alert("\u9700\u0020\u7231\u53d1\u7535\u0020\u83b7\u53d6\u6d4b\u8bd5\u8d44\u683c");
-                                dPlayer.contextmenu.show(dPlayer.container.offsetWidth / 2.5, dPlayer.container.offsetHeight / 3);
-                            }
-                        });
-                    }
-                }
-            });
-            if (localStorage.getItem("dplayer-isfullscreen") == "true") {
-                dPlayer.fullScreen.request("web");
+        if (obj.sessionGet("isMobile")) {
+            options.video.customType = {
+                hls: function (video, player) {
+                    const hls = new unsafeWindow.Hls();
+                    hls.loadSource(video.src);
+                    hls.attachMedia(video);
+                },
             }
-            dPlayer.on("fullscreen", function () {
-                localStorage.setItem("dplayer-isfullscreen", true);
-            });
-            dPlayer.on("fullscreen_cancel", function () {
-                dPlayer.fullScreen.isFullScreen("web") || localStorage.removeItem("dplayer-isfullscreen");
-            });
-            $(document).on("click", ".dplayer .dplayer-full", function(event) {
-                var isFullScreen = dPlayer.fullScreen.isFullScreen("web") || dPlayer.fullScreen.isFullScreen("browser");
-                localStorage.setItem("dplayer-isfullscreen", isFullScreen);
-            });
-            dPlayer.on("ended", function () {
-                obj.autoPlayNext();
-            });
+        }
+        try {
+            var player = obj.player = new unsafeWindow.DPlayer(options);
+            console.log("=== 百度 网 网 网盘 好 好 好棒棒！===", player);
+            obj.initPlayer(player);
             obj.resetPlayer();
             obj.msg("DPlayer 播放器创建成功");
         } catch (error) {
             obj.msg("播放器创建失败", "failure");
         }
+    };
+
+    obj.initPlayer = function (player) {
+        obj.playerReady(player, function(player) {
+            obj.isIntegrity(player, function() {
+                const { container } = player;
+                var $ = obj.getJquery();
+                $(container).nextAll().remove();
+                location.pathname == "/mbox/streampage" && $(container).css("height", "480px");
+                $("#layoutMain").attr("style", "z-index: 42;");
+                $(".header-box").remove();
+            });
+            obj.initPlayerEvents(player);
+            obj.memoryPlay(player);
+            obj.customSpeed(player);
+            obj.appreciation(player);
+            obj.playSetting();
+            obj.videoFit();
+            obj.autoPlayEpisode();
+            obj.addCueVideoSubtitle(function (textTracks) {
+                if (textTracks) {
+                    obj.selectSubtitles(textTracks);
+                    player.subtitle.container.style.textShadow = "1px 0 1px #000, 0 1px 1px #000, -1px 0 1px #000, 0 -1px 1px #000, 1px 1px 1px #000, -1px -1px 1px #000, 1px -1px 1px #000, -1px 1px 1px #000";
+                    player.subtitle.container.style.fontFamily = "黑体, Trajan, serif";
+                }
+            });
+        });
+    };
+
+    obj.playerReady = function (player, callback) {
+        if (player.isReady) {
+            callback && callback(player);
+        }
+        else if (player.video.duration > 0 || player.video.readyState > 2) {
+            player.isReady = true;
+            callback && callback(player);
+        }
+        else {
+            player.video.ondurationchange = function () {
+                player.video.ondurationchange = null;
+                player.isReady = true;
+                callback && callback(player);
+            }
+        }
+        setTimeout(function () {
+            if (player.isReady) {
+                obj.sessionRemoveItem("startError");
+            }
+            else {
+                var startError = obj.sessionGet("startError") || 0;
+                if (++startError <= 3) {
+                    obj.sessionSet("startError", startError);
+                    location.reload();
+                }
+                else {
+                    obj.msg("此视频经多次尝试，可能无法正常播放", "failure");
+                    obj.sessionRemoveItem("startError");
+                }
+            }
+        }, 5000);
+    };
+
+    obj.isIntegrity = function (player, callback) {
+        const { options: { contextmenu } } = player;
+        JSON.stringify(contextmenu).includes(6336167) || player.destroy();
+        JSON.stringify(contextmenu).includes(2540025) || player.destroy();
+        document.querySelector("#dplayer .dplayer-menu-item").addEventListener('click', () => {
+            obj.sessionSet("users", {appreciation: true});
+        });
+        callback && callback();
+    };
+
+    obj.isAppreciation = function (callback) {
+        var data = obj.sessionGet("users");
+        if (data) {
+            callback && callback(data);
+        }
+        else {
+            obj.usersPost(function (data) {
+                data && obj.sessionSet("users", data);
+                callback && callback(data);
+            });
+        }
+    };
+
+    obj.initPlayerEvents = function (player) {
+        player.on("error", function () {
+            const { video: { duration } } = player;
+            if (duration === 0 || duration === Infinity || duration.toString() === "NaN") {
+                if (!obj.sessionGet("isMobile") && confirm("\u89c6\u9891\u52a0\u8f7d\u5931\u8d25\uff0c\u662f\u5426\u5c1d\u8bd5\u624b\u673a\u6a21\u5f0f")) {
+                    obj.isAppreciation(function (data) {
+                        if (data.appreciation) {
+                            obj.sessionSet("isMobile", 1);
+                            location.reload();
+                        }
+                        else {
+                            obj.sessionRemoveItem("isMobile");
+                            alert("\u8bf7\u4f7f\u7528\u0020\u7231\u53d1\u7535\u0020\u83b7\u53d6\u6d4b\u8bd5\u8d44\u683c");
+                            player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
+                        }
+                    });
+                }
+            }
+        });
+        player.on("ended", function () {
+            obj.getJquery()(".next-icon").click();
+        });
+        if (localStorage.getItem("dplayer-isfullscreen") == "true") {
+            player.fullScreen.request("web");
+        }
+        player.on("fullscreen", function () {
+            localStorage.setItem("dplayer-isfullscreen", true);
+        });
+        player.on("fullscreen_cancel", function () {
+            player.fullScreen.isFullScreen("web") || localStorage.removeItem("dplayer-isfullscreen");
+        });
+        document.querySelector(".dplayer .dplayer-full").addEventListener('click', () => {
+            var isFullScreen = player.fullScreen.isFullScreen("web") || player.fullScreen.isFullScreen("browser");
+            localStorage.setItem("dplayer-isfullscreen", isFullScreen);
+        });
     };
 
     obj.memoryPlay = function (player) {
@@ -438,7 +499,6 @@
                 });
             }
         }
-
         document.onvisibilitychange = function () {
             if (document.visibilityState === "hidden") {
                 var currentTime = player.video.currentTime;
@@ -484,33 +544,35 @@
             player.speed(valnum);
         });
         player.on("ratechange", function () {
-            player.notice("播放速度：" + player.video.playbackRate);
-            localStorage.setItem("dplayer-speed", player.video.playbackRate);
-            input.val(player.video.playbackRate);
+            const { video: { playbackRate } } = player;
+            player.notice("播放速度：" + playbackRate);
+            localStorage.setItem("dplayer-speed", playbackRate);
+            input.val(playbackRate);
         });
         $(".dplayer-setting-custom-speed span").dblclick(function() {
             input.val(1);
             player.speed(1);
         });
         $(".dplayer-setting-speed-item[data-speed='自定义']").on("click", function() {
-            custombox.css("display") == "block" ? (custombox.css("display", "none"), player.setting.hide()) : custombox.css("display", "block");
+            if (document.querySelector(".dplayer .dplayer-menu").classList.contains("dplayer-menu-show")) {
+                obj.msg("\u8bf7\u8d5e\u8d4f\u540e\u4f7f\u7528\u52a0\u5f3a\u529f\u80fd");
+            }
+            else {
+                obj.isAppreciation(function (data) {
+                    if (data.appreciation) {
+                        custombox.css("display") == "block" ? (custombox.css("display", "none"), player.setting.hide()) : custombox.css("display", "block");
+                    }
+                    else {
+                        player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
+                        obj.msg("\u8bf7\u8d5e\u8d4f\u540e\u4f7f\u7528\u52a0\u5f3a\u529f\u80fd");
+                    }
+                });
+            }
         }).prevAll().on("click", function() {
             custombox.css("display", "none");
         });
         player.template.mask.addEventListener("click", function() {
             custombox.css("display", "none");
-        });
-    };
-
-    obj.videoFit = function () {
-        var $ = obj.getJquery();
-        if ($(".dplayer-icons-right .btn-select-fit").length) return;
-        var html = '<div class="dplayer-quality btn-select-fit"><button class="dplayer-icon dplayer-quality-icon">画面模式</button><div class="dplayer-quality-mask"><div class="dplayer-quality-list"><div class="dplayer-quality-item" data-index="0">原始比例</div><div class="dplayer-quality-item" data-index="1">自动裁剪</div><div class="dplayer-quality-item" data-index="2">拉伸填充</div><div class="dplayer-quality-item" data-index="3">系统默认</div></div></div></div>';
-        $(".dplayer-icons-right").prepend(html);
-        $(".btn-select-fit .dplayer-quality-item").on("click", function() {
-            var vfit = ["none", "cover", "fill", ""][$(this).attr("data-index")];
-            document.querySelector("video").style["object-fit"] = vfit;
-            $(".btn-select-fit .dplayer-icon").text($(this).text());
         });
     };
 
@@ -535,7 +597,20 @@
         });
     };
 
+    obj.videoFit = function () {
+        var $ = obj.getJquery();
+        if ($(".dplayer-icons-right .btn-select-fit").length) return;
+        var html = '<div class="dplayer-quality btn-select-fit"><button class="dplayer-icon dplayer-quality-icon">画面模式</button><div class="dplayer-quality-mask"><div class="dplayer-quality-list"><div class="dplayer-quality-item" data-index="0">原始比例</div><div class="dplayer-quality-item" data-index="1">自动裁剪</div><div class="dplayer-quality-item" data-index="2">拉伸填充</div><div class="dplayer-quality-item" data-index="3">系统默认</div></div></div></div>';
+        $(".dplayer-icons-right").prepend(html);
+        $(".btn-select-fit .dplayer-quality-item").on("click", function() {
+            var vfit = ["none", "cover", "fill", ""][$(this).attr("data-index")];
+            document.querySelector("video").style["object-fit"] = vfit;
+            $(".btn-select-fit .dplayer-icon").text($(this).text());
+        });
+    };
+
     obj.autoPlayEpisode = function () {
+        if (obj.getJquery()(".dplayer-icons-right #btn-select-episode").length) return;
         var path = location.pathname.split("/")[1];
         if (path == "s") {
             obj.selectEpisodeSharePage();
@@ -548,9 +623,7 @@
     };
 
     obj.selectEpisodeSharePage = function () {
-        var $ = obj.getJquery();
-        if ($(".dplayer-icons-right #btn-select-episode").length) return;
-        var fileList = JSON.parse(sessionStorage.getItem("sharePageFileList") || "[]")
+        var fileList = obj.sessionGet("sharePageFileList") || []
         , videoList = fileList.filter(function (item, index) {
             return item.category == 1;
         })
@@ -558,77 +631,14 @@
         , fileIndex = videoList.findIndex(function (item, index) {
             return item.fs_id == file.fs_id;
         });
-        if (!(fileIndex > -1 && videoList.length > 1)) return;
-        var eleitem = "";
-        videoList.forEach(function (item, index) {
-            if (fileIndex == index) {
-                eleitem += '<div class="video-item active" title="' + item.server_filename + '" style="background-color: rgba(0,0,0,.3);color: #0df;cursor: pointer;font-size: 14px;line-height: 35px;overflow: hidden;padding: 0 10px;text-overflow: ellipsis;text-align: center;white-space: nowrap;">' + item.server_filename + '</div>';
-            }
-            else {
-                eleitem += '<div class="video-item" title="' + item.server_filename + '" style="color: #fff;cursor: pointer;font-size: 14px;line-height: 35px;overflow: hidden;padding: 0 10px;text-overflow: ellipsis;text-align: center;white-space: nowrap;">' + item.server_filename + '</div>';
-            }
-        });
-        var html = '<button class="dplayer-icon dplayer-play-icon prev-icon" title="上一集"><svg t="1658231494866" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="22734" width="128" height="128" xmlns:xlink="http://www.w3.org/1999/xlink"><defs><style type="text/css"></style></defs><path d="M757.527273 190.138182L382.510545 490.123636a28.020364 28.020364 0 0 0 0 43.752728l375.016728 299.985454a28.020364 28.020364 0 0 0 45.474909-21.876363V212.014545a28.020364 28.020364 0 0 0-45.474909-21.876363zM249.949091 221.509818a28.020364 28.020364 0 0 0-27.973818 27.973818v525.032728a28.020364 28.020364 0 1 0 55.994182 0V249.483636a28.020364 28.020364 0 0 0-28.020364-27.973818zM747.054545 270.242909v483.514182L444.834909 512l302.173091-241.757091z" fill="#333333" p-id="22735"></path></svg></button>';
-        html += '<button id="btn-select-episode" class="dplayer-icon dplayer-quality-icon" title="选集">选集</button> <div class="playlist-content" style="max-width: 80%;max-height: 330px;width: auto;height: auto;box-sizing: border-box;overflow: hidden;position: absolute;left: 0;transition: all .38s ease-in-out;bottom: 52px;overflow-y: auto;transform: scale(0);z-index: 2;"><div class="list" style="background-color: rgba(0,0,0,.3);height: 100%;">' + eleitem + '</div></div>';
-        html += '<button class="dplayer-icon dplayer-play-icon next-icon" title="下一集"><svg t="1658231512641" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="23796" xmlns:xlink="http://www.w3.org/1999/xlink" width="128" height="128"><defs><style type="text/css"></style></defs><path d="M248.506182 190.138182l374.970182 299.985454a28.020364 28.020364 0 0 1 0 43.752728L248.552727 833.861818a28.020364 28.020364 0 0 1-45.521454-21.876363V212.014545c0-23.505455 27.182545-36.538182 45.521454-21.876363z m507.485091 31.371636c15.453091 0 28.020364 12.567273 28.020363 27.973818v525.032728a28.020364 28.020364 0 1 1-55.994181 0V249.483636c0-15.453091 12.520727-27.973818 27.973818-27.973818zM258.978909 270.242909v483.514182L561.198545 512 258.978909 270.242909z" fill="#333333" p-id="23797"></path></svg></button>';
-        $(".dplayer-icons-right").prepend(html);
-        $("#btn-select-episode").on("click", function() {
-            var eleEpisode = $(".playlist-content");
-            if (eleEpisode.css("transform").match(/\d+/) > 0) {
-                eleEpisode.css("transform", "scale(0)");
-            }
-            else {
-                eleEpisode.css("transform", "scale(1)");
-                $(".dplayer-mask").addClass("dplayer-mask-show");
-                var singleheight = $(".dplayer-icons-right .video-item")[0].offsetHeight;
-                var totalheight = $(".dplayer-icons-right .playlist-content").height();
-                $(".dplayer-icons-right .playlist-content").scrollTop((fileIndex + 1) * singleheight - totalheight / 2);
-            }
-        });
-        $(".dplayer-mask").on("click",function() {
-            var eleEpisode = $(".playlist-content");
-            if (eleEpisode.css("transform").match(/\d+/) > 0) {
-                eleEpisode.css("transform", "scale(0)");
-                $(this).removeClass("dplayer-mask-show");
-            }
-        });
-
-        $(".playlist-content .video-item").on("click", function() {
-            var $this = $(this);
-            if ($this.hasClass("active")) return;
-            $(".dplayer-mask").removeClass("dplayer-mask-show");
-            var oldele = $(".video-item.active");
-            oldele.removeClass("active");
-            oldele.css({"background-color": "", "color": "#fff"});
-            $this.addClass("active");
-            $this.css({"background-color": "rgba(0,0,0,.3)", "color": "#0df"});
-            location.href = "https://pan.baidu.com" + location.pathname + "?fid=" + videoList[$this.index()].fs_id;
-        });
-        $(".prev-icon").on("click",function () {
-            var prevvideo = videoList[fileIndex - 1];
-            if (prevvideo) {
-                location.href = "https://pan.baidu.com" + location.pathname + "?fid=" + prevvideo.fs_id;
-            }
-            else {
-                obj.msg("没有上一集了", "failure");
-            }
-        });
-        $(".next-icon").on("click",function () {
-            var nextvideo = videoList[fileIndex + 1];
-            if (nextvideo) {
-                location.href = "https://pan.baidu.com" + location.pathname + "?fid=" + nextvideo.fs_id;
-            }
-            else {
-                obj.msg("没有下一集了", "failure");
-            }
-        });
+        if (fileIndex > -1 && videoList.length > 1) {
+            obj.createEpisodeElement(videoList, fileIndex, "home");
+        }
     };
 
     obj.selectEpisodeHomePage = function () {
-        var $ = obj.getJquery();
-        if ($(".dplayer-icons-right #btn-select-episode").length) return;
         var videoList = [];
-        $("#videoListView").find(".video-item").each(function () {
+        obj.getJquery()("#videoListView").find(".video-item").each(function () {
             videoList.push({
                 server_filename: this.title
             })
@@ -638,7 +648,13 @@
         , fileIndex = videoList.findIndex(function (item, index) {
             return item.server_filename == server_filename;
         });
-        if (!(fileIndex > -1 && videoList.length > 1)) return;
+        if (fileIndex > -1 && videoList.length > 1) {
+            obj.createEpisodeElement(videoList, fileIndex, "home");
+        }
+    };
+
+    obj.createEpisodeElement = function (videoList, fileIndex, page) {
+        var $ = obj.getJquery();
         var eleitem = "";
         videoList.forEach(function (item, index) {
             if (fileIndex == index) {
@@ -681,16 +697,32 @@
             oldele.css({"background-color": "", "color": "#fff"});
             $this.addClass("active");
             $this.css({"background-color": "rgba(0,0,0,.3)", "color": "#0df"});
-            var t = $this.index();
-            var path = currpath.split("/").slice(0, -1).concat(videoList[t].server_filename).join("/");
-            location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + t;
+            try {
+                if (page == "share") {
+                    location.href = "https://pan.baidu.com" + location.pathname + "?fid=" + videoList[$this.index()].fs_id;
+                }
+                else if (page == "home") {
+                    var currpath = obj.require("system-core:context/context.js").instanceForSystem.router.query.get("path");
+                    var t = $this.index();
+                    var path = currpath.split("/").slice(0, -1).concat(videoList[t].server_filename).join("/");
+                    location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + t;
+                }
+            } catch (error) { }
         });
         $(".prev-icon").on("click",function () {
             var prevvideo = videoList[fileIndex - 1];
             if (prevvideo) {
-                var t = fileIndex - 1;
-                var path = currpath.split("/").slice(0, -1).concat(videoList[t].server_filename).join("/");
-                location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + t;
+                try {
+                    if (page == "share") {
+                        location.href = "https://pan.baidu.com" + location.pathname + "?fid=" + prevvideo.fs_id;
+                    }
+                    else if (page == "home") {
+                        var currpath = obj.require("system-core:context/context.js").instanceForSystem.router.query.get("path");
+                        var t = fileIndex - 1;
+                        var path = currpath.split("/").slice(0, -1).concat(videoList[t].server_filename).join("/");
+                        location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + t;
+                    }
+                } catch (error) { }
             }
             else {
                 obj.msg("没有上一集了", "failure");
@@ -699,119 +731,21 @@
         $(".next-icon").on("click",function () {
             var nextvideo = videoList[fileIndex + 1];
             if (nextvideo) {
-                var t = fileIndex + 1;
-                var path = currpath.split("/").slice(0, -1).concat(videoList[t].server_filename).join("/");
-                location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + t;
+                try {
+                    if (page == "share") {
+                        location.href = "https://pan.baidu.com" + location.pathname + "?fid=" + nextvideo.fs_id;
+                    }
+                    else if (page == "home") {
+                        var currpath = obj.require("system-core:context/context.js").instanceForSystem.router.query.get("path");
+                        var t = fileIndex + 1;
+                        var path = currpath.split("/").slice(0, -1).concat(videoList[t].server_filename).join("/");
+                        location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + t;
+                    }
+                } catch (error) { }
             }
             else {
                 obj.msg("没有下一集了", "failure");
             }
-        });
-    };
-
-    obj.autoPlayNext = function () {
-        var path = location.pathname.split("/")[1];
-        if (path == "s") {
-            obj.playNextSharePage();
-        }
-        else if (path == "play") {
-            obj.playNextHomePage();
-        }
-        else if (path == "mbox") {
-        }
-    };
-
-    obj.playNextSharePage = function () {
-        var fileList = JSON.parse(sessionStorage.getItem("sharePageFileList") || "[]")
-        , videoList = fileList.filter(function (item, index) {
-            return item.category == 1;
-        })
-        , file = obj.video_page.info[0]
-        , fileIndex = videoList.findIndex(function (item, index) {
-            return item.fs_id == file.fs_id;
-        });
-        if (!(fileIndex > -1 && videoList.length)) return;
-        var nextvideo = videoList[fileIndex + 1];
-        if (nextvideo) {
-            location.search = "?fid=" + nextvideo.fs_id;
-        }
-        else {
-            obj.msg("没有下一集了", "failure");
-        }
-    };
-
-    obj.playNextHomePage = function () {
-        var autoPlayNext = localStorage.getItem("dplayer-autoplaynext") == "true";
-        if (!autoPlayNext) return;
-        var listContainer = obj.getJquery()("#videoListView")
-        , currentplay = listContainer.find(".currentplay")
-        , nextSibling = currentplay.next();
-        if (nextSibling.length) {
-            var instanceForSystem = obj.require("system-core:context/context.js").instanceForSystem
-            , router = instanceForSystem.router
-            , path = router.query.get("path")
-            , t = router.query.get("t");
-            var title = nextSibling.attr("title")
-            , nextpath = path.split("/").slice(1, -1).concat(title).join("/");
-            location.hash = "#/video?path=" + encodeURIComponent("/" + nextpath);
-        }
-    };
-
-    obj.resetPlayer = function () {
-        obj.async("file-widget-1:videoPlay/context.js", function(c) {
-            if (!(c && obj.appreciation)) return;
-            var count, id = count = setInterval(function() {
-                var context = c.getContext() || {}, playerInstance = context.playerInstance;
-                if (playerInstance && playerInstance.player) {
-                    clearInterval(id);
-                    playerInstance.player.dispose();
-                    playerInstance.player = !1;
-                }
-                else if (++count - id > 60) {
-                    clearInterval(id);
-                }
-            }, 500);
-        });
-    };
-
-    obj.loadScript = function (src) {
-        if (!window.instances) {
-            window.instances = {};
-        }
-        if (!window.instances[src]) {
-            window.instances[src] = new Promise((resolve, reject) => {
-                const script = document.createElement("script")
-                script.src = src;
-                script.type = "text/javascript";
-                script.onload = resolve;
-                script.onerror = reject;
-                document.head.appendChild(script);
-            });
-        }
-        return window.instances[src];
-    };
-
-    obj.appreciation = function (player) {
-        if (this.contextmenu_show) return;
-        this.contextmenu_show = true;
-        var pnum = GM_getValue("pnum", 1);
-        GM_setValue("pnum", ++pnum);
-        GM_getValue("appreciation_show") || GM_setValue("appreciation_show", Date.now());
-        if (Date.now() - GM_getValue("appreciation_show") > 86400000) {
-            setTimeout(() => {
-                JSON.stringify(player.options.contextmenu).includes(6336167) || player.destroy();
-                JSON.stringify(player.options.contextmenu).includes(2540025) || player.destroy();
-                obj.usersPost(function (data) {
-                    if (!data.appreciation) {
-                        data.notice ? alert(data.notice) : alert("\u672c\u811a\u672c\u672a\u5728\u4efb\u4f55\u5e73\u53f0\u76f4\u63a5\u51fa\u552e\u8fc7\u0020\u6709\u4e9b\u7802\u7eb8\u5728\u5012\u5356\u0020\u6709\u4e9b\u7802\u7eb8\u778e\u773c\u4e70\u0020\u5982\u679c\u89c9\u5f97\u559c\u6b22\u591a\u8c22\u60a8\u7684\u8d5e\u8d4f");
-                        player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
-                    }
-                });
-            }, player.video.duration / 60 * 1000);
-        }
-        document.querySelector("#dplayer .dplayer-menu-item").addEventListener('click', () => {
-            player.contextmenu.hide();
-            GM_setValue("appreciation_show", Date.now());
         });
     };
 
@@ -1362,29 +1296,35 @@
         return newsarr;
     };
 
-    obj.usersPost = function (callback) {
-        obj.uinfo(function(data) {
-            obj.users(data, function(users) {
-                users && GM_setValue("users", users);
-                callback && callback(users);
+    obj.appreciation = function (player) {
+        var pnum = GM_getValue("pnum", 1);
+        GM_setValue("pnum", ++pnum);
+        if (Date.now() - (GM_getValue("appreciation_show") || 0) > 86400000) {
+            setTimeout(() => {
+                obj.isAppreciation(function (data) {
+                    if (!data.appreciation) {
+                        data.notice ? alert(data.notice) : alert("\u672c\u811a\u672c\u672a\u5728\u4efb\u4f55\u5e73\u53f0\u76f4\u63a5\u51fa\u552e\u8fc7\u0020\u6709\u4e9b\u7802\u7eb8\u5728\u5012\u5356\u0020\u6709\u4e9b\u7802\u7eb8\u778e\u773c\u4e70\u0020\u5982\u679c\u89c9\u5f97\u559c\u6b22\u591a\u8c22\u60a8\u7684\u8d5e\u8d4f");
+                        player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
+                    }
+                });
+            }, player.video.duration / 30 * 1000);
+        }
+    };
+
+    obj.onPost = function (on, callback) {
+        obj.usersPost(function(data) {
+            obj.infoPost(data, on, function (result) {
+                callback && callback(result);
             });
         });
     };
 
-    obj.onPost = function (on, callback) {
-        var users = GM_getValue("users");
-        if (users) {
-            obj.infoPost(users, on, function (result) {
-                callback && callback(result);
+    obj.usersPost = function (callback) {
+        obj.uinfo(function(data) {
+            obj.users(data, function(users) {
+                callback && callback(users);
             });
-        }
-        else {
-            obj.usersPost(function(data) {
-                obj.infoPost(data, on, function (result) {
-                    callback && callback(result);
-                });
-            });
-        }
+        });
     };
 
     obj.users = function(data, callback) {
@@ -1406,7 +1346,8 @@
                 callback && callback(response);
             },
             error: function (error) {
-                callback && callback("");
+                var response = error && error.response ? JSON.parse(error.response) : "";
+                response && response.code == 140 ? callback && callback({appreciation: true}) : callback && callback("");
             }
         });
     };
@@ -1432,13 +1373,6 @@
             error: function (error) {
                 callback && callback("");
             }
-        });
-    };
-
-    obj.uinfo = function (callback) {
-        var a = obj.getJquery();
-        a.get("https://pan.baidu.com/rest/2.0/xpan/nas?method=uinfo", function(data, status) {
-            status == "success" ? callback && callback(data) : callback && callback("");
         });
     };
 
@@ -1474,6 +1408,45 @@
             delete details.data;
         }
         GM_xmlhttpRequest(details);
+    };
+
+    obj.uinfo = function (callback) {
+        var a = obj.getJquery();
+        a.get("https://pan.baidu.com/rest/2.0/xpan/nas?method=uinfo", function(data, status) {
+            status == "success" ? callback && callback(data) : callback && callback("");
+        });
+    };
+
+    obj.sessionGet = function (key) {
+        var item = sessionStorage.getItem(key);
+        if (item) {
+            try { item = JSON.parse(item) } catch (error) {};
+        }
+        return item;
+    };
+
+    obj.sessionSet = function (key, value) {
+        sessionStorage.setItem(key, JSON.stringify(value));
+    };
+
+    obj.sessionRemoveItem = function (key) {
+        sessionStorage.removeItem(key);
+    };
+
+    obj.resetPlayer = function () {
+        obj.async("file-widget-1:videoPlay/context.js", function(c) {
+            var count, id = count = setInterval(function() {
+                var context = c && c.getContext() || {}, playerInstance = context.playerInstance;
+                if (playerInstance && playerInstance.player) {
+                    clearInterval(id);
+                    playerInstance.player.dispose();
+                    playerInstance.player = !1;
+                }
+                else if (++count - id > 60) {
+                    clearInterval(id);
+                }
+            }, 500);
+        });
     };
 
     obj.require = function (name) {
