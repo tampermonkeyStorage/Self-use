@@ -337,8 +337,7 @@
             }
         }
         try {
-            var player = obj.player = new unsafeWindow.DPlayer(options);
-            console.log("=== 百度 网 网 网盘 好 好 好棒棒！===", player);
+            var player = new unsafeWindow.DPlayer(options);
             obj.initPlayer(player);
             obj.resetPlayer();
             obj.msg("DPlayer 播放器创建成功");
