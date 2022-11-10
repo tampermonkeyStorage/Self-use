@@ -26,6 +26,7 @@
         video_page: {
             info: [],
             quality: [],
+            sub_info: [],
             adToken: ""
         }
     };
