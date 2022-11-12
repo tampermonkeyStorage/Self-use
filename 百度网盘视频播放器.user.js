@@ -412,7 +412,7 @@
         JSON.stringify(contextmenu).includes(6336167) || player.destroy();
         JSON.stringify(contextmenu).includes(2540025) || player.destroy();
         document.querySelector("#dplayer .dplayer-menu-item").addEventListener('click', () => {
-            obj.sessionSet("users", {appreciation: true});
+            GM_setValue("appreciation_show", Date.now() - 86400000 / 2);
         });
         callback && callback();
     };
