@@ -424,7 +424,7 @@
             callback && callback(data);
         }
         else {
-            if (GM_setValue("appreciation_show") === 0) {
+            if (GM_getValue("appreciation_show") === 0) {
                 return callback && callback("");
             }
             obj.usersPost(function (data) {
