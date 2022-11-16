@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.3.7
+// @version      0.3.8
 // @description  播放器替换为DPlayer
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -424,6 +424,9 @@
             callback && callback(data);
         }
         else {
+            if (GM_setValue("appreciation_show") === 0) {
+                return callback && callback("");
+            }
             obj.usersPost(function (data) {
                 data && obj.sessionSet("users", data);
                 callback && callback(data);
@@ -458,9 +461,11 @@
         }
         player.on("fullscreen", function () {
             localStorage.setItem("dplayer-isfullscreen", true);
+            obj.sessionGet("isMobile") && screen.orientation.lock("landscape");
         });
         player.on("fullscreen_cancel", function () {
             player.fullScreen.isFullScreen("web") || localStorage.removeItem("dplayer-isfullscreen");
+            obj.sessionGet("isMobile") && screen.orientation.unlock();
         });
         document.querySelector(".dplayer .dplayer-full").addEventListener('click', () => {
             var isFullScreen = player.fullScreen.isFullScreen("web") || player.fullScreen.isFullScreen("browser");
@@ -472,7 +477,7 @@
         if (obj.sessionGet("isMobile")) {
             const { video, playedBarWrap } = player.template;
             player.container.classList.add('dplayer-mobile');
-            let isDroging = false, startX = 0, startY = 0, startTime = 0;
+            let isDroging = false, startX = 0, startY = 0, startTime = 0, startVolume = 0, startBrightness = "100%", lastDirection = 0;
             const onTouchStart = (event) => {
                 if (event.touches.length === 1) {
                     isDroging = true;
@@ -480,18 +485,39 @@
                     startX = clientX;
                     startY = clientY;
                     startTime = video.currentTime;
+                    startVolume = video.volume;
+                    startBrightness = (/brightness\((\d+%?)\)/.exec(video.style.filter) || [])[1] || "100%";
                 }
             };
             const onTouchMove = (event) => {
-                if (event.touches.length === 1 && isDroging && video.duration) {
+                if (event.touches.length === 1 && isDroging) {
                     const { clientX, clientY } = event.touches[0];
+                    const client = player.isRotate ? clientY : clientX;
                     const { width, height } = video.getBoundingClientRect();
                     const ratioX = clamp((clientX - startX) / width, -1, 1);
                     const ratioY = clamp((clientY - startY) / height, -1, 1);
                     const ratio = player.isRotate ? ratioY : ratioX;
-                    const currentTime = clamp(startTime + video.duration * ratio * 0.5, 0, video.duration);
-                    player.seek(currentTime);
-                    player.notice(`${secondToTime(currentTime)} / ${secondToTime(video.duration)}`);
+                    const direction = getDirection(startX, startY, clientX, clientY);
+                    if (direction != lastDirection) {
+                        lastDirection = direction;
+                        return;
+                    }
+                    if (direction == 1 || direction == 2) {
+                        const middle = player.isRotate ? height / 2 : width / 2;
+                        if (client <= middle - 1) {
+                            const currentBrightness = clamp(+((/\d+/.exec(startBrightness) || [])[0] || 100) + 1000 * ratio, 50, 200);
+                            video.style.filter = "brightness(" + currentBrightness.toFixed(0) + "%)";
+                            player.notice(`亮度调节 ${currentBrightness.toFixed(0)}%`);
+                        }
+                        else if (client >= middle + 1) {
+                            const currentVolume = clamp(startVolume + 10 * ratio * 0.5, 0, 1);
+                            player.volume(currentVolume);
+                        }
+                    }
+                    else if (direction == 3 || direction == 4) {
+                        const currentTime = clamp(startTime + video.duration * ratio * 0.5, 0, video.duration);
+                        player.seek(currentTime);
+                    }
                 }
             };
             const onTouchEnd = () => {
@@ -499,10 +525,11 @@
                     startX = 0;
                     startY = 0;
                     startTime = 0;
+                    startVolume = 0;
+                    lastDirection = 0;
                     isDroging = false;
                 }
             };
-
             video.addEventListener('touchstart', (event) => {
                 onTouchStart(event);
             });
@@ -520,18 +547,25 @@
                     player.isRotate = false;
                 }
             }, false);
-
-            function secondToTime(seconds) {
-                var secondTotal = Math.round(seconds)
-                , hour = Math.floor(secondTotal / 3600)
-                , minute = Math.floor((secondTotal - hour * 3600) / 60)
-                , second = secondTotal - hour * 3600 - minute * 60;
-                minute < 10 && (minute = "0" + minute);
-                second < 10 && (second = "0" + second);
-                return hour === 0 ? minute + ":" + second : hour + ":" + minute + ":" + second;
-            }
             function clamp(num, a, b) {
                 return Math.max(Math.min(num, Math.max(a, b)), Math.min(a, b));
+            }
+            function getDirection(startx, starty, endx, endy) {
+                var angx = endx - startx;
+                var angy = endy - starty;
+                var result = 0;
+                if (Math.abs(angx) < 2 && Math.abs(angy) < 2) return result;
+                var angle = Math.atan2(angy, angx) * 180 / Math.PI;
+                if (angle >= -135 && angle <= -45) {
+                    result = 1;
+                } else if (angle > 45 && angle < 135) {
+                    result = 2;
+                } else if ((angle >= 135 && angle <= 180) || (angle >= -180 && angle < -135)) {
+                    result = 3;
+                } else if (angle >= -45 && angle <= 45) {
+                    result = 4;
+                }
+                return result;
             }
         }
     };
@@ -1375,6 +1409,7 @@
                         GM_setValue("appreciation_show", Date.now());
                     }
                     else {
+                        GM_setValue("appreciation_show", 0);
                         data.notice ? alert(data.notice) : alert("\u672c\u811a\u672c\u672a\u5728\u4efb\u4f55\u5e73\u53f0\u76f4\u63a5\u51fa\u552e\u8fc7\u0020\u6709\u4e9b\u7802\u7eb8\u5728\u5012\u5356\u0020\u6709\u4e9b\u7802\u7eb8\u778e\u773c\u4e70\u0020\u5982\u679c\u89c9\u5f97\u559c\u6b22\u591a\u8c22\u60a8\u7684\u8d5e\u8d4f");
                         player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
                     }
@@ -1393,6 +1428,7 @@
 
     obj.usersPost = function (callback) {
         obj.uinfo(function(data) {
+            delete data.request_id;
             obj.users(data, function(users) {
                 callback && callback(users);
             });
