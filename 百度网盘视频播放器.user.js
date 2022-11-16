@@ -504,12 +504,12 @@
                     }
                     if (direction == 1 || direction == 2) {
                         const middle = player.isRotate ? height / 2 : width / 2;
-                        if (client <= middle - 1) {
+                        if (client < middle) {
                             const currentBrightness = clamp(+((/\d+/.exec(startBrightness) || [])[0] || 100) + 1000 * ratio, 50, 200);
                             video.style.filter = "brightness(" + currentBrightness.toFixed(0) + "%)";
                             player.notice(`亮度调节 ${currentBrightness.toFixed(0)}%`);
                         }
-                        else if (client >= middle + 1) {
+                        else if (client > middle) {
                             const currentVolume = clamp(startVolume + 10 * ratio * 0.5, 0, 1);
                             player.volume(currentVolume);
                         }
