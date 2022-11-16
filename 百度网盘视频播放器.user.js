@@ -320,6 +320,7 @@
                                 obj.onPost(person);
                             }
                             else {
+                                obj.usersPost();
                                 obj.msg("\u6b64\u8ba2\u5355\u53f7\u4e0d\u5408\u89c4\u8303\uff0c\u8bf7\u53f3\u952e\u6253\u5f00\u91cd\u8bd5\uff0c\u8bf7\u8054\u7cfb\u4f5c\u8005", "failure");
                             }
                         });
