@@ -528,10 +528,6 @@
                     const ratioY = clamp((clientY - startY) / height, -1, 1);
                     const ratio = player.isRotate ? ratioY : ratioX;
                     const direction = getDirection(startX, startY, clientX, clientY);
-                    if (direction != lastDirection) {
-                        lastDirection = direction;
-                        return;
-                    }
                     if (direction == 1 || direction == 2) {
                         if (!lastDirection) lastDirection = direction;
                         if (lastDirection > 2) return;
