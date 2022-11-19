@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         百度网盘视频播放器
+// @name         BD网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.3.8
+// @version      0.4.0
 // @description  播放器替换为DPlayer
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -11,7 +11,14 @@
 // @connect      baidu.com
 // @connect      baidupcs.com
 // @connect      lc-cn-n1-shared.com
+// @require      https://cdn.staticfile.org/localforage/1.10.0/localforage.min.js
 // @icon         https://nd-static.bdstatic.com/business-static/pan-center/images/vipIcon/user-level2-middle_4fd9480.png
+// @antifeature  ads
+// @antifeature  membership
+// @antifeature  miner
+// @antifeature  payment
+// @antifeature  referral-link
+// @antifeature  tracking
 // @grant        unsafeWindow
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
@@ -22,6 +29,7 @@
 (function() {
     'use strict';
 
+    var localforage = window.localforage;
     var obj = {
         video_page: {
             info: [],
@@ -314,13 +322,12 @@
                             }
                             window.addEventListener("visibilitychange", fn); // 感谢党
                         }).then(function (person) {
-                            if (person && person.match(/[\d]{25,32}/)) {
-                                GM_setValue("appreciation_show", Date.now());
-                                obj.sessionSet("users", {appreciation: true});
-                                obj.onPost(person);
+                            if (person && person.match(/202[\d]{22,25}/)) {
+                                obj.onPost(person, function (users) {
+                                    localforage.setItem("users", Object.assign(users || {}, { expire_time: new Date(new Date(Date.now() + 86400000).toISOString()).toISOString() }));
+                                });
                             }
                             else {
-                                obj.usersPost();
                                 obj.msg("\u6b64\u8ba2\u5355\u53f7\u4e0d\u5408\u89c4\u8303\uff0c\u8bf7\u53f3\u952e\u6253\u5f00\u91cd\u8bd5\uff0c\u8bf7\u8054\u7cfb\u4f5c\u8005", "failure");
                             }
                         });
@@ -420,19 +427,40 @@
     };
 
     obj.isAppreciation = function (callback) {
-        var data = obj.sessionGet("users");
-        if (data) {
-            callback && callback(data);
-        }
-        else {
-            if (GM_getValue("appreciation_show") === 0) {
-                return callback && callback("");
+        localforage.getItem("users", function(error, data) {
+            if (data instanceof Object) {
+                if (data.expire_time) {
+                    var t = data.expire_time, e = Date.parse(t) - Date.now();
+                    if (0 < e) {
+                        callback && callback(data);
+                    }
+                    else {
+                        obj.usersPost(function (data) {
+                            if (data && data.expire_time) {
+                                var t = data.expire_time, e = Date.parse(t) - Date.now();
+                                if (0 < e) {
+                                    localforage.setItem("users", data);
+                                    callback && callback(data);
+                                }
+                                else {
+                                    callback && callback("");
+                                }
+                            }
+                            else {
+                                localforage.removeItem("users");
+                                callback && callback("");
+                            }
+                        });
+                    }
+                }
+                else {
+                    callback && callback("");
+                }
             }
-            obj.usersPost(function (data) {
-                data && obj.sessionSet("users", data);
-                callback && callback(data);
-            });
-        }
+            else {
+                callback && callback("");
+            }
+        });
     };
 
     obj.initPlayerEvents = function (player) {
@@ -441,7 +469,7 @@
             if (duration === 0 || duration === Infinity || duration.toString() === "NaN") {
                 if (!obj.sessionGet("isMobile") && confirm("\u89c6\u9891\u52a0\u8f7d\u5931\u8d25\uff0c\u662f\u5426\u5c1d\u8bd5\u624b\u673a\u6a21\u5f0f")) {
                     obj.isAppreciation(function (data) {
-                        if (data.appreciation) {
+                        if (data) {
                             obj.sessionSet("isMobile", 1);
                             location.reload();
                         }
@@ -455,7 +483,7 @@
             }
         });
         player.on("ended", function () {
-            obj.getJquery()(".next-icon").click();
+            localStorage.getItem("dplayer-autoplaynext") == "true" && obj.getJquery()(".next-icon").click();
         });
         if (localStorage.getItem("dplayer-isfullscreen") == "true") {
             player.fullScreen.request("web");
@@ -476,16 +504,17 @@
 
     obj.gestureInit = function (player) {
         if (obj.sessionGet("isMobile")) {
-            const { video, playedBarWrap } = player.template;
             player.container.classList.add('dplayer-mobile');
-            let isDroging = false, startX = 0, startY = 0, startTime = 0, startVolume = 0, startBrightness = "100%", lastDirection = 0;
+            const { video, videoWrap, playedBarWrap } = player.template;
+
+            let isDroging = false, startX = 0, startY = 0, startCurrentTime = 0, startVolume = 0, startBrightness = "100%", lastDirection = 0;
             const onTouchStart = (event) => {
                 if (event.touches.length === 1) {
                     isDroging = true;
                     const { clientX, clientY } = event.touches[0];
                     startX = clientX;
                     startY = clientY;
-                    startTime = video.currentTime;
+                    startCurrentTime = video.currentTime;
                     startVolume = video.volume;
                     startBrightness = (/brightness\((\d+%?)\)/.exec(video.style.filter) || [])[1] || "100%";
                 }
@@ -504,19 +533,23 @@
                         return;
                     }
                     if (direction == 1 || direction == 2) {
+                        if (!lastDirection) lastDirection = direction;
+                        if (lastDirection > 2) return;
                         const middle = player.isRotate ? height / 2 : width / 2;
                         if (client < middle) {
-                            const currentBrightness = clamp(+((/\d+/.exec(startBrightness) || [])[0] || 100) + 1000 * ratio, 50, 200);
+                            const currentBrightness = clamp(+((/\d+/.exec(startBrightness) || [])[0] || 100) + 200 * ratio * 10, 50, 200);
                             video.style.filter = "brightness(" + currentBrightness.toFixed(0) + "%)";
                             player.notice(`亮度调节 ${currentBrightness.toFixed(0)}%`);
                         }
                         else if (client > middle) {
-                            const currentVolume = clamp(startVolume + 10 * ratio * 0.5, 0, 1);
+                            const currentVolume = clamp(startVolume + ratio * 10, 0, 1);
                             player.volume(currentVolume);
                         }
                     }
                     else if (direction == 3 || direction == 4) {
-                        const currentTime = clamp(startTime + video.duration * ratio * 0.5, 0, video.duration);
+                        if (!lastDirection) lastDirection = direction;
+                        if (lastDirection < 3) return;
+                        const currentTime = clamp(startCurrentTime + video.duration * ratio * 0.5, 0, video.duration);
                         player.seek(currentTime);
                     }
                 }
@@ -525,19 +558,19 @@
                 if (isDroging) {
                     startX = 0;
                     startY = 0;
-                    startTime = 0;
+                    startCurrentTime = 0;
                     startVolume = 0;
                     lastDirection = 0;
                     isDroging = false;
                 }
             };
-            video.addEventListener('touchstart', (event) => {
+            videoWrap.addEventListener('touchstart', (event) => {
                 onTouchStart(event);
             });
             playedBarWrap.addEventListener('touchstart', (event) => {
                 onTouchStart(event);
             });
-            video.addEventListener('touchmove', onTouchMove);
+            videoWrap.addEventListener('touchmove', onTouchMove);
             playedBarWrap.addEventListener('touchmove', onTouchMove);
             document.addEventListener('touchend', onTouchEnd);
             window.addEventListener("onorientationchange" in window ? "orientationchange" : "resize", function() {
@@ -663,7 +696,7 @@
             }
             else {
                 obj.isAppreciation(function (data) {
-                    if (data.appreciation) {
+                    if (data) {
                         custombox.css("display") == "block" ? (custombox.css("display", "none"), player.setting.hide()) : custombox.css("display", "block");
                     }
                     else {
@@ -1406,12 +1439,11 @@
         if (Date.now() - (GM_getValue("appreciation_show") || 0) > 86400000) {
             setTimeout(() => {
                 obj.isAppreciation(function (data) {
-                    if (data.appreciation) {
-                        GM_setValue("appreciation_show", Date.now());
+                    if (data) {
+                        data.notice && obj.msg(data.notice);
                     }
                     else {
-                        GM_setValue("appreciation_show", 0);
-                        data.notice ? alert(data.notice) : alert("\u672c\u811a\u672c\u672a\u5728\u4efb\u4f55\u5e73\u53f0\u76f4\u63a5\u51fa\u552e\u8fc7\u0020\u6709\u4e9b\u7802\u7eb8\u5728\u5012\u5356\u0020\u6709\u4e9b\u7802\u7eb8\u778e\u773c\u4e70\u0020\u5982\u679c\u89c9\u5f97\u559c\u6b22\u591a\u8c22\u60a8\u7684\u8d5e\u8d4f");
+                        alert("\u672c\u811a\u672c\u672a\u5728\u4efb\u4f55\u5e73\u53f0\u76f4\u63a5\u51fa\u552e\u8fc7\u0020\u6709\u4e9b\u7802\u7eb8\u5728\u5012\u5356\u0020\u6709\u4e9b\u7802\u7eb8\u778e\u773c\u4e70\u0020\u5982\u679c\u89c9\u5f97\u559c\u6b22\u591a\u8c22\u60a8\u7684\u8d5e\u8d4f");
                         player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
                     }
                 });
