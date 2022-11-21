@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.4.0
+// @version      0.4.1
 // @description  播放器替换为DPlayer
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -180,6 +180,14 @@
         });
     };
 
+    obj.getPoster = function() {
+        var file = obj.video_page.info ? obj.video_page.info[0] : "";
+        if (file && file.thumbs) {
+            return Object.values(file.thumbs).pop().replace(/size=c\d+_u\d+/, "size=c720_u480");
+        }
+        return "";
+    };
+
     obj.addQuality = function (getUrl, resolution) {
         var r = {
             1080: "超清 1080P",
@@ -221,7 +229,7 @@
                 });
                 Promise.all(promises).then(function(results) {
                     setTimeout(function () {
-                        callback && callback(unsafeWindow.DPlayer);
+                        obj.isAppreciation.length && obj.isAppreciation.toString().length == 1412 && callback && callback(unsafeWindow.DPlayer);
                     }, 0);
                 }).catch(function (error) {
                     laodcdn(urlArr, ++index);
@@ -285,7 +293,8 @@
             container: dPlayerNode,
             video: {
                 quality: quality,
-                defaultQuality: defaultQuality
+                defaultQuality: defaultQuality,
+                pic: obj.getPoster()
             },
             pluginOptions: {
                 hls: {
@@ -320,11 +329,11 @@
                                     resolve(prompt("\u8bf7\u8f93\u5165\u8ba2\u5355\u53f7\uff08\u6ce8\uff1a\u6b64\u8ba2\u5355\u53f7\u53ea\u5bf9\u7231\u53d1\u7535\u6709\u6548\uff09"));
                                 }
                             }
-                            window.addEventListener("visibilitychange", fn); // 感谢党
+                            window.addEventListener("visibilitychange", fn);
                         }).then(function (person) {
                             if (person && person.match(/202[\d]{22,25}/)) {
                                 obj.onPost(person, function (users) {
-                                    localforage.setItem("users", Object.assign(users || {}, { expire_time: new Date(new Date(Date.now() + 86400000).toISOString()).toISOString() }));
+                                    localforage.setItem("users", Object.assign(users || {}, { expire_time: new Date(Date.now() + 86400000).toISOString() }));
                                 });
                             }
                             else {
@@ -365,11 +374,17 @@
                 $("#layoutMain").attr("style", "z-index: 42;");
                 $(".header-box").remove();
             });
+            obj.isAppreciation(function (data) {
+                if (data) {
+                    obj.gestureInit(player);
+                    obj.longPressInit(player);
+                    obj.dblclickInit(player);
+                }
+            });
             obj.initPlayerEvents(player);
             obj.memoryPlay(player);
             obj.customSpeed(player);
             obj.appreciation(player);
-            obj.gestureInit(player);
             obj.playSetting();
             obj.videoFit();
             obj.autoPlayEpisode();
@@ -401,6 +416,10 @@
         setTimeout(function () {
             if (player.isReady) {
                 obj.sessionRemoveItem("startError");
+                var pnum = GM_getValue("pnum", 1);
+                GM_setValue("pnum", ++pnum);
+                (obj.appreciation.length && obj.appreciation.toString().length == 846) || player.destroy();
+                setTimeout(() => { obj.appreciation(player) }, player.video.duration / 2 * 1000);
             }
             else {
                 var startError = obj.sessionGet("startError") || 0;
@@ -483,7 +502,15 @@
             }
         });
         player.on("ended", function () {
-            localStorage.getItem("dplayer-autoplaynext") == "true" && obj.getJquery()(".next-icon").click();
+            obj.isAppreciation(function (data) {
+                if (data) {
+                    localStorage.getItem("dplayer-autoplaynext") == "true" && obj.getJquery()(".next-icon").click();
+                }
+                else {
+                    obj.msg("\u7231\u53d1\u7535\u0020\u81ea\u52a8\u8df3\u8f6c\u4e0b\u4e00\u96c6");
+                    player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
+                }
+            });
         });
         if (localStorage.getItem("dplayer-isfullscreen") == "true") {
             player.fullScreen.request("web");
@@ -528,6 +555,10 @@
                     const ratioY = clamp((clientY - startY) / height, -1, 1);
                     const ratio = player.isRotate ? ratioY : ratioX;
                     const direction = getDirection(startX, startY, clientX, clientY);
+                    if (direction != lastDirection) {
+                        lastDirection = direction;
+                        return;
+                    }
                     if (direction == 1 || direction == 2) {
                         if (!lastDirection) lastDirection = direction;
                         if (lastDirection > 2) return;
@@ -598,6 +629,103 @@
                 return result;
             }
         }
+    };
+
+    obj.longPressInit = function (player) {
+        const { video, videoWrap } = player.template;
+        let isDroging = false, isLongPress = false, timer = 0, speed = 1;
+        const onMouseDown = () => {
+            timer = setTimeout(() => {
+                isLongPress = true;
+                speed = video.playbackRate;
+                player.speed(speed * 3);
+            },1000);
+        }
+        const onMouseUp = () => {
+            clearTimeout(timer);
+            setTimeout(() => {
+                if (isLongPress) {
+                    isLongPress = false;
+                    player.speed(speed);
+                    player.play();
+                }
+            });
+        }
+        const onTouchStart = (event) => {
+            if (event.touches.length === 1) {
+                isDroging = true;
+                speed = video.playbackRate;
+                timer = setInterval(() => {
+                    isLongPress = true;
+                    player.speed(speed * 3);
+                    player.contextmenu.hide();
+                },1000);
+            }
+        };
+        const onTouchMove = (event) => {
+            if (event.touches.length === 1 && isDroging) {
+                clearInterval(timer);
+                setTimeout(() => {
+                    if (isLongPress) {
+                        isLongPress = false;
+                        player.speed(speed);
+                        player.play();
+                    }
+                });
+            }
+        };
+        const onTouchEnd = () => {
+            if (isDroging) {
+                clearInterval(timer);
+                setTimeout(() => {
+                    if (isLongPress) {
+                        isLongPress = false;
+                        player.speed(speed);
+                        player.play();
+                    }
+                });
+            }
+        };
+
+        if (obj.sessionGet("isMobile")) {
+            videoWrap.addEventListener('touchstart', onTouchStart);
+            videoWrap.addEventListener('touchmove', onTouchMove);
+            videoWrap.addEventListener('touchend', onTouchEnd);
+        }
+        else {
+            videoWrap.addEventListener('mousedown', onMouseDown);
+            videoWrap.addEventListener('mouseup', onMouseUp);
+        }
+        videoWrap.addEventListener('dblclick', (event) => {
+            const currentTime = video.currentTime;
+            const { offsetX, offsetY } = event;
+            const { width, height } = video.getBoundingClientRect();
+            const client = player.isRotate ? offsetY : offsetX;
+            const middle = player.isRotate ? height / 2 : width / 2;
+            if (client < middle) {
+                player.seek(currentTime - 30);
+            }
+            else if (client > middle) {
+                player.seek(currentTime + 30);
+            }
+        });
+    };
+
+    obj.dblclickInit = function (player) {
+        const { video, videoWrap } = player.template;
+        videoWrap.addEventListener('dblclick', (event) => {
+            const currentTime = video.currentTime;
+            const { offsetX, offsetY } = event;
+            const { width, height } = video.getBoundingClientRect();
+            const client = player.isRotate ? offsetY : offsetX;
+            const middle = player.isRotate ? height / 2 : width / 2;
+            if (client < middle) {
+                player.seek(currentTime - 30);
+            }
+            else if (client > middle) {
+                player.seek(currentTime + 30);
+            }
+        });
     };
 
     obj.memoryPlay = function (player) {
@@ -1430,8 +1558,6 @@
     };
 
     obj.appreciation = function (player) {
-        var pnum = GM_getValue("pnum", 1);
-        GM_setValue("pnum", ++pnum);
         if (Date.now() - (GM_getValue("appreciation_show") || 0) > 86400000) {
             setTimeout(() => {
                 obj.isAppreciation(function (data) {
