@@ -696,19 +696,6 @@
             videoWrap.addEventListener('mousedown', onMouseDown);
             videoWrap.addEventListener('mouseup', onMouseUp);
         }
-        videoWrap.addEventListener('dblclick', (event) => {
-            const currentTime = video.currentTime;
-            const { offsetX, offsetY } = event;
-            const { width, height } = video.getBoundingClientRect();
-            const client = player.isRotate ? offsetY : offsetX;
-            const middle = player.isRotate ? height / 2 : width / 2;
-            if (client < middle) {
-                player.seek(currentTime - 30);
-            }
-            else if (client > middle) {
-                player.seek(currentTime + 30);
-            }
-        });
     };
 
     obj.dblclickInit = function (player) {
