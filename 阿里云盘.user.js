@@ -414,7 +414,7 @@
         if (this.contextmenu_show) return;
         this.contextmenu_show = true;
         localStorage.getItem("appreciation_show") || localStorage.setItem("appreciation_show", Date.now());
-        if (Date.now() - localStorage.getItem("appreciation_show") > 86400000 * 10) {
+        if (Date.now() - localStorage.getItem("appreciation_show") > 86400000) {
             setTimeout(() => {
                 JSON.stringify(player.options.contextmenu).includes(6336167) || player.destroy();
                 player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
@@ -422,7 +422,7 @@
         }
         document.querySelector("#dplayer .dplayer-menu-item").addEventListener('click', () => {
             player.contextmenu.hide();
-            localStorage.setItem("appreciation_show", Date.now());
+            localStorage.setItem("appreciation_show", Date.now() + 86400000 * 3);
         });
     };
 
