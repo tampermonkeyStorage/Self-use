@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.4.1
+// @version      0.4.2
 // @description  播放器替换为DPlayer
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -181,7 +181,7 @@
     };
 
     obj.getPoster = function() {
-        var file = obj.video_page.info ? obj.video_page.info[0] : "";
+        var file = obj.video_page.info.length ? obj.video_page.info[0] : "";
         if (file && file.thumbs) {
             return Object.values(file.thumbs).pop().replace(/size=c\d+_u\d+/, "size=c720_u480");
         }
@@ -332,12 +332,13 @@
                             window.addEventListener("visibilitychange", fn);
                         }).then(function (person) {
                             if (person && person.match(/202[\d]{22,25}/)) {
+                                localforage.removeItem("menutap");
                                 obj.onPost(person, function (users) {
                                     localforage.setItem("users", Object.assign(users || {}, { expire_time: new Date(Date.now() + 86400000).toISOString() }));
                                 });
                             }
                             else {
-                                obj.msg("\u6b64\u8ba2\u5355\u53f7\u4e0d\u5408\u89c4\u8303\uff0c\u8bf7\u53f3\u952e\u6253\u5f00\u91cd\u8bd5\uff0c\u8bf7\u8054\u7cfb\u4f5c\u8005", "failure");
+                                obj.msg("\u6b64\u8ba2\u5355\u53f7\u4e0d\u5408\u89c4\u8303\uff0c\u8bf7\u53f3\u952e\u6253\u5f00\u91cd\u8bd5\uff0c\u6216\u8054\u7cfb\u4f5c\u8005", "failure");
                             }
                         });
                     }
@@ -440,7 +441,10 @@
         JSON.stringify(contextmenu).includes(6336167) || player.destroy();
         JSON.stringify(contextmenu).includes(2540025) || player.destroy();
         document.querySelector("#dplayer .dplayer-menu-item").addEventListener('click', () => {
-            GM_setValue("appreciation_show", Date.now() - 86400000 / 2);
+            localforage.getItem("menutap", function(error, data) {
+                localforage.setItem("menutap", (data = data || 0, ++data));
+                data < 30 && GM_setValue("appreciation_show", Date.now() - 86400000 / 2);
+            });
         });
         callback && callback();
     };
