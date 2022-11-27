@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.4.2
+// @version      0.4.3
 // @description  播放器替换为DPlayer
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -320,28 +320,8 @@
                 },
                 {
                     text: "👍 为爱发电 不再弹出 👍",
-                    link: "https://afdian.net/order/create?plan_id=dc4bcdfa5c0a11ed8ee452540025c377&product_type=0",
-                    click: () => {
-                        new Promise(function (resolve, reject) {
-                            const fn = function () {
-                                if (!document.hidden) {
-                                    window.removeEventListener("visibilitychange", fn);
-                                    resolve(prompt("\u8bf7\u8f93\u5165\u8ba2\u5355\u53f7\uff08\u6ce8\uff1a\u6b64\u8ba2\u5355\u53f7\u53ea\u5bf9\u7231\u53d1\u7535\u6709\u6548\uff09"));
-                                }
-                            }
-                            window.addEventListener("visibilitychange", fn);
-                        }).then(function (person) {
-                            if (person && person.match(/202[\d]{22,25}/)) {
-                                localforage.removeItem("menutap");
-                                obj.onPost(person, function (users) {
-                                    localforage.setItem("users", Object.assign(users || {}, { expire_time: new Date(Date.now() + 86400000).toISOString() }));
-                                });
-                            }
-                            else {
-                                obj.msg("\u6b64\u8ba2\u5355\u53f7\u4e0d\u5408\u89c4\u8303\uff0c\u8bf7\u53f3\u952e\u6253\u5f00\u91cd\u8bd5\uff0c\u6216\u8054\u7cfb\u4f5c\u8005", "failure");
-                            }
-                        });
-                    }
+                    link: "https://afdian.net/order/create?plan_id=dc4bcdfa5c0a11ed8ee452540025c377&product_type=0&month=6",
+                    click: obj.showDialog
                 },
             ],
             theme: "#b7daff"
@@ -374,6 +354,19 @@
                 location.pathname == "/mbox/streampage" && $(container).css("height", "480px");
                 $("#layoutMain").attr("style", "z-index: 42;");
                 $(".header-box").remove();
+                $(document).on("change", ".afdian-order", function () {
+                    if (this.value) {
+                        if (this.value.match(/202[\d]{23,24}/)) {
+                            localforage.removeItem("menutap");
+                            obj.onPost(this.value, function (users) {
+                                localforage.setItem("users", Object.assign(users || {}, { expire_time: new Date(Date.now() + 86400000).toISOString() }));
+                            });
+                        }
+                        else {
+                            obj.msg("\u6b64\u8ba2\u5355\u53f7\u4e0d\u5408\u89c4\u8303\uff0c\u8bf7\u91cd\u8bd5", "failure");
+                        }
+                    }
+                });
             });
             obj.isAppreciation(function (data) {
                 if (data) {
@@ -959,6 +952,7 @@
                     var path = currpath.split("/").slice(0, -1).concat(videoList[t].server_filename).join("/");
                     location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + t;
                 }
+                location.reload();
             } catch (error) { }
         });
         $(".prev-icon").on("click",function () {
@@ -974,6 +968,7 @@
                         var path = currpath.split("/").slice(0, -1).concat(videoList[t].server_filename).join("/");
                         location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + t;
                     }
+                    location.reload();
                 } catch (error) { }
             }
             else {
@@ -993,6 +988,7 @@
                         var path = currpath.split("/").slice(0, -1).concat(videoList[t].server_filename).join("/");
                         location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + t;
                     }
+                    location.reload();
                 } catch (error) { }
             }
             else {
@@ -1600,8 +1596,7 @@
                 callback && callback(response);
             },
             error: function (error) {
-                var response = error && error.response ? JSON.parse(error.response) : "";
-                response && response.code == 140 ? callback && callback({appreciation: true}) : callback && callback("");
+                callback && callback("");
             }
         });
     };
@@ -1701,6 +1696,18 @@
                 }
             }, 500);
         });
+    };
+
+    obj.showDialog = function () {
+        var dialog = obj.require("system-core:system/uiService/dialog/dialog.js").verify({
+            title: "",
+            img: "img",
+            vcode: "vcode"
+        });
+        var $ = obj.getJquery();
+        $(dialog.$dialog).find(".dialog-body").empty().append('<div style="padding: 60px 20px; max-height: 300px; overflow-y: auto;"><div style="margin-bottom: 10px;" class="g-center">爱发电订单号：<input value="" style="width: 200px;border: 1px solid #f2f2f2;padding: 4px 5px;" class="afdian-order" type="text"></div><div class="g-center"><p>请在爱发电后复制订单号填入输入框，确认无误关闭即可</p></div><div class="g-center"><a href="https://afdian.net/order/create?plan_id=dc4bcdfa5c0a11ed8ee452540025c377&amp;product_type=0&amp;month=6" target="_blank"> 打开爱发电 </a></div></div>');
+        $(dialog.$dialog).find(".dialog-footer").empty().append("");
+        dialog.show();
     };
 
     obj.require = function (name) {
