@@ -2,7 +2,7 @@
 // @name         BD网盘视频播放器
 // @namespace    http://tampermonkey.net/
 // @version      0.4.3
-// @description  播放器替换为DPlayer
+// @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画面模式，支持自动、手动添加字幕，。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
 // @match        https://pan.baidu.com/s/*
