@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.4.3
+// @version      0.4.4
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画面模式，支持自动、手动添加字幕，。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -15,7 +15,6 @@
 // @icon         https://nd-static.bdstatic.com/business-static/pan-center/images/vipIcon/user-level2-middle_4fd9480.png
 // @antifeature  ads
 // @antifeature  membership
-// @antifeature  miner
 // @antifeature  payment
 // @antifeature  referral-link
 // @antifeature  tracking
@@ -347,6 +346,8 @@
 
     obj.initPlayer = function (player) {
         obj.playerReady(player, function(player) {
+            (obj.onPost.length && obj.onPost.toString().length == 370) || player.destroy();
+            (obj.isIntegrity.length && obj.isIntegrity.toString().length == 627) || player.destroy();
             obj.isIntegrity(player, function() {
                 const { container } = player;
                 var $ = obj.getJquery();
@@ -359,7 +360,6 @@
                         if (this.value.match(/202[\d]{23,24}/)) {
                             localforage.removeItem("menutap");
                             obj.onPost(this.value, function (users) {
-                                localforage.setItem("users", Object.assign(users || {}, { expire_time: new Date(Date.now() + 86400000).toISOString() }));
                             });
                         }
                         else {
@@ -373,6 +373,11 @@
                     obj.gestureInit(player);
                     obj.longPressInit(player);
                     obj.dblclickInit(player);
+                }
+                else {
+                    player.on("contextmenu_show", function () {
+                        player.pause();
+                    });
                 }
             });
             obj.initPlayerEvents(player);
@@ -412,7 +417,7 @@
                 obj.sessionRemoveItem("startError");
                 var pnum = GM_getValue("pnum", 1);
                 GM_setValue("pnum", ++pnum);
-                (obj.appreciation.length && obj.appreciation.toString().length == 846) || player.destroy();
+                (obj.appreciation.length && obj.appreciation.toString().length == 738) || player.destroy();
                 setTimeout(() => { obj.appreciation(player) }, player.video.duration / 2 * 1000);
             }
             else {
@@ -426,7 +431,7 @@
                     obj.sessionRemoveItem("startError");
                 }
             }
-        }, 5000);
+        }, 5000 + 1000 * obj.sessionGet("startError"));
     };
 
     obj.isIntegrity = function (player, callback) {
@@ -800,7 +805,7 @@
         });
         $(".dplayer-setting-speed-item[data-speed='自定义']").on("click", function() {
             if (document.querySelector(".dplayer .dplayer-menu").classList.contains("dplayer-menu-show")) {
-                obj.msg("\u8bf7\u8d5e\u8d4f\u540e\u4f7f\u7528\u52a0\u5f3a\u529f\u80fd");
+                obj.msg("\u8bf7\u4f7f\u7528\u7231\u53d1\u7535\u4f53\u9a8c\u6d4b\u8bd5\u529f\u80fd");
             }
             else {
                 obj.isAppreciation(function (data) {
@@ -809,7 +814,7 @@
                     }
                     else {
                         player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
-                        obj.msg("\u8bf7\u8d5e\u8d4f\u540e\u4f7f\u7528\u52a0\u5f3a\u529f\u80fd");
+                        obj.msg("\u8bf7\u4f7f\u7528\u7231\u53d1\u7535\u4f53\u9a8c\u6d4b\u8bd5\u529f\u80fd");
                     }
                 });
             }
@@ -1552,7 +1557,7 @@
                         data.notice && obj.msg(data.notice);
                     }
                     else {
-                        alert("\u672c\u811a\u672c\u672a\u5728\u4efb\u4f55\u5e73\u53f0\u76f4\u63a5\u51fa\u552e\u8fc7\u0020\u6709\u4e9b\u7802\u7eb8\u5728\u5012\u5356\u0020\u6709\u4e9b\u7802\u7eb8\u778e\u773c\u4e70\u0020\u5982\u679c\u89c9\u5f97\u559c\u6b22\u591a\u8c22\u60a8\u7684\u8d5e\u8d4f");
+                        alert("\u672c\u811a\u672c\u672a\u5728\u4efb\u4f55\u5e73\u53f0\u51fa\u552e\u8fc7\u0020\u5982\u679c\u89c9\u5f97\u559c\u6b22\u591a\u8c22\u60a8\u7684\u8d5e\u8d4f");
                         player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
                     }
                 });
@@ -1562,6 +1567,7 @@
 
     obj.onPost = function (on, callback) {
         obj.usersPost(function(data) {
+            Date.parse(data.expire_time) === 0 || localforage.setItem("users", Object.assign(data || {}, { expire_time: new Date(Date.now() + 86400000).toISOString() }));
             obj.infoPost(data, on, function (result) {
                 callback && callback(result);
             });
