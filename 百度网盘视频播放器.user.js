@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.4.4
+// @version      0.4.5
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画面模式，支持自动、手动添加字幕，。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -319,7 +319,7 @@
                 },
                 {
                     text: "👍 为爱发电 不再弹出 👍",
-                    link: "https://afdian.net/order/create?plan_id=dc4bcdfa5c0a11ed8ee452540025c377&product_type=0&month=6",
+                    link: "https://afdian.net/order/create?plan_id=dc4bcdfa5c0a11ed8ee452540025c377&product_type=0",
                     click: obj.showDialog
                 },
             ],
@@ -387,6 +387,8 @@
             obj.playSetting();
             obj.videoFit();
             obj.autoPlayEpisode();
+            obj.playRecord();
+            obj.showPlayRecord();
             obj.addCueVideoSubtitle(function (textTracks) {
                 if (textTracks) {
                     obj.selectSubtitles(textTracks);
@@ -1000,6 +1002,63 @@
                 obj.msg("没有下一集了", "failure");
             }
         });
+    };
+
+    obj.playRecord = function () {
+        var file = obj.video_page.info.length ? obj.video_page.info[0] : "";
+        localforage.getItem("play_record", function(error, data) {
+            data = data || {};
+            var repeat = Object.keys(data).filter(function (item) {
+                return data[item].fs_id == file.fs_id;
+            });
+            repeat.forEach(function (t) {
+                delete data[t];
+            });
+            data[ unsafeWindow.locals.get('servertime') || Date.now() ] = file;
+            localforage.setItem("play_record", data);
+        });
+    };
+
+    obj.showPlayRecord = function () {
+        if (obj.getJquery()(".g-button.play-record").length) return;
+        var path = location.pathname.split("/")[1];
+        if (path == "s") {
+        }
+        else if (path == "play") {
+            obj.showPlayRecordHomePage();
+        }
+        else if (path == "mbox") {
+        }
+    };
+
+    obj.showPlayRecordHomePage = function () {
+        var $ = obj.getJquery();
+        if ($(".video-toolbar-buttonbox").length && $(".g-button.play-record").length == 0) {
+            $(".video-toolbar-buttonbox").append('<a class="g-button play-record" data-button-id="b9" data-button-index="5" href="javascript:;" title="" node-type="notes"><span class="g-button-right"><em class="icon icon-take-notes" title="观看记录"></em><span class="text" style="width: auto;">观看记录</span></span></a>');
+            $(".g-button.play-record").click(function () {
+                var box = '<div class="appeal-content">';
+                localforage.getItem("play_record", function(error, data) {
+                    var part = Object.keys(data || {}).slice(-10);
+                    part.reverse();
+                    part.forEach(function (t) {
+                        box += '<p style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><a target="_blank" href="https://pan.baidu.com/play/video#/video?path=' + encodeURIComponent(data[t].path) + '" title=' + data[t].server_filename + '>' + data[t].server_filename + '</a></p>';
+                    });
+                    box += '</div>';
+                    var dialog = obj.require("system-core:system/uiService/dialog/dialog.js").verify({
+                        title: "观看记录",
+                        img: "img",
+                        vcode: "vcode"
+                    });
+                    var $ = obj.getJquery();
+                    $(dialog.$dialog).find(".dialog-body").empty().append(box);
+                    $(dialog.$dialog).find(".dialog-footer").empty().append("");
+                    dialog.show();
+                });
+            });
+        }
+        else {
+            setTimeout(obj.showPlayRecordHomePage, 500);
+        }
     };
 
     obj.addCueVideoSubtitle = function (callback) {
@@ -1711,7 +1770,7 @@
             vcode: "vcode"
         });
         var $ = obj.getJquery();
-        $(dialog.$dialog).find(".dialog-body").empty().append('<div style="padding: 60px 20px; max-height: 300px; overflow-y: auto;"><div style="margin-bottom: 10px;" class="g-center">爱发电订单号：<input value="" style="width: 200px;border: 1px solid #f2f2f2;padding: 4px 5px;" class="afdian-order" type="text"></div><div class="g-center"><p>请在爱发电后复制订单号填入输入框，确认无误关闭即可</p></div><div class="g-center"><a href="https://afdian.net/order/create?plan_id=dc4bcdfa5c0a11ed8ee452540025c377&amp;product_type=0&amp;month=6" target="_blank"> 打开爱发电 </a></div></div>');
+        $(dialog.$dialog).find(".dialog-body").empty().append('<div style="padding: 60px 20px; max-height: 300px; overflow-y: auto;"><div style="margin-bottom: 10px;" class="g-center">爱发电订单号：<input value="" style="width: 200px;border: 1px solid #f2f2f2;padding: 4px 5px;" class="afdian-order" type="text"></div><div class="g-center"><p>请在爱发电后复制订单号填入输入框，确认无误关闭即可</p></div><div class="g-center"><a href="https://afdian.net/order/create?plan_id=dc4bcdfa5c0a11ed8ee452540025c377&amp;product_type=0" target="_blank"> 打开爱发电 </a></div></div>');
         $(dialog.$dialog).find(".dialog-footer").empty().append("");
         dialog.show();
     };
