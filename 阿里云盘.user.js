@@ -411,8 +411,6 @@
     };
 
     obj.appreciation = function (player) {
-        if (this.contextmenu_show) return;
-        this.contextmenu_show = true;
         localStorage.getItem("appreciation_show") || localStorage.setItem("appreciation_show", Date.now());
         if (Date.now() - localStorage.getItem("appreciation_show") > 86400000) {
             setTimeout(() => {
