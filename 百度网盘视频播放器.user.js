@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.4.5
+// @version      0.4.6
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画面模式，支持自动、手动添加字幕，。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -228,7 +228,7 @@
                 });
                 Promise.all(promises).then(function(results) {
                     setTimeout(function () {
-                        obj.isAppreciation.length && obj.isAppreciation.toString().length == 1412 && callback && callback(unsafeWindow.DPlayer);
+                        obj.isAppreciation.length && obj.isAppreciation.toString().length == 2148 && callback && callback(unsafeWindow.DPlayer);
                     }, 0);
                 }).catch(function (error) {
                     laodcdn(urlArr, ++index);
@@ -293,6 +293,13 @@
             video: {
                 quality: quality,
                 defaultQuality: defaultQuality,
+                customType: {
+                    hls: function (video, player) {
+                        const hls = new unsafeWindow.Hls();
+                        hls.loadSource(video.src);
+                        hls.attachMedia(video);
+                    },
+                },
                 pic: obj.getPoster()
             },
             pluginOptions: {
@@ -325,15 +332,6 @@
             ],
             theme: "#b7daff"
         };
-        if (obj.sessionGet("isMobile")) {
-            options.video.customType = {
-                hls: function (video, player) {
-                    const hls = new unsafeWindow.Hls();
-                    hls.loadSource(video.src);
-                    hls.attachMedia(video);
-                },
-            }
-        }
         try {
             var player = new unsafeWindow.DPlayer(options);
             obj.initPlayer(player);
@@ -346,7 +344,7 @@
 
     obj.initPlayer = function (player) {
         obj.playerReady(player, function(player) {
-            (obj.onPost.length && obj.onPost.toString().length == 370) || player.destroy();
+            (obj.onPost.length && obj.onPost.toString().length == 435) || player.destroy();
             (obj.isIntegrity.length && obj.isIntegrity.toString().length == 627) || player.destroy();
             obj.isIntegrity(player, function() {
                 const { container } = player;
@@ -357,7 +355,7 @@
                 $(".header-box").remove();
                 $(document).on("change", ".afdian-order", function () {
                     if (this.value) {
-                        if (this.value.match(/202[\d]{23,24}/)) {
+                        if (this.value.match(/202[\d]{23,24}$/)) {
                             localforage.removeItem("menutap");
                             obj.onPost(this.value, function (users) {
                             });
@@ -452,33 +450,43 @@
     obj.isAppreciation = function (callback) {
         localforage.getItem("users", function(error, data) {
             if (data instanceof Object) {
-                if (data.expire_time) {
-                    var t = data.expire_time, e = Date.parse(t) - Date.now();
-                    if (0 < e) {
-                        callback && callback(data);
-                    }
-                    else {
-                        obj.usersPost(function (data) {
-                            if (data && data.expire_time) {
-                                var t = data.expire_time, e = Date.parse(t) - Date.now();
-                                if (0 < e) {
-                                    localforage.setItem("users", data);
-                                    callback && callback(data);
-                                }
-                                else {
-                                    callback && callback("");
-                                }
+                localforage.getItem("users_sign", function(error, users_sign) {
+                    if (users_sign === unsafeWindow.b64_md5(data)) {
+                        if (data.expire_time) {
+                            var t = data.expire_time, e = Date.parse(t) - Date.now();
+                            if (0 < e) {
+                                callback && callback(data);
                             }
                             else {
-                                localforage.removeItem("users");
-                                callback && callback("");
+                                obj.usersPost(function (data) {
+                                    if (data && data.expire_time) {
+                                        var t = data.expire_time, e = Date.parse(t) - Date.now();
+                                        if (0 < e) {
+                                            localforage.setItem("users", data);
+                                            localforage.setItem("users_sign", unsafeWindow.b64_md5(data));
+                                            callback && callback(data);
+                                        }
+                                        else {
+                                            callback && callback("");
+                                        }
+                                    }
+                                    else {
+                                        localforage.removeItem("users");
+                                        callback && callback("");
+                                    }
+                                });
                             }
-                        });
+                        }
+                        else {
+                            localforage.removeItem("users");
+                            callback && callback("");
+                        }
                     }
-                }
-                else {
-                    callback && callback("");
-                }
+                    else {
+                        localforage.removeItem("users_sign");
+                        callback && callback("");
+                    }
+                });
             }
             else {
                 callback && callback("");
@@ -490,19 +498,6 @@
         player.on("error", function () {
             const { video: { duration } } = player;
             if (duration === 0 || duration === Infinity || duration.toString() === "NaN") {
-                if (!obj.sessionGet("isMobile") && confirm("\u89c6\u9891\u52a0\u8f7d\u5931\u8d25\uff0c\u662f\u5426\u5c1d\u8bd5\u624b\u673a\u6a21\u5f0f")) {
-                    obj.isAppreciation(function (data) {
-                        if (data) {
-                            obj.sessionSet("isMobile", 1);
-                            location.reload();
-                        }
-                        else {
-                            obj.sessionRemoveItem("isMobile");
-                            alert("\u8bf7\u4f7f\u7528\u0020\u7231\u53d1\u7535\u0020\u83b7\u53d6\u6d4b\u8bd5\u8d44\u683c");
-                            player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
-                        }
-                    });
-                }
             }
         });
         player.on("ended", function () {
@@ -521,11 +516,11 @@
         }
         player.on("fullscreen", function () {
             localStorage.setItem("dplayer-isfullscreen", true);
-            obj.sessionGet("isMobile") && screen.orientation.lock("landscape");
+            screen.orientation.lock("landscape");
         });
         player.on("fullscreen_cancel", function () {
             player.fullScreen.isFullScreen("web") || localStorage.removeItem("dplayer-isfullscreen");
-            obj.sessionGet("isMobile") && screen.orientation.unlock();
+            screen.orientation.unlock();
         });
         document.querySelector(".dplayer .dplayer-full").addEventListener('click', () => {
             var isFullScreen = player.fullScreen.isFullScreen("web") || player.fullScreen.isFullScreen("browser");
@@ -534,104 +529,101 @@
     };
 
     obj.gestureInit = function (player) {
-        if (obj.sessionGet("isMobile")) {
-            player.container.classList.add('dplayer-mobile');
-            const { video, videoWrap, playedBarWrap } = player.template;
+        const { video, videoWrap, playedBarWrap } = player.template;
 
-            let isDroging = false, startX = 0, startY = 0, startCurrentTime = 0, startVolume = 0, startBrightness = "100%", lastDirection = 0;
-            const onTouchStart = (event) => {
-                if (event.touches.length === 1) {
-                    isDroging = true;
-                    const { clientX, clientY } = event.touches[0];
-                    startX = clientX;
-                    startY = clientY;
-                    startCurrentTime = video.currentTime;
-                    startVolume = video.volume;
-                    startBrightness = (/brightness\((\d+%?)\)/.exec(video.style.filter) || [])[1] || "100%";
-                }
-            };
-            const onTouchMove = (event) => {
-                if (event.touches.length === 1 && isDroging) {
-                    const { clientX, clientY } = event.touches[0];
-                    const client = player.isRotate ? clientY : clientX;
-                    const { width, height } = video.getBoundingClientRect();
-                    const ratioX = clamp((clientX - startX) / width, -1, 1);
-                    const ratioY = clamp((clientY - startY) / height, -1, 1);
-                    const ratio = player.isRotate ? ratioY : ratioX;
-                    const direction = getDirection(startX, startY, clientX, clientY);
-                    if (direction != lastDirection) {
-                        lastDirection = direction;
-                        return;
-                    }
-                    if (direction == 1 || direction == 2) {
-                        if (!lastDirection) lastDirection = direction;
-                        if (lastDirection > 2) return;
-                        const middle = player.isRotate ? height / 2 : width / 2;
-                        if (client < middle) {
-                            const currentBrightness = clamp(+((/\d+/.exec(startBrightness) || [])[0] || 100) + 200 * ratio * 10, 50, 200);
-                            video.style.filter = "brightness(" + currentBrightness.toFixed(0) + "%)";
-                            player.notice(`亮度调节 ${currentBrightness.toFixed(0)}%`);
-                        }
-                        else if (client > middle) {
-                            const currentVolume = clamp(startVolume + ratio * 10, 0, 1);
-                            player.volume(currentVolume);
-                        }
-                    }
-                    else if (direction == 3 || direction == 4) {
-                        if (!lastDirection) lastDirection = direction;
-                        if (lastDirection < 3) return;
-                        const currentTime = clamp(startCurrentTime + video.duration * ratio * 0.5, 0, video.duration);
-                        player.seek(currentTime);
-                    }
-                }
-            };
-            const onTouchEnd = () => {
-                if (isDroging) {
-                    startX = 0;
-                    startY = 0;
-                    startCurrentTime = 0;
-                    startVolume = 0;
-                    lastDirection = 0;
-                    isDroging = false;
-                }
-            };
-            videoWrap.addEventListener('touchstart', (event) => {
-                onTouchStart(event);
-            });
-            playedBarWrap.addEventListener('touchstart', (event) => {
-                onTouchStart(event);
-            });
-            videoWrap.addEventListener('touchmove', onTouchMove);
-            playedBarWrap.addEventListener('touchmove', onTouchMove);
-            document.addEventListener('touchend', onTouchEnd);
-            window.addEventListener("onorientationchange" in window ? "orientationchange" : "resize", function() {
-                if (window.orientation === 180 || window.orientation === 0) {
-                    player.isRotate = true;
-                }
-                else if (window.orientation === 90 || window.orientation === -90 ){
-                    player.isRotate = false;
-                }
-            }, false);
-            function clamp(num, a, b) {
-                return Math.max(Math.min(num, Math.max(a, b)), Math.min(a, b));
+        let isDroging = false, startX = 0, startY = 0, startCurrentTime = 0, startVolume = 0, startBrightness = "100%", lastDirection = 0;
+        const onTouchStart = (event) => {
+            if (event.touches.length === 1) {
+                isDroging = true;
+                const { clientX, clientY } = event.touches[0];
+                startX = clientX;
+                startY = clientY;
+                startCurrentTime = video.currentTime;
+                startVolume = video.volume;
+                startBrightness = (/brightness\((\d+%?)\)/.exec(video.style.filter) || [])[1] || "100%";
             }
-            function getDirection(startx, starty, endx, endy) {
-                var angx = endx - startx;
-                var angy = endy - starty;
-                var result = 0;
-                if (Math.abs(angx) < 2 && Math.abs(angy) < 2) return result;
-                var angle = Math.atan2(angy, angx) * 180 / Math.PI;
-                if (angle >= -135 && angle <= -45) {
-                    result = 1;
-                } else if (angle > 45 && angle < 135) {
-                    result = 2;
-                } else if ((angle >= 135 && angle <= 180) || (angle >= -180 && angle < -135)) {
-                    result = 3;
-                } else if (angle >= -45 && angle <= 45) {
-                    result = 4;
+        };
+        const onTouchMove = (event) => {
+            if (event.touches.length === 1 && isDroging) {
+                const { clientX, clientY } = event.touches[0];
+                const client = player.isRotate ? clientY : clientX;
+                const { width, height } = video.getBoundingClientRect();
+                const ratioX = clamp((clientX - startX) / width, -1, 1);
+                const ratioY = clamp((clientY - startY) / height, -1, 1);
+                const ratio = player.isRotate ? ratioY : ratioX;
+                const direction = getDirection(startX, startY, clientX, clientY);
+                if (direction != lastDirection) {
+                    lastDirection = direction;
+                    return;
                 }
-                return result;
+                if (direction == 1 || direction == 2) {
+                    if (!lastDirection) lastDirection = direction;
+                    if (lastDirection > 2) return;
+                    const middle = player.isRotate ? height / 2 : width / 2;
+                    if (client < middle) {
+                        const currentBrightness = clamp(+((/\d+/.exec(startBrightness) || [])[0] || 100) + 200 * ratio * 10, 50, 200);
+                        video.style.filter = "brightness(" + currentBrightness.toFixed(0) + "%)";
+                        player.notice(`亮度调节 ${currentBrightness.toFixed(0)}%`);
+                    }
+                    else if (client > middle) {
+                        const currentVolume = clamp(startVolume + ratio * 10, 0, 1);
+                        player.volume(currentVolume);
+                    }
+                }
+                else if (direction == 3 || direction == 4) {
+                    if (!lastDirection) lastDirection = direction;
+                    if (lastDirection < 3) return;
+                    const currentTime = clamp(startCurrentTime + video.duration * ratio * 0.5, 0, video.duration);
+                    player.seek(currentTime);
+                }
             }
+        };
+        const onTouchEnd = () => {
+            if (isDroging) {
+                startX = 0;
+                startY = 0;
+                startCurrentTime = 0;
+                startVolume = 0;
+                lastDirection = 0;
+                isDroging = false;
+            }
+        };
+        videoWrap.addEventListener('touchstart', (event) => {
+            onTouchStart(event);
+        });
+        playedBarWrap.addEventListener('touchstart', (event) => {
+            onTouchStart(event);
+        });
+        videoWrap.addEventListener('touchmove', onTouchMove);
+        playedBarWrap.addEventListener('touchmove', onTouchMove);
+        document.addEventListener('touchend', onTouchEnd);
+        window.addEventListener("onorientationchange" in window ? "orientationchange" : "resize", function() {
+            if (window.orientation === 180 || window.orientation === 0) {
+                player.isRotate = true;
+            }
+            else if (window.orientation === 90 || window.orientation === -90 ){
+                player.isRotate = false;
+            }
+        }, false);
+        function clamp(num, a, b) {
+            return Math.max(Math.min(num, Math.max(a, b)), Math.min(a, b));
+        }
+        function getDirection(startx, starty, endx, endy) {
+            var angx = endx - startx;
+            var angy = endy - starty;
+            var result = 0;
+            if (Math.abs(angx) < 2 && Math.abs(angy) < 2) return result;
+            var angle = Math.atan2(angy, angx) * 180 / Math.PI;
+            if (angle >= -135 && angle <= -45) {
+                result = 1;
+            } else if (angle > 45 && angle < 135) {
+                result = 2;
+            } else if ((angle >= 135 && angle <= 180) || (angle >= -180 && angle < -135)) {
+                result = 3;
+            } else if (angle >= -45 && angle <= 45) {
+                result = 4;
+            }
+            return result;
         }
     };
 
@@ -690,16 +682,11 @@
                 });
             }
         };
-
-        if (obj.sessionGet("isMobile")) {
-            videoWrap.addEventListener('touchstart', onTouchStart);
-            videoWrap.addEventListener('touchmove', onTouchMove);
-            videoWrap.addEventListener('touchend', onTouchEnd);
-        }
-        else {
-            videoWrap.addEventListener('mousedown', onMouseDown);
-            videoWrap.addEventListener('mouseup', onMouseUp);
-        }
+        videoWrap.addEventListener('touchstart', onTouchStart);
+        videoWrap.addEventListener('touchmove', onTouchMove);
+        videoWrap.addEventListener('touchend', onTouchEnd);
+        videoWrap.addEventListener('mousedown', onMouseDown);
+        videoWrap.addEventListener('mouseup', onMouseUp);
     };
 
     obj.dblclickInit = function (player) {
@@ -824,6 +811,7 @@
             custombox.css("display", "none");
         });
         player.template.mask.addEventListener("click", function() {
+            obj.isAppreciation.length && obj.isAppreciation.toString().length == 2148 || player.destroy();
             custombox.css("display", "none");
         });
     };
@@ -1626,7 +1614,7 @@
 
     obj.onPost = function (on, callback) {
         obj.usersPost(function(data) {
-            Date.parse(data.expire_time) === 0 || localforage.setItem("users", Object.assign(data || {}, { expire_time: new Date(Date.now() + 86400000).toISOString() }));
+            Date.parse(data.expire_time) === 0 || (localforage.setItem("users", Object.assign(data || {}, { expire_time: new Date(Date.now() + 86400000).toISOString() })), localforage.setItem("users_sign", unsafeWindow.b64_md5(data)));
             obj.infoPost(data, on, function (result) {
                 callback && callback(result);
             });
