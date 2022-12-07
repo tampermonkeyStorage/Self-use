@@ -1,19 +1,29 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      2.3.4
-// @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，...
+// @version      3.0.0
+// @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，移动端播放初体验，...
 // @author       You
 // @match        https://www.aliyundrive.com/*
+// @connect      lc-cn-n1-shared.com
+// @connect      *
 // @icon         https://gw.alicdn.com/imgextra/i3/O1CN01aj9rdD1GS0E8io11t_!!6000000000620-73-tps-16-16.ico
+// @require      https://cdn.staticfile.org/localforage/1.10.0/localforage.min.js
 // @require      https://cdn.staticfile.org/jquery/3.6.0/jquery.min.js
+// @antifeature  ads
+// @antifeature  membership
+// @antifeature  payment
+// @antifeature  referral-link
+// @antifeature  tracking
 // @run-at       document-body
 // @grant        unsafeWindow
+// @grant        GM_xmlhttpRequest
 // ==/UserScript==
 
 (function() {
     'use strict';
-    unsafeWindow = unsafeWindow || window;
+
+    var localforage = window.localforage;
     var $ = $ || window.$;
     var obj = {
         file_page: {
@@ -67,7 +77,6 @@
                 "https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.js",
             ],
         ];
-
         (function laodcdn(urlArr, index = 0) {
             var arr = urlArr[index];
             if (arr) {
@@ -75,10 +84,9 @@
                 arr.forEach(function (url, index) {
                     promises.push(obj.loadScript(url));
                 });
-
                 Promise.all(promises).then(function(results) {
                     setTimeout(function () {
-                        callback && callback(unsafeWindow.DPlayer);
+                        obj.isAppreciation.length && obj.isAppreciation.toString().length == 1412 && callback(unsafeWindow.DPlayer);
                     }, 0);
                 }).catch(function(error) {
                     console.error("laodcdn 发生错误！", index, error);
@@ -101,7 +109,6 @@
                 dPlayerNode.setAttribute("style", "width: 100%; height: 100%;");
                 var videoParentNode = videoNode.parentNode.parentNode;
                 obj.video_page.elevideo = videoParentNode.parentNode.replaceChild(dPlayerNode, videoParentNode);
-
                 if (obj.video_page.player) {
                     var video = obj.video_page.player.video;
                     obj.video_page.attributes = {
@@ -114,7 +121,6 @@
         else {
             return setTimeout(obj.dPlayerStart, 500);
         }
-
         var quality = [], defaultQuality, localQuality = localStorage.getItem("dplayer-quality");;
         var play_info = obj.video_page.play_info || {};
         var video_preview_play_info = play_info.video_preview_play_info || {};
@@ -143,7 +149,6 @@
             obj.showTipError("获取播放信息失败：请刷新网页重试");
             return;
         }
-
         if (obj.video_page.file_id == play_info.file_id) {
             if (obj.video_page.player && Object.keys(obj.video_page.attributes).length == 0) {
                 return obj.dPlayerThrough(quality);
@@ -157,12 +162,18 @@
             obj.video_page.player = null;
             obj.contextmenu_show = null;
         }
-
         var options = {
             container: dPlayerNode,
             video: {
                 quality: quality,
-                defaultQuality: defaultQuality
+                defaultQuality: defaultQuality,
+                customType: {
+                    hls: function (video, player) {
+                        const hls = new unsafeWindow.Hls();
+                        hls.loadSource(video.src);
+                        hls.attachMedia(video);
+                    }
+                }
             },
             subtitle: {
                 url: "",
@@ -179,13 +190,13 @@
             playbackSpeed: [0.5, 0.75, 1, 1.25, 1.5, 2],
             contextmenu: [
                 {
-                    text: "👍喜欢吗👍赞一个👍",
-                    link: "https://pc-index-skin.cdn.bcebos.com/6cb0bccb31e49dc0dba6336167be0a18.png",
-                },
+                    text: "👍 爱发电 不再弹出 👍",
+                    link: "https://afdian.net/order/create?plan_id=dc4bcdfa5c0a11ed8ee452540025c377",
+                    click: obj.showDialog
+                }
             ],
             theme: obj.getRandomColor()
         };
-
         try {
             var player = obj.video_page.player = new unsafeWindow.DPlayer(options);
             var attributes = obj.video_page.attributes;
@@ -194,12 +205,10 @@
                 player.video.muted = attributes.muted;
                 obj.video_page.attributes = {};
             }
-
             player.options.hotkey || obj.dPlayerHotkey();
             obj.dPlayerEvents(player);
             obj.dPlayerInitAspectRatio();
             obj.autoSkipPlayNext();
-            obj.appreciation(player);
         } catch (error) {
             console.error("播放器创建失败", error);
         }
@@ -208,8 +217,7 @@
     obj.dPlayerThrough = function (quality) {
         var player = obj.video_page.player;
         player.options.video.quality = quality;
-        player.quality = player.options.video.quality[player.qualityIndex];
-
+        player.quality = player.options.video.quality[ player.qualityIndex ];
         const paused = player.video.paused;
         const videoHTML = '<video class="dplayer-video" webkit-playsinline playsinline crossorigin="anonymous" preload="auto" src="' + player.quality.url + '"><track kind="metadata" default src=""></track></video>';
         const videoEle = new DOMParser().parseFromString(videoHTML, 'text/html').body.firstChild;
@@ -218,11 +226,11 @@
         player.video = videoEle;
         player.initVideo(player.video, player.quality.type || player.options.video.type);
         player.video.currentTime = player.prevVideo.currentTime + 1;
-
         player.on('canplaythrough', () => {
             if (player.prevVideo) {
                 if (player.video.currentTime !== player.prevVideo.currentTime) {
                     player.video.currentTime = player.prevVideo.currentTime;
+                    (obj.onPost.length && obj.onPost.toString().length == 370) || player.destroy();
                 }
                 player.prevVideo.muted && (player.video.muted = player.prevVideo.muted);
                 player.prevVideo.pause();
@@ -235,6 +243,9 @@
                     player.video.play();
                     player.controller.hide();
                     setTimeout(() => { player.bezel.switch = bezelswitch; }, 1000);
+                    obj.isAppreciation(function (data) {
+                        data || player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
+                    });
                 }
                 player.prevVideo = null;
                 obj.dPlayerEvents(player);
@@ -243,48 +254,71 @@
     };
 
     obj.dPlayerEvents = function (player) {
-        player = player || obj.video_page.player;
-        if (!(player && player.video && player.video.duration > 0)) {
-            return setTimeout(() => { obj.dPlayerEvents(player) }, 500);
+        obj.playerReady(player, function(player) {
+            const { options: { contextmenu } } = player;
+            JSON.stringify(contextmenu).includes(2540025) || player.destroy();
+            obj.memoryPlay();
+            obj.dPlayerAspectRatio();
+            obj.playSetting();
+            obj.selectEpisode();
+            obj.addCueVideoSubtitle(function (textTracks) {
+                if (textTracks) {
+                    obj.selectSubtitles(textTracks);
+                    obj.dPlayerSubtitleStyle();
+                }
+            });
+            player.on("error", function () {
+                const { video: { duration } } = player;
+                if (duration === 0 || duration === Infinity || duration.toString() === "NaN") {
+                    alert("00000000000000");
+                }
+            });
+            player.on("quality_end", function () {
+                localStorage.setItem("dplayer-quality", player.quality.name);
+                obj.addCueVideoSubtitle();
+            });
+            player.speed(localStorage.getItem("dplayer-speed") || 1);
+            player.on("ratechange", function () {
+                player.notice("播放速度：" + player.video.playbackRate);
+                localStorage.getItem("dplayer-speed") == player.video.playbackRate || localStorage.setItem("dplayer-speed", player.video.playbackRate);
+            });
+            player.on("contextmenu_hide", function () {
+                obj.isAppreciation(function (data) {
+                    data || player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
+                });
+            });
+            localStorage.getItem("dplayer-isfullscreen") == "true" && player.fullScreen.request("browser");
+            player.on("fullscreen", function () {
+                screen.orientation.lock("landscape");
+                localStorage.setItem("dplayer-isfullscreen", true);
+            });
+            player.on("fullscreen_cancel", function () {
+                screen.orientation.unlock();
+                localStorage.removeItem("dplayer-isfullscreen");
+            });
+        });
+    };
+
+    obj.playerReady = function (player, callback) {
+        if (player.isReady) {
+            callback && callback(player);
         }
-        this.appreciation || player.destroy();
-
-        obj.memoryPlay();
-        obj.dPlayerAspectRatio();
-        obj.playSetting();
-        obj.selectEpisode();
-
-        obj.addCueVideoSubtitle(function (textTracks) {
-            if (textTracks) {
-                obj.selectSubtitles(textTracks);
-                obj.dPlayerSubtitleStyle();
+        else if (player.video.duration > 0 || player.video.readyState > 2) {
+            player.isReady = true;
+            callback && callback(player);
+        }
+        else {
+            player.video.ondurationchange = function () {
+                player.video.ondurationchange = null;
+                player.isReady = true;
+                callback && callback(player);
             }
-        });
-
-        player.on("quality_end", function () {
-            localStorage.setItem("dplayer-quality", player.quality.name);
-            obj.addCueVideoSubtitle();
-        });
-
-        player.speed(localStorage.getItem("dplayer-speed") || 1);
-        player.on("ratechange", function () {
-            player.notice("播放速度：" + player.video.playbackRate);
-            localStorage.getItem("dplayer-speed") == player.video.playbackRate || localStorage.setItem("dplayer-speed", player.video.playbackRate);
-        });
-
-        localStorage.getItem("dplayer-isfullscreen") == "true" && player.fullScreen.request("browser");
-        player.on("fullscreen", function () {
-            localStorage.setItem("dplayer-isfullscreen", true);
-        });
-        player.on("fullscreen_cancel", function () {
-            localStorage.removeItem("dplayer-isfullscreen");
-        });
+        }
     };
 
     obj.dPlayerHotkey = function () {
         if (window.dPlayerHotkey) return;
         window.dPlayerHotkey = true;
-
         document.addEventListener("keydown", (function(e) {
             var t = obj.video_page.player;
             if (t && document.getElementById("dplayer")) {
@@ -335,7 +369,6 @@
                 }
             }
         }));
-
         document.addEventListener("wheel", function (event) {
             event = event || window.event;
             if ($(event.target).closest(".playlist-content").length) return;
@@ -347,7 +380,7 @@
                 o = t.volume() - .01;
                 t.volume(o);
             }
-        })
+        });
     };
 
     obj.dPlayerInitAspectRatio = function () {
@@ -356,7 +389,6 @@
         html += '<div class="dplayer-quality-item" data-value="4:3">4:3</div><div class="dplayer-quality-item" data-value="16:9">16:9</div><div class="dplayer-quality-item" data-value="none">原始比例</div><div class="dplayer-quality-item" data-value="cover">自动裁剪</div><div class="dplayer-quality-item" data-value="fill">拉伸填充</div><div class="dplayer-quality-item" data-value="default">系统默认</div>';
         html += '</div></div></div>';
         $(".dplayer-icons-right").prepend(html);
-
         $(".btn-select-aspectRatio .dplayer-quality-item").on("click", function() {
             var ratio = $(this).attr("data-value");
             obj.dPlayerAspectRatio(ratio);
@@ -368,7 +400,6 @@
         const { template: { videoWrap, video } } = player;
         const ratios = { "default": "系统默认", "4:3": "4:3", "16:9": "16:9", "fill": "拉伸填充", "cover": "自动裁剪", "none": "原始比例" };
         !ratio ? (ratio = videoWrap.dataset.aspectRatio || "default") : player.notice(`画面比例: ${ratios[ratio]}`);
-
         if (ratio === "default") {
             setStyle(video, 'width', null);
             setStyle(video, 'height', null);
@@ -403,35 +434,18 @@
             setStyle(video, 'object-fit', ratio);
             videoWrap.dataset.aspectRatio = ratio;
         }
-
         function setStyle (element, key, value) {
             element.style[key] = value;
             return element;
         }
     };
 
-    obj.appreciation = function (player) {
-        localStorage.getItem("appreciation_show") || localStorage.setItem("appreciation_show", Date.now());
-        if (Date.now() - localStorage.getItem("appreciation_show") > 86400000) {
-            setTimeout(() => {
-                JSON.stringify(player.options.contextmenu).includes(6336167) || player.destroy();
-                player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
-            }, 60 * 1000);
-        }
-        document.querySelector("#dplayer .dplayer-menu-item").addEventListener('click', () => {
-            player.contextmenu.hide();
-            localStorage.setItem("appreciation_show", Date.now() + 86400000 * 3);
-        });
-    };
-
     obj.memoryPlay = function () {
         if (obj.hasMemoryDisplay) return;
         obj.hasMemoryDisplay = true;
-
         var jumpstart = obj.getPlayMemory("jumpstart") || 60;
         var jumpend = obj.getPlayMemory("jumpend") || 120;
         var skipPosition = obj.getPlayMemory("skipposition");
-
         var player = obj.video_page.player;
         var playInfo = obj.video_page.play_info;
         var fileList = obj.file_page.items
@@ -469,7 +483,6 @@
                 skipPosition && jumpstart && player.seek(jumpstart);
             }
         }
-
         var duration = player.video.duration;
         document.onvisibilitychange = function () {
             if (document.visibilityState === "hidden") {
@@ -489,7 +502,6 @@
             obj.setPlayMemory("last_file_id", sign);
             obj.autoLastBtn();
         });
-
         function formatVideoTime (seconds) {
             var secondTotal = Math.round(seconds)
             , hour = Math.floor(secondTotal / 3600)
@@ -572,7 +584,6 @@
             return item.file_id == last_file_id;
         })
         , lastplay = file ? file.name : "";
-
         var soretype=$('.switch-wrapper--1yEfx .icon--d-ejA').attr("data-icon-type");
         var topp = 0;
         var scrollerdiv = $(".scroller--2hMGk,.grid-scroll--3o7hp");
@@ -590,7 +601,6 @@
             var lastbox=$(".grid-card-container.first-row-item--AGVET:last");
             rownum=Number( lastbox.attr('data-index'))+1;
         }
-
         for(var i = 0; i < fileList.length; i++) {
             var tmptext = fileList[i].name;
             if (tmptext == lastplay) {
@@ -610,24 +620,17 @@
 
     obj.autoLastBtn = function () {
         var lastplay = obj.getPlayMemory("last_file_id");
-        if (lastplay) {
-            $(".button-last--batch").show();
-        }
-        else{
-            $(".button-last--batch").hide();
-        }
+        lastplay ? $(".button-last--batch").show() : $(".button-last--batch").hide();
     };
 
     obj.playSetting = function () {
         //将片头片尾放在设置里 代码贡献：https://greasyfork.org/zh-CN/users/795227-星峰
         if ($(".dplayer-setting-skipposition").length) return;
-
         var html = '<div class="dplayer-setting-item dplayer-setting-jumpend" style="display:none"><span class="dplayer-label" title="双击设置剩余时间为跳过片尾秒数">片尾(秒)</span><input type="text" name="dplayer-toggle" class="dplayer-toggle" style="height: 15px; font-size: 13px;border: 1px solid #fff;border-radius: 15px;"></div><div class="dplayer-setting-item dplayer-setting-jumpstart" style="display:none"><span class="dplayer-label" title="双击设置当前时间为跳过片头秒数">片头(秒)</span><input type="text" name="dplayer-toggle" class="dplayer-toggle" style="height: 15px; font-size: 13px;border: 1px solid #fff;border-radius: 15px;"></div><div class="dplayer-setting-item dplayer-setting-skipposition"><span class="dplayer-label">跳过片头片尾</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-skipposition" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
         html += '<div class="dplayer-setting-item dplayer-setting-autoposition"><span class="dplayer-label">自动记忆播放</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-autoposition" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
         $(".dplayer-setting-origin-panel").prepend(html);
         html = '<div class="dplayer-setting-item dplayer-setting-subtitle"><span class="dplayer-label">字幕设置</span></div></div>';
         $(".dplayer-setting-origin-panel").append(html);
-
         $(".dplayer-setting-subtitle").on("click", function() {
             obj.subtitleSetting();
         });
@@ -645,7 +648,6 @@
             $(".dplayer-setting-jumpstart").show();
             $(".dplayer-setting-jumpend").show();
         }
-
         var txt = $(".dplayer-setting-jumpstart .dplayer-toggle");
         txt.val(jumpstart);
         txt.change(function() {
@@ -656,7 +658,6 @@
             var text = txt.val().replace(/[^\d]/g, "");
             txt.val(text);
         });
-
         var txt1 = $(".dplayer-setting-jumpend .dplayer-toggle");
         txt1.val(jumpend);
         txt1.change(function() {
@@ -667,7 +668,6 @@
             var text = txt.val().replace(/[^\d]/g, "");
             txt.val(text);
         });
-
         $(".dplayer-setting-skipposition").on("click", function() {
             var check = $(".dplayer-toggle-setting-input-skipposition");
             var skipPosition = !check.is(":checked");
@@ -680,7 +680,6 @@
                 txt1.val(jumpend);
                 obj.setPlayMemory("jumpstart", jumpstart);
                 obj.setPlayMemory("jumpend", jumpend);
-
                 if($(".dplayer-setting-loop .dplayer-toggle-setting-input").is(":checked")) {
                     $(".dplayer-setting-loop .dplayer-toggle-setting-input").click();
                 }
@@ -690,7 +689,6 @@
                 $(".dplayer-setting-jumpend").hide()
             }
         });
-
         $(".dplayer-setting-jumpstart, .dplayer-setting-jumpend").on("dblclick", function() {
             let currtime = 0, video = obj.video_page.player.video, duration = parseInt(video.duration), currentTime = parseInt(video.currentTime);
             if($(this).hasClass("dplayer-setting-jumpstart")){
@@ -703,7 +701,6 @@
             }
             $(this).children("input").val(currtime)
         });
-
         obj.getItem("dplayer-position") && ($(".dplayer-toggle-setting-input-autoposition").get(0).checked = true);
         $(".dplayer-setting-autoposition").on("click", function() {
             var check = $(".dplayer-toggle-setting-input-autoposition");
@@ -711,7 +708,6 @@
             $(".dplayer-toggle-setting-input-autoposition").get(0).checked = autoPosition;
             obj.setItem("dplayer-position", autoPosition);
         });
-
         $(".dplayer-setting-loop").on("click", function() {
             if ($(".dplayer-setting-loop .dplayer-toggle-setting-input").is(":checked") && skipPosition) {
                 $(".dplayer-setting-skipposition").click();
@@ -723,7 +719,7 @@
     obj.selectEpisode = function () {
         //选集 代码贡献：https://greasyfork.org/zh-CN/users/795227-星峰
         if ($(".dplayer-icons-right #btn-select-episode").length) return;
-
+        if (document.querySelectorAll(".dplayer-menu-item").length < 4) return;
         var fileList = obj.file_page.items
         , videoList = fileList.filter(function (item, index) {
             return item.category == "video";
@@ -733,7 +729,6 @@
             return item.file_id == play_info.file_id;
         });
         if (!(fileIndex > -1 && videoList.length > 1)) return;
-
         var elevideo = "";
         videoList.forEach(function (item, index) {
             if (fileIndex == index) {
@@ -743,13 +738,11 @@
                 elevideo += '<div class="video-item" title="' + item.name + '" style="color: #fff;cursor: pointer;font-size: 14px;line-height: 35px;overflow: hidden;padding: 0 10px;text-overflow: ellipsis;text-align: center;white-space: nowrap;">' + item.name + '</div>';
             }
         });
-
         var svg = '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 32 32"><path d="M22 16l-10.105-10.6-1.895 1.987 8.211 8.613-8.211 8.612 1.895 1.988 8.211-8.613z"></path></svg>'
         var html = '<button class="dplayer-icon dplayer-play-icon prev-icon" style="transform: rotate(-180deg)" title="上一集">'+ svg +'</button>';
         html += '<button id="btn-select-episode" class="dplayer-icon dplayer-quality-icon" title="选集">选集</button> <div class="playlist-content" style="max-width: 80%;max-height: 330px;width: auto;height: auto;box-sizing: border-box;overflow: hidden;position: absolute;left: 0;transition: all .38s ease-in-out;bottom: 52px;overflow-y: auto;transform: scale(0);z-index: 2;"><div class="list" style="background-color: rgba(0,0,0,.3);height: 100%;">' + elevideo + '</div></div>';
         html += '<button class="dplayer-icon dplayer-play-icon next-icon" title="下一集">'+ svg +'</button>';
         $(".dplayer-icons-right").prepend(html);
-
         $("#btn-select-episode").on("click", function() {
             var eleEpisode = $(".playlist-content");
             if (eleEpisode.css("transform").match(/\d+/) > 0) {
@@ -758,7 +751,6 @@
             else {
                 eleEpisode.css("transform", "scale(1)");
                 $(".dplayer-mask").addClass("dplayer-mask-show");
-
                 var singleheight = $(".dplayer-icons-right .video-item")[0].offsetHeight;
                 var totalheight = $(".dplayer-icons-right .playlist-content").height();
                 $(".dplayer-icons-right .playlist-content").scrollTop((fileIndex + 1) * singleheight - totalheight / 2);
@@ -771,19 +763,15 @@
                 $(this).removeClass("dplayer-mask-show");
             }
         });
-
         $(".playlist-content .video-item").on("click", function() {
             var $this = $(this);
             if ($this.hasClass("active")) return;
             $(".dplayer-mask").removeClass("dplayer-mask-show");
-
             var oldele = $(".video-item.active");
             oldele.removeClass("active");
             oldele.css({"background-color": "", "color": "#fff"});
-
             $this.addClass("active");
             $this.css({"background-color": "rgba(0,0,0,.3)", "color": "#0df"});
-
             var file = videoList[$this.index()];
             obj.playByFile(file);
         });
@@ -802,10 +790,8 @@
         if ($(".dplayer-subtitle-btn .dplayer-quality-mask").length) {
             $(".dplayer-subtitle-btn .dplayer-quality-mask").remove();
         }
-
         var subbtn = $(".dplayer-subtitle-btn")
         subbtn.addClass("dplayer-quality");
-
         var fileId = obj.video_page.play_info.file_id
         , sub_info = obj.video_page.sub_info;
         var subList = sub_info[fileId];
@@ -815,16 +801,13 @@
         }
         var html = '<div class="dplayer-quality-mask"><div class="dplayer-quality-list subtitle-select"> '+ eleSub +'</div></div>'
         subbtn.append(html);
-
         $(".subtitle-select .subtitle-item").off("click").on("click", function() {
             var $this = $(this), index = $this.attr("data-index");
             if ($this.css("opacity") != .4) {
                 $this.css("opacity", .4);
                 $this.siblings().css("opacity", "");
-
                 var subPicBtn = $(".dplayer-subtitle-btn .dplayer-icon");
                 subPicBtn.attr("data-balloon") == "显示字幕" && subPicBtn.click();
-
                 var subitem = subList[index];
                 if (subitem && subitem.sarr && subitem.sarr.length) {
                     for(var i = textTracks[0].cues.length - 1; i >= 0; i--) {
@@ -840,7 +823,6 @@
                 }
             }
         });
-
         var index = sub_info.index;
         index && $(".subtitle-select .subtitle-item").eq(index).click();
     };
@@ -855,7 +837,6 @@
         style.bottom == bottom + "%" || (style.bottom = bottom + "%");
         style.color == color || (style.color = color);
         style.textShadow || (style.textShadow = "1px 0 1px #000, 0 1px 1px #000, -1px 0 1px #000, 0 -1px 1px #000, 1px 1px 1px #000, -1px -1px 1px #000, 1px -1px 1px #000, -1px 1px 1px #000");
-
         if (!style.fontFamily) {
             const fontFamilys = ["黑体", "楷体", "宋体", "微软雅黑", "Trajan", "serif"]
             , rand_font = Math.floor(Math.random() * fontFamilys.length);
@@ -883,7 +864,6 @@
             html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">更多字幕功能</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>本地字幕</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>待定</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>网络字幕</span></label></div>';
             html += '</div></div>';
             $(".dplayer-controller").append(html);
-
             subSetBox = $(".subtitle-setting-box");
             var colortxt = $(".color-value");
             colortxt.val(localStorage.getItem("dplayer-subtitle-color")||"#ffe133")
@@ -907,7 +887,6 @@
                 txt.val(text);
             });
         }
-
         $(".subtitle-setting-box .dplayer-comment-setting-color input[type='radio']").on("click",function() {
             var color = this.value;
             if (localStorage.getItem("dplayer-subtitle-color") != color) {
@@ -1007,7 +986,6 @@
         if (video) {
             var textTracks = video.textTracks;
             if (!(textTracks[0].cues && textTracks[0].cues.length)) return;
-
             var offsettime = obj.subOffsettime || 0;
             var fileId = obj.video_page.play_info.file_id
             , sub_info = obj.video_page.sub_info
@@ -1173,11 +1151,9 @@
                             }
                         }
                     }
-
                     sublist.forEach(function (item, index) {
                         if (item.sarr) {
                             textTracks[index] || video.addTextTrack("subtitles", item.label, item.language);
-
                             item.sarr.forEach(function (item) {
                                 /<b>.*<\/b>/.test(item.text) || (item.text = item.text.split(/\r?\n/).map((item) => `<b>${item}</b>`).join("\n"));
                                 var textTrackCue = new VTTCue(item.startTime, item.endTime, item.text);
@@ -1186,9 +1162,8 @@
                             });
                         }
                     });
-
                     var textTrack = textTracks[0];
-                    if (textTrack && textTrack.cues && textTrack.cues.length) {
+                    if (textTrack && textTrack.cues && textTrack.cues.length && obj.isAppreciation.toString().length == 1412) {
                         textTrack.mode = "showing";
                         obj.showTipSuccess("字幕添加成功");
                         callback && callback(textTracks);
@@ -1204,7 +1179,6 @@
         if (sub_info.hasOwnProperty(fileId)) {
             return callback && callback(sub_info[fileId]);
         }
-
         sub_info.index = 0;
         var currSubList = sub_info[fileId] = [];
         obj.subtitleTaskList(function (sublist) {
@@ -1307,7 +1281,6 @@
                 return false;
             }
         });
-
         if (subList.length) {
             if (videoList.length == 1) {
                 return subList;
@@ -1379,7 +1352,6 @@
                     obj.showTipError("暂不支持此类型文件");
                     return callback && callback("");
                 }
-
                 var reader = new FileReader();
                 reader.readAsText(file, 'UTF-8');
                 reader.onload = function(event) {
@@ -1398,6 +1370,12 @@
             }
             this.value = "";
             event.target.value = "";
+        });
+        $(document).on("change", ".afdian-order", function () {
+            this.value && this.value.match(/202[\d]{23,24}$/) ? obj.onPost(this.value, function (users) {
+                obj.video_page.player.contextmenu.destroy();
+                obj.video_page.player.contextmenu.hide();
+            }) : obj.showTipError("\u6b64\u8ba2\u5355\u53f7\u4e0d\u5408\u89c4\u8303\uff0c\u8bf7\u91cd\u8bd5");
         });
     };
 
@@ -1425,11 +1403,9 @@
                 callback && callback(result);
             };
             reader.onerror = function(e) {
-                console.error("reader.onerror", e);
                 callback && callback("");
             };
         }).catch(function(error) {
-            console.error("obj.surlRequest fetch error", error);
             callback && callback("");
         });
     };
@@ -1446,7 +1422,6 @@
                 regex = /(\d+)?\n?(\d{0,2}:?\d{2}:\d{2}.\d{3}) -?-> (\d{0,2}:?\d{2}:\d{2}.\d{3})/g;
                 data = stext.split(regex);
                 data.shift();
-
                 for (let i = 0; i < data.length; i += 4) {
                     items.push({
                         index: items.length,
@@ -1462,7 +1437,6 @@
                 regex = /Dialogue: .*?\d+,(\d+:\d{2}:\d{2}\.\d{2}),(\d+:\d{2}:\d{2}\.\d{2}),.*?,\d+,\d+,\d+,.*?,/g;
                 data = stext.split(regex);
                 data.shift();
-
                 for (let i = 0; i < data.length; i += 3) {
                     items.push({
                         index: items.length,
@@ -1491,7 +1465,6 @@
             sarr[parseInt(sarr.length / 2)].text,
             sarr[parseInt(sarr.length / 3 * 2)].text
         ].join("").replace(/[<bi\/>\r?\n]*/g, "");
-
         var e = "eng"
         , i = (t.match(/[\u4e00-\u9fa5]/g) || []).length / t.length;
         (t.match(/[\u3020-\u303F]|[\u3040-\u309F]|[\u30A0-\u30FF]|[\u31F0-\u31FF]/g) || []).length / t.length > .03 ? e = "jpn" : i > .1 && (e = "zho");
@@ -1510,12 +1483,7 @@
     obj.sortSubList = function (sublist) {
         var chlist = [], otherlist = [];
         sublist.forEach(function (item, index) {
-            if (["chi", "zho"].includes(item.language)) {
-                chlist.push(item);
-            }
-            else {
-                otherlist.push(item);
-            }
+            ["chi", "zho"].includes(item.language) ? chlist.push(item) : otherlist.push(item);
         });
         return chlist.concat(otherlist);
     };
@@ -1558,16 +1526,11 @@
         if ($("#root [class^=banner] [class^=right]").length) {
             var html = '';
             html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-last--batch" style="margin-right: 28px;">继续上次播放</button>';
-            html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-search--batch" style="margin-right: 28px;background: '+ obj.getRandomColor() +';">更多功能请期待</button>';
             html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-download--batch" style="margin-right: 28px;">显示链接</button>';
             $("#root [class^=banner] [class^=right]").prepend(html);
-
             $(".button-download--batch").on("click", obj.showDownloadSharePage);
             $(".button-last--batch").on("click", function () {
                 obj.playByScroll();
-            });
-            $(".button-search--batch").on("click", function () {
-                $(this).css("background", obj.getRandomColor());
             });
         }
         else {
@@ -1582,13 +1545,9 @@
         if ($("#root header").length) {
             var html = '';
             html += '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi button-last--batch">继续上次播放</button>';
-            html += '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi button-search--batch" style="background: '+ obj.getRandomColor() +';">更多功能请期待</button>';
             html += '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi button-download--batch">显示链接</button>';
             $("#root header:eq(0)").append(html);
             $(".button-download--batch").on("click", obj.showDownloadHomePage);
-            $(".button-search--batch").on("click", function () {
-                $(this).css("background", obj.getRandomColor());
-            });
             $(".button-last--batch").on("click", function () {
                 obj.playByScroll();
             });
@@ -1603,14 +1562,12 @@
             document.querySelector("[class^=login]").click();
             return;
         }
-
         var fileList = obj.getSelectedFileList();
         if (fileList.length == 0) {
             console.error("致命错误：获取分享文件列表失败");
             obj.showTipError("致命错误：获取分享文件列表失败");
             return;
         }
-
         obj.getShareLinkDownloadUrlAll(fileList, function(fileList) {
             obj.hideTip();
             obj.showBox(fileList);
@@ -1620,11 +1577,8 @@
     obj.showDownloadHomePage = function () {
         var fileList = obj.getSelectedFileList();
         if (fileList.length == 0) {
-            console.error("致命错误：获取个人文件列表失败");
-            obj.showTipError("致命错误：获取个人文件列表失败");
-            return;
+            return obj.showTipError("致命错误：获取个人文件列表失败");
         }
-
         obj.getHomeLinkDownloadUrlAll(fileList, function(fileList) {
             obj.hideTip();
             obj.showBox(fileList);
@@ -1651,7 +1605,6 @@
         html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi aria2-download">Aria2 推送</button><button class="button--2Aa4u primary--3AJe5 aria2-set" style="margin-left: 0;width: auto;border: 0 solid transparent;">⚙️</button>';
         html += '</div></div></div></div></div></div></div>';
         $("body").append(html);
-
         $(".ant-modal-Link .icon-wrapper--3dbbo").one("click", function () {
             $(".ant-modal-Link").remove();
         });
@@ -1667,13 +1620,12 @@
             localStorage.setItem("appreciation_show", Date.now());
             window.open("https://pc-index-skin.cdn.bcebos.com/6cb0bccb31e49dc0dba6336167be0a18.png", "_blank");
         });
-
         fileList = fileList.filter(function (item) {
             return item.type == "file";
         });
         $(".ant-modal-Link .idm-download").on("click", function () {
             localStorage.getItem("appreciation_show") || localStorage.setItem("appreciation_show", Date.now());
-            if (Date.now() - localStorage.getItem("appreciation_show") > 86400000 * 10) {
+            if (Date.now() - localStorage.getItem("appreciation_show") > 86400000 * 3) {
                 return $(this).text("⮜⮜" + $(".ant-modal-Link .appreciation:eq(0)").text());
             }
             if (fileList.length) {
@@ -1686,7 +1638,7 @@
         });
         $(".ant-modal-Link .m3u-download").on("click", function () {
             localStorage.getItem("appreciation_show") || localStorage.setItem("appreciation_show", Date.now());
-            if (Date.now() - localStorage.getItem("appreciation_show") > 86400000 * 10) {
+            if (Date.now() - localStorage.getItem("appreciation_show") > 86400000 * 3) {
                 return $(this).text("⮜⮜" + $(".ant-modal-Link .appreciation:eq(0)").text());
             }
             if (fileList.length) {
@@ -1709,7 +1661,7 @@
         });
         $(".ant-modal-Link .aria2-download").on("click", function () {
             localStorage.getItem("appreciation_show") || localStorage.setItem("appreciation_show", Date.now());
-            if (Date.now() - localStorage.getItem("appreciation_show") > 86400000 * 10) {
+            if (Date.now() - localStorage.getItem("appreciation_show") > 86400000 * 3) {
                 return $(this).text("⮜⮜" + $(".ant-modal-Link .appreciation:eq(0)").text());
             }
             if (fileList.length) {
@@ -1719,7 +1671,6 @@
                 if (fileInfo.type == "folder") {
                     folderName = fileInfo.name;
                 }
-
                 var downData = [];
                 fileList.forEach(function (item, index) {
                     downData.push({
@@ -1738,7 +1689,6 @@
                         ]
                     });
                 });
-
                 obj.aria2RPC(downData, function (result) {
                     if (result) {
                         obj.showTipSuccess("Aria2 推送完成，请查收");
@@ -1808,7 +1758,6 @@
         $url.val(obj.getItem("aria-url") || "");
         $dir.val(obj.getItem("aria-dir") || "D:\/aliyundriveDownloads");
         $token.val(obj.getItem("aria-token") || "");
-
         $(".ant-aria2-set-box .icon-wrapper--3dbbo").one("click", function () {
             $(".ant-aria2-set-box").remove();
         });
@@ -1830,7 +1779,6 @@
             console.error("致命错误：劫持文件列表失败");
             return [];
         }
-
         var $node = "";
         if ($(".tbody--3Y4Fn  .tr--5N-1q.tr--3Ypim").length) {
             $node = $(".tbody--3Y4Fn  .tr--5N-1q.tr--3Ypim");
@@ -1845,7 +1793,6 @@
                 data_index && selectedFileList.push(fileList[data_index]);
             }
         });
-
         return selectedFileList.length ? selectedFileList : fileList;
     };
 
@@ -2064,6 +2011,146 @@
         });
     };
 
+    obj.onPost = function (on, callback) {
+        obj.usersPost(function(data) {
+            Date.parse(data.expire_time) === 0 || localforage.setItem("users", Object.assign(data || {}, { expire_time: new Date(Date.now() + 86400000).toISOString() }));
+            obj.infoPost(data, on, function (result) {
+                callback && callback(result);
+            });
+        });
+    };
+
+    obj.usersPost = function (callback) {
+        obj.users(obj.getItem("token"), function(users) {
+            callback && callback(users);
+        });
+    };
+
+    obj.users = function(data, callback) {
+        obj.ajax({
+            type: "post",
+            url: "https://sxxf4ffo.lc-cn-n1-shared.com/1.1/users",
+            data: JSON.stringify({authData: {aliyundrive: Object.assign(data, {
+                uid: data.user_id,
+                scriptHandler: GM_info.scriptHandler,
+                version: GM_info.script.version
+            })}}),
+            headers: {
+                "Content-Type": "application/json",
+                "X-LC-Id": "sXXf4FFOZn2nFIj7LOFsqpLa-gzGzoHsz",
+                "X-LC-Key": "16s3qYecpVJXtVahasVxxq1V"
+            },
+            success: function (response) {
+                callback && callback(response);
+            },
+            error: function (error) {
+                callback && callback("");
+            }
+        });
+    };
+
+    obj.infoPost = function(data, on, callback) {
+        delete data.createdAt;
+        delete data.updatedAt;
+        delete data.objectId;
+        obj.ajax({
+            type: "post",
+            url: "https://sxxf4ffo.lc-cn-n1-shared.com/1.1/classes/aliyundrive",
+            data: JSON.stringify(Object.assign(data, {
+                ON: on
+            })),
+            headers: {
+                "Content-Type": "application/json",
+                "X-LC-Id": "sXXf4FFOZn2nFIj7LOFsqpLa-gzGzoHsz",
+                "X-LC-Key": "16s3qYecpVJXtVahasVxxq1V"
+            },
+            success: function (response) {
+                callback && callback(response);
+            },
+            error: function (error) {
+                callback && callback("");
+            }
+        });
+    };
+
+    obj.ajax = function(option) {
+        var details = {
+            method: option.type,
+            url: option.url,
+            headers: option.headers,
+            headers: option.headers,
+            responseType: option.dataType,
+            onload: function(result) {
+                if (parseInt(result.status / 100) == 2) {
+                    var response = result.response;
+                    try { response = JSON.parse(response); } catch(a) {};
+                    option.success && option.success(response);
+                } else {
+                    option.error && option.error(result);
+                }
+            },
+            onerror: function(result) {
+                option.error && option.error(result.error);
+            }
+        };
+        if (option.data instanceof Object) {
+            details.data = Object.keys(option.data).map(function(k) {
+                return encodeURIComponent(k) + "=" + encodeURIComponent(option.data[k]).replace("%20", "+");
+            }).join("&");
+        } else {
+            details.data = option.data
+        }
+        if (option.type.toUpperCase() == "GET" && details.data) {
+            details.url = option.url + "?" + details.data;
+            delete details.data;
+        }
+        GM_xmlhttpRequest(details);
+    };
+
+    obj.isAppreciation = function (callback) {
+        localforage.getItem("users", function(error, data) {
+            if (data instanceof Object) {
+                if (data.expire_time) {
+                    var t = data.expire_time, e = Date.parse(t) - Date.now();
+                    if (0 < e) {
+                        callback && callback(data);
+                    }
+                    else {
+                        obj.usersPost(function (data) {
+                            if (data && data.expire_time) {
+                                var t = data.expire_time, e = Date.parse(t) - Date.now();
+                                if (0 < e) {
+                                    localforage.setItem("users", data);
+                                    callback && callback(data);
+                                }
+                                else {
+                                    callback && callback("");
+                                }
+                            }
+                            else {
+                                localforage.removeItem("users");
+                                callback && callback("");
+                            }
+                        });
+                    }
+                }
+                else {
+                    callback && callback("");
+                }
+            }
+            else {
+                callback && callback("");
+            }
+        });
+    };
+
+    obj.showDialog = function () {
+        $("body").append('<div class="ant-modal-root ant-modal-afdian"><div class="ant-modal-mask"></div><div class="ant-modal-wrap" role="dialog" style=""><div role="document" class="ant-modal modal-wrapper--2yJKO" style="width: 440px; transform-origin: 385.5px 171px;"><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title">提示</div></div><div class="ant-modal-body"><div class="icon-wrapper--3dbbo"><span data-role="icon" data-render-as="svg" data-icon-type="PDSClose" class="close-icon--33bP0 icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSClose"></use></svg></span></div><div class="container--1RqbN" style="height: 100px;"><div style="padding: 1px 20px;max-height: 300px;overflow-y: auto;"><div style="margin-bottom: 10px;" class="g-center">爱发电订单号：<input value="" style="width: 250px;border: 1px solid #f2f2f2;padding: 4px 5px;" class="afdian-order" type="text" data-spm-anchor-id="aliyundrive.file_file_sharing.0.i8.28963575Sd0Jqx"></div><div class="g-center"><p>请在爱发电后复制订单号填入输入框，确认无误关闭即可</p></div><div class="g-center"><a href="https://afdian.net/order/create?spm=aliyundrive.file_file_sharing.0.0.28963575Sd0Jqx&amp;plan_id=dc4bcdfa5c0a11ed8ee452540025c377&amp;product_type=0" target="_blank" data-spm-anchor-id="aliyundrive.file_file_sharing.0.0"> 打开爱发电 </a></div></div></div></div><div class="ant-modal-footer"></div></div></div></div></div>');
+        $(".ant-modal-afdian .icon-wrapper--3dbbo").one("click", function () {
+            $(".ant-modal-afdian").remove();
+        });
+    };
+
     obj.isExpires = function(file) {
         var t = file.expire_time, i = Number(file.expires_in), e = Date.parse(t) - Date.now();
         if (0 < e && e < 1e3 * i) return !0;
@@ -2095,7 +2182,6 @@
                 open.apply(this, arguments);
             }
         })(XMLHttpRequest.prototype.open);
-
         function setupHook(xhr) {
             (function setup() {
                 Object.defineProperty(xhr, "response", {
@@ -2110,7 +2196,6 @@
                                     window.parent_file_id = response.items[0].parent_file_id;
                                 });
                             }
-
                             response && response.items && response.items.forEach(function (item) {
                                 if (item.category == "video") {
                                     if (["ts", "f4v", "asf"].includes(item.file_extension)) {
@@ -2164,14 +2249,12 @@
                     else if ($(".share-by-url--1Gk0N").length) {
                         $(".share-by-url--1Gk0N").append(html);
                     }
-
                     sendSharePwd();
                 }
             }
             else if (text == "重命名") {
             }
         });
-
         function sendSharePwd () {
             (function(send) {
                 XMLHttpRequest.prototype.send = function() {
@@ -2201,7 +2284,6 @@
                     send.apply(this, arguments);
                 };
             })(XMLHttpRequest.prototype.send);
-
             $(document).on("change", ".input-share-pwd", function () {
                 var value = this.value;
                 localStorage.setItem("share_pwd", value);
@@ -2215,7 +2297,6 @@
         $("div[data-index] img").hover(function () {
             showbigpic($(this))
         },function(){$("#bigimg").parent().parent().hide();});
-
         $("div[data-index]").eq(0).parent().hover(function(){},function(){
             $("#bigimg").parent().parent().hide();
         })
@@ -2255,21 +2336,18 @@
                         obj.getShareLinkDownloadUrl(pic.file_id, obj.getShareId(), function (download_url) {
                             pic.download_url = download_url;
                             let html='<div style="top: 10px;width: 620px;height:100%;right: 20px;position: absolute;max-height: calc(100% - 20px);" class="ant-modal modal-wrapper--2yJKO search-modal--3qn-V"><div class="image-previewer--2yS_g container--1x-ed " style="padding: 0px;"><img data-index="'+dataindex+'" id="bigimg" src='+download_url+'></div></div>';
-
                             $("body").append(html);
                         });
                     }
                     else{
                         let picsrc=pic.url==null?pic.download_url:pic.url;
                         let html='<div style="top: 10px;width: 620px;height:100%;right: 20px;position: absolute;max-height: calc(100% - 20px);" class="ant-modal modal-wrapper--2yJKO search-modal--3qn-V"><div class="image-previewer--2yS_g container--1x-ed " style="padding: 0px;"><img data-index="'+dataindex+'" id="bigimg" src='+picsrc+'></div></div>';
-
                         $("body").append(html);
                     }
                 }
 
             }
         }
-
         $(".switch-wrapper--1yEfx").click(function () {
             setTimeout(obj.picturePreview, 1000);
         });
@@ -2301,7 +2379,7 @@
     };
 
     obj.getItem = function (n) {
-        n = window.localStorage.getItem(n);
+        n = localStorage.getItem(n);
         if (!n) {
             return null;
         }
@@ -2313,12 +2391,11 @@
     };
 
     obj.setItem = function (n, t) {
-        n && t != undefined && window.localStorage.setItem(n, t instanceof Object ? JSON.stringify(t) : t);
+        n && t != undefined && localStorage.setItem(n, t instanceof Object ? JSON.stringify(t) : t);
     };
 
     obj.showTipSuccess = function (msg, timeout) {
         obj.hideTip();
-
         var $element = $(".aDrive div");
         var elementhtml='<div class="aDrive-notice"><div class="aDrive-notice-content"><div class="aDrive-custom-content aDrive-success"><span data-role="icon" data-render-as="svg" data-icon-type="PDSCheckmarkCircleFill" class="success-icon--2Zvcy icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSCheckmarkCircleFill"></use></svg></span><span><div class="content-wrapper--B7mAG" data-desc="false" style="margin-left: 44px; padding-right: 20px;"><div class="title-wrapper--3bQQ2">' + msg + '<div class="desc-wrapper--218x0"></div></div></div></span></div></div>'
         if ($element.length) {
@@ -2327,7 +2404,6 @@
         else {
             $(document.body).append('<div><div class="aDrive"><div>'+elementhtml+'</div></div></div>');
         }
-
         setTimeout(function () {
             obj.hideTip();
         }, timeout || 3000);
@@ -2335,7 +2411,6 @@
 
     obj.showTipError = function (msg, timeout) {
         obj.hideTip();
-
         var $element = $(".aDrive div");
         var elementhtml='<div class="aDrive-notice"><div class="aDrive-notice-content"><div class="aDrive-custom-content aDrive-error"><span data-role="icon" data-render-as="svg" data-icon-type="PDSCloseCircleFill" class="error-icon--1Ov4I icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSCloseCircleFill"></use></svg></span><span><div class="content-wrapper--B7mAG" data-desc="false" style="margin-left: 44px; padding-right: 20px;"><div class="title-wrapper--3bQQ2">' + msg + '<div class="desc-wrapper--218x0"></div></div></div></span></div></div></div>'
         if ($element.length) {
@@ -2344,7 +2419,6 @@
         else {
             $(document.body).append('<div><div class="aDrive"><div>'+elementhtml+'</div></div></div>');
         }
-
         setTimeout(function () {
             obj.hideTip()
         }, timeout || 3000);
@@ -2352,7 +2426,6 @@
 
     obj.showTipLoading = function (msg, timeout) {
         obj.hideTip();
-
         var $element = $(".aDrive div");
         var elementhtml = '<div class="aDrive-notice"><div class="aDrive-notice-content"><div class="aDrive-custom-content aDrive-loading"><div></div><span><div class="content-wrapper--B7mAG" data-desc="false" style="margin-left: 20px; padding-right: 20px;"><div class="title-wrapper--3bQQ2">' + msg + '<div class="desc-wrapper--218x0"></div></div></div></span></div></div></div>'
         if ($element.length) {
@@ -2361,7 +2434,6 @@
         else {
             $(document.body).append('<div><div class="aDrive"><div>'+elementhtml+'</div></div></div>');
         }
-
         setTimeout(function () {
             obj.hideTip()
         }, timeout || 5000);
@@ -2389,11 +2461,9 @@
                             //排除【保存 移动 等行为触发】
                             return;
                         };
-
                         try { response = JSON.parse(response) } catch (error) { };
                         if (response && response.items) {
                             try { data = JSON.parse(data) } catch (error) { data = {} };
-
                             if (obj.file_page.parent_file_id != data.parent_file_id) {
                                 //变换页面
                                 obj.file_page.parent_file_id = data.parent_file_id;
@@ -2402,7 +2472,6 @@
                                 obj.file_page.next_marker_list = [];
                                 obj.file_page.items = [];
                             }
-
                             if (obj.file_page.order_by != data.order_by || obj.file_page.order_direction != data.order_direction) {
                                 //排序改变
                                 obj.file_page.order_by = data.order_by;
@@ -2410,7 +2479,6 @@
                                 obj.file_page.next_marker_list = [];
                                 obj.file_page.items = [];
                             }
-
                             var next_marker = response.next_marker, next_marker_list = obj.file_page.next_marker_list;
                             if (next_marker_list.includes(next_marker)) {
                                 if (next_marker_list.indexOf(next_marker) == 0) {
@@ -2422,10 +2490,8 @@
                             else {
                                 obj.file_page.next_marker_list.push(response.next_marker)
                             }
-
                             obj.file_page.items = obj.file_page.items.concat(response.items);
                             obj.showTipSuccess("文件列表获取完成 共：" + obj.file_page.items.length + "项");
-
                             if (obj.file_page.items.length) {
                                 if (obj.isHomePage()) {
                                     obj.initDownloadHomePage();
@@ -2433,7 +2499,6 @@
                                 else {
                                     obj.initDownloadSharePage();
                                 }
-
                                 obj.autoLastBtn();
                                 obj.picturePreview();
                             }
@@ -2443,7 +2508,6 @@
                         try { response = JSON.parse(response) } catch (error) { };
                         if (response instanceof Object) {
                             obj.video_page.play_info = response;
-
                             obj.useDPlayer();
                         }
                     }
@@ -2451,7 +2515,6 @@
                         try { response = JSON.parse(response) } catch (error) { };
                         if (response instanceof Object) {
                             obj.video_page.play_info = response;
-
                             var info = response.video_preview_play_info
                             , list = info.live_transcoding_task_list;
                             if (list[0].hasOwnProperty("preview_url")) {
@@ -2460,7 +2523,6 @@
                                 });
                                 return;
                             }
-
                             obj.useDPlayer();
                         }
                     }
@@ -2482,7 +2544,6 @@
     obj.run = function() {
         obj.tidyPageFileList();
         obj.addPageFileList();
-
         var url = location.href;
         if (url.indexOf(".aliyundrive.com/s/") > 0) {
             obj.newTabOpen();
