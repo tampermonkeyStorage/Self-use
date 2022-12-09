@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.4.6
+// @version      0.4.7
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画面模式，支持自动、手动添加字幕，。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -162,8 +162,8 @@
     };
 
     obj.getAdToken = function (url, callback) {
-        var jQuery = obj.getJquery();
-        jQuery.ajax({
+        var jQuery = obj.correct();
+        obj.getJquery().ajax({
             url: url,
         }).done(function(n) {
             if (133 === n.errno && 0 !== n.adTime) {
@@ -414,7 +414,7 @@
         }
         setTimeout(function () {
             if (player.isReady) {
-                obj.sessionRemoveItem("startError");
+                obj.sessionRemove("startError");
                 var pnum = GM_getValue("pnum", 1);
                 GM_setValue("pnum", ++pnum);
                 (obj.appreciation.length && obj.appreciation.toString().length == 738) || player.destroy();
@@ -428,7 +428,7 @@
                 }
                 else {
                     obj.msg("此视频经多次尝试，可能无法正常播放", "failure");
-                    obj.sessionRemoveItem("startError");
+                    obj.sessionRemove("startError");
                 }
             }
         }, 5000 + 1000 * obj.sessionGet("startError"));
@@ -510,6 +510,9 @@
                     player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
                 }
             });
+        });
+        player.on("quality_end", function () {
+            localStorage.setItem("dplayer-quality", player.quality.name);
         });
         if (localStorage.getItem("dplayer-isfullscreen") == "true") {
             player.fullScreen.request("web");
@@ -993,6 +996,7 @@
     };
 
     obj.playRecord = function () {
+        if (location.pathname.split("/")[1] == "mbox") return;
         var file = obj.video_page.info.length ? obj.video_page.info[0] : "";
         localforage.getItem("play_record", function(error, data) {
             data = data || {};
@@ -1029,7 +1033,7 @@
                     var part = Object.keys(data || {}).slice(-10);
                     part.reverse();
                     part.forEach(function (t) {
-                        box += '<p style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><a target="_blank" href="https://pan.baidu.com/play/video#/video?path=' + encodeURIComponent(data[t].path) + '" title=' + data[t].server_filename + '>' + data[t].server_filename + '</a></p>';
+                       t && (box += '<p style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><a target="_blank" href="https://pan.baidu.com/play/video#/video?path=' + encodeURIComponent(data[t].path) + '" title=' + data[t].server_filename + '>' + data[t].server_filename + '</a></p>');
                     });
                     box += '</div>';
                     var dialog = obj.require("system-core:system/uiService/dialog/dialog.js").verify({
@@ -1719,6 +1723,43 @@
         });
     };
 
+    obj.correct = function (callback) {
+        localforage.getItem("users", function(error, data) {
+           data ? localforage.getItem("users_sign", function(error, users_sign) {
+                if (users_sign) {
+                    if (unsafeWindow.b64_md5(JSON.stringify(data)) === GM_getValue("users_sign")) {
+                        callback && callback(users_sign);
+                    }
+                    else {
+                        obj.usersPost(function (data) {
+                            if (data && data.expire_time) {
+                                var t = data.expire_time, e = Date.parse(t) - Date.now();
+                                if (0 < e) {
+                                    localforage.setItem("users", data);
+                                    GM_setValue("users_sign", unsafeWindow.b64_md5(JSON.stringify(data)));
+                                    callback && callback(data);
+                                }
+                                else {
+                                    localforage.removeItem("users_sign");
+                                    callback && callback("");
+                                }
+                            }
+                            else {
+                                localforage.removeItem("users_sign");
+                                localforage.removeItem("users");
+                                callback && callback("");
+                            }
+                        });
+                    }
+                }
+                else {
+                    localforage.removeItem("users");
+                    callback && callback("");
+                }
+            }) : callback && callback("");
+        });
+    };
+
     obj.sessionGet = function (key) {
         var item = sessionStorage.getItem(key);
         if (item) {
@@ -1731,7 +1772,7 @@
         sessionStorage.setItem(key, JSON.stringify(value));
     };
 
-    obj.sessionRemoveItem = function (key) {
+    obj.sessionRemove = function (key) {
         sessionStorage.removeItem(key);
     };
 
