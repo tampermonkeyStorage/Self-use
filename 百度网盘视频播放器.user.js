@@ -1033,7 +1033,7 @@
                     var part = Object.keys(data || {}).slice(-10);
                     part.reverse();
                     part.forEach(function (t) {
-                       t && (box += '<p style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><a target="_blank" href="https://pan.baidu.com/play/video#/video?path=' + encodeURIComponent(data[t].path) + '" title=' + data[t].server_filename + '>' + data[t].server_filename + '</a></p>');
+                        t && !data[t].share && (box += '<p style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><a target="_blank" href="https://pan.baidu.com/play/video#/video?path=' + encodeURIComponent(data[t].path) + '" title=' + data[t].server_filename + '>' + data[t].server_filename + '</a></p>');
                     });
                     box += '</div>';
                     var dialog = obj.require("system-core:system/uiService/dialog/dialog.js").verify({
@@ -1725,7 +1725,7 @@
 
     obj.correct = function (callback) {
         localforage.getItem("users", function(error, data) {
-           data ? localforage.getItem("users_sign", function(error, users_sign) {
+            data ? localforage.getItem("users_sign", function(error, users_sign) {
                 if (users_sign) {
                     if (unsafeWindow.b64_md5(JSON.stringify(data)) === GM_getValue("users_sign")) {
                         callback && callback(users_sign);
