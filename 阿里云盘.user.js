@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      3.0.0
+// @version      3.0.1
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，移动端播放初体验，...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -65,12 +65,12 @@
     obj.dPlayerSupport = function (callback) {
         var urlArr = [
             [
-                "https://cdn.staticfile.org/hls.js/1.2.4/hls.min.js",
-                "https://cdn.staticfile.org/dplayer/1.27.0/DPlayer.min.js",
+                "https://cdn.staticfile.org/hls.js/1.2.9/hls.min.js",
+                "https://cdn.staticfile.org/dplayer/1.26.0/DPlayer.min.js",
             ],
             [
-                "https://cdn.bootcdn.net/ajax/libs/hls.js/1.2.4/hls.min.js",
-                "https://cdn.bootcdn.net/ajax/libs/dplayer/1.27.0/DPlayer.min.js",
+                "https://cdn.bootcdn.net/ajax/libs/hls.js/1.2.9/hls.min.js",
+                "https://cdn.bootcdn.net/ajax/libs/dplayer/1.26.0/DPlayer.min.js",
             ],
             [
                 "https://cdn.jsdelivr.net/npm/hls.js/dist/hls.min.js",
@@ -86,7 +86,7 @@
                 });
                 Promise.all(promises).then(function(results) {
                     setTimeout(function () {
-                        obj.isAppreciation.length && obj.isAppreciation.toString().length == 1412 && callback(unsafeWindow.DPlayer);
+                        obj.isAppreciation.length && obj.isAppreciation.toString().length == 1481 && callback(unsafeWindow.DPlayer);
                     }, 0);
                 }).catch(function(error) {
                     console.error("laodcdn 发生错误！", index, error);
@@ -187,7 +187,6 @@
             hotkey: false,
             airplay: true,
             volume: 1.0,
-            playbackSpeed: [0.5, 0.75, 1, 1.25, 1.5, 2],
             contextmenu: [
                 {
                     text: "👍 爱发电 不再弹出 👍",
@@ -289,12 +288,16 @@
             });
             localStorage.getItem("dplayer-isfullscreen") == "true" && player.fullScreen.request("browser");
             player.on("fullscreen", function () {
-                screen.orientation.lock("landscape");
                 localStorage.setItem("dplayer-isfullscreen", true);
+                try {
+                    screen.orientation.lock("landscape");
+                } catch (error) { };
             });
             player.on("fullscreen_cancel", function () {
-                screen.orientation.unlock();
                 localStorage.removeItem("dplayer-isfullscreen");
+                try {
+                    screen.orientation.unlock();
+                } catch (error) { };
             });
         });
     };
@@ -1163,7 +1166,7 @@
                         }
                     });
                     var textTrack = textTracks[0];
-                    if (textTrack && textTrack.cues && textTrack.cues.length && obj.isAppreciation.toString().length == 1412) {
+                    if (textTrack && textTrack.cues && textTrack.cues.length && obj.isAppreciation.toString().length == 1481) {
                         textTrack.mode = "showing";
                         obj.showTipSuccess("字幕添加成功");
                         callback && callback(textTracks);
@@ -1372,7 +1375,7 @@
             event.target.value = "";
         });
         $(document).on("change", ".afdian-order", function () {
-            this.value && this.value.match(/202[\d]{23,24}$/) ? obj.onPost(this.value, function (users) {
+            this.value && this.value.match(/202[\d]{22,25}$/) ? obj.onPost(this.value, function (users) {
                 obj.video_page.player.contextmenu.destroy();
                 obj.video_page.player.contextmenu.hide();
             }) : obj.showTipError("\u6b64\u8ba2\u5355\u53f7\u4e0d\u5408\u89c4\u8303\uff0c\u8bf7\u91cd\u8bd5");
@@ -2124,6 +2127,7 @@
                                     callback && callback(data);
                                 }
                                 else {
+                                    localforage.removeItem("users");
                                     callback && callback("");
                                 }
                             }
@@ -2170,69 +2174,6 @@
             name == "_blank" || (name = "_blank");
             return open(url, name, specs, replace);
         }
-    };
-
-    obj.tidyPageFileList = function () {
-        (function(open) {
-            XMLHttpRequest.prototype.open = function() {
-                if (!this._hooked) {
-                    this._hooked = true;
-                    setupHook(this);
-                }
-                open.apply(this, arguments);
-            }
-        })(XMLHttpRequest.prototype.open);
-        function setupHook(xhr) {
-            (function setup() {
-                Object.defineProperty(xhr, "response", {
-                    get: function () {
-                        delete xhr.response;
-                        var responseURL = xhr.responseURL, response = xhr.response;
-                        if (responseURL.includes("/file/list") || responseURL.includes("/file/search")) {
-                            if (response && response.items && response.items.length > 1 && window.parent_file_id != response.items[0].parent_file_id) {
-                                response.items.sort(obj.sortByName);
-                                document.querySelector("#root") && (document.querySelector("#root").onclick = function () {
-                                    document.querySelector("#root").onclick = null;
-                                    window.parent_file_id = response.items[0].parent_file_id;
-                                });
-                            }
-                            response && response.items && response.items.forEach(function (item) {
-                                if (item.category == "video") {
-                                    if (["ts", "f4v", "asf"].includes(item.file_extension)) {
-                                        item.file_extension = "mp4";
-                                    }
-                                }
-                                else if (item.category == "audio") {
-                                    if (["ape"].includes(item.file_extension)) {
-                                        item.file_extension = "mp3";
-                                    }
-                                }
-                            });
-                        }
-                        else if (responseURL.includes("/file/get")) {
-                            if (response && response.category == "video") {
-                                if (["ts", "f4v", "asf"].includes(response.file_extension)) {
-                                    response.file_extension = "mp4";
-                                }
-                            }
-                        }
-                        setup();
-                        return response;
-                    },
-                    set: function () { },
-                    configurable: true
-                });
-            })();
-        }
-    };
-
-    obj.sortByName = function (n, i) {
-        const a = n.name.split(".").slice(0, -1).join(".").match(/(\d+)/g);
-        const b = i.name.split(".").slice(0, -1).join(".").match(/(\d+)/g);
-        if (a && b) {
-            return +a[0] > +b[0] ? 1 : +b[0] > +a[0] ? -1 : +a[1] > +b[1] ? 1 : +b[1] > +a[1] ? -1 : +a[2] > +b[2] ? 1 : +b[2] > +a[2] ? -1 : 0;
-        }
-        return n > i ? 1 : i > n ? -1 : 0;
     };
 
     obj.customSharePwd = function () {
@@ -2542,7 +2483,6 @@
     };
 
     obj.run = function() {
-        obj.tidyPageFileList();
         obj.addPageFileList();
         var url = location.href;
         if (url.indexOf(".aliyundrive.com/s/") > 0) {
