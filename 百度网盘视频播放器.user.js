@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.4.7
+// @version      0.4.8
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画面模式，支持自动、手动添加字幕，。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -239,11 +239,11 @@
             }
         })([
             [
-                "https://cdn.staticfile.org/hls.js/1.1.5/hls.min.js",
+                "https://cdn.staticfile.org/hls.js/1.2.9/hls.min.js",
                 "https://cdn.staticfile.org/dplayer/1.26.0/DPlayer.min.js",
             ],
             [
-                "https://cdn.bootcdn.net/ajax/libs/hls.js/1.1.5/hls.min.js",
+                "https://cdn.bootcdn.net/ajax/libs/hls.js/1.2.9/hls.min.js",
                 "https://cdn.bootcdn.net/ajax/libs/dplayer/1.26.0/DPlayer.min.js",
             ],
             [
