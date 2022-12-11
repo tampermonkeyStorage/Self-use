@@ -355,7 +355,7 @@
                 $(".header-box").remove();
                 $(document).on("change", ".afdian-order", function () {
                     if (this.value) {
-                        if (this.value.match(/202[\d]{23,24}$/)) {
+                        if (this.value.match(/202[\d]{22,25}$/)) {
                             localforage.removeItem("menutap");
                             obj.onPost(this.value, function (users) {
                             });
