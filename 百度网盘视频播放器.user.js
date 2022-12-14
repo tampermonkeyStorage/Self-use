@@ -526,7 +526,7 @@
             screen.orientation.unlock();
         });
         document.querySelector(".dplayer .dplayer-full").addEventListener('click', () => {
-            new Date().getDay() || obj.appreciation(player);
+            new Date().getDay() && obj.appreciation(player);
             var isFullScreen = player.fullScreen.isFullScreen("web") || player.fullScreen.isFullScreen("browser");
             localStorage.setItem("dplayer-isfullscreen", isFullScreen);
         });
