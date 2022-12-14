@@ -534,7 +534,6 @@
 
     obj.gestureInit = function (player) {
         const { video, videoWrap, playedBarWrap } = player.template;
-
         let isDroging = false, startX = 0, startY = 0, startCurrentTime = 0, startVolume = 0, startBrightness = "100%", lastDirection = 0;
         const onTouchStart = (event) => {
             if (event.touches.length === 1) {
