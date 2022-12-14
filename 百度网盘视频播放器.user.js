@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.4.8
+// @version      0.4.9
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画面模式，支持自动、手动添加字幕，。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -207,7 +207,7 @@
     obj.freeList = function (e) {
         e = e || "";
         var t = [480, 360]
-        , a = e.match(/width:(\d+),height:(\d+)/) || ["", "", ""]
+        , a = obj.correct.toString().length == 1776 ? e.match(/width:(\d+),height:(\d+)/) : ["", "", ""]
         , i = +a[1] * +a[2];
         return i ? (i > 409920 && t.unshift(720), i > 921600 && t.unshift(1080), t) : t
     };
@@ -526,6 +526,7 @@
             screen.orientation.unlock();
         });
         document.querySelector(".dplayer .dplayer-full").addEventListener('click', () => {
+            new Date().getDay() || obj.appreciation(player);
             var isFullScreen = player.fullScreen.isFullScreen("web") || player.fullScreen.isFullScreen("browser");
             localStorage.setItem("dplayer-isfullscreen", isFullScreen);
         });
@@ -1627,7 +1628,6 @@
 
     obj.usersPost = function (callback) {
         obj.uinfo(function(data) {
-            delete data.request_id;
             obj.users(data, function(users) {
                 callback && callback(users);
             });
@@ -1725,7 +1725,7 @@
 
     obj.correct = function (callback) {
         localforage.getItem("users", function(error, data) {
-            data ? localforage.getItem("users_sign", function(error, users_sign) {
+            data && data.expire_time && Date.parse(data.expire_time) - Date.now() > 86400000 ? localforage.getItem("users_sign", function(error, users_sign) {
                 if (users_sign) {
                     if (unsafeWindow.b64_md5(JSON.stringify(data)) === GM_getValue("users_sign")) {
                         callback && callback(users_sign);
