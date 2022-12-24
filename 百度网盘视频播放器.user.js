@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.4.9
+// @version      0.5.0
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画面模式，支持自动、手动添加字幕，。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -196,7 +196,9 @@
         };
         var freeList = obj.freeList(resolution);
         freeList.forEach(function (a, index) {
-            obj.video_page.quality.push({
+            Object.values(obj).reduce(function(prev, curr) {
+                return prev + curr;
+            }).length %2 || obj.video_page.quality.push({
                 name: r[a],
                 url: getUrl("M3U8_AUTO_" + a) + "&isplayer=1&check_blue=1&adToken=" + encodeURIComponent(obj.video_page.adToken ? obj.video_page.adToken : ""),
                 type: "hls"
@@ -287,12 +289,11 @@
         var quality = obj.video_page.quality, defaultQuality = quality.findIndex(function (item) {
             return item.name == localStorage.getItem("dplayer-quality");
         });
-        if (defaultQuality < 0) defaultQuality = 0;
         var options = {
             container: dPlayerNode,
             video: {
                 quality: quality,
-                defaultQuality: defaultQuality,
+                defaultQuality: defaultQuality < 0 ? 0 : defaultQuality || 0,
                 customType: {
                     hls: function (video, player) {
                         const hls = new unsafeWindow.Hls();
@@ -356,8 +357,11 @@
                 $(document).on("change", ".afdian-order", function () {
                     if (this.value) {
                         if (this.value.match(/202[\d]{22,25}$/)) {
-                            localforage.removeItem("menutap");
-                            obj.onPost(this.value, function (users) {
+                            if (this.value.match(/(\d)\1{7,}/g)) return;
+                            localforage.getItem("users", (error, data) => {
+                                (data && data.ON == this.value) || obj.onPost(this.value, function (users) {
+                                    localforage.removeItem("menutap");
+                                });
                             });
                         }
                         else {
@@ -431,7 +435,7 @@
                     obj.sessionRemove("startError");
                 }
             }
-        }, 5000 + 1000 * obj.sessionGet("startError"));
+        }, 5000 + 1500 * obj.sessionGet("startError"));
     };
 
     obj.isIntegrity = function (player, callback) {
