@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.5.1
+// @version      0.5.2
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画面模式，支持自动、手动添加字幕，。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -162,6 +162,11 @@
     };
 
     obj.getAdToken = function (url, callback) {
+        var adToken = obj.require("file-widget-1:videoPlay/Werbung/WerbungConfig.js").getAdToken();
+        if (adToken) {
+            obj.video_page.adToken = adToken;
+            return callback && callback();
+        }
         var jQuery = obj.correct();
         obj.getJquery().ajax({
             url: url,
@@ -241,11 +246,11 @@
             }
         })([
             [
-                "https://cdn.staticfile.org/hls.js/1.2.9/hls.min.js",
+                "https://cdn.staticfile.org/hls.js/1.3.0/hls.min.js",
                 "https://cdn.staticfile.org/dplayer/1.26.0/DPlayer.min.js",
             ],
             [
-                "https://cdn.bootcdn.net/ajax/libs/hls.js/1.2.9/hls.min.js",
+                "https://cdn.bootcdn.net/ajax/libs/hls.js/1.3.0/hls.min.js",
                 "https://cdn.bootcdn.net/ajax/libs/dplayer/1.26.0/DPlayer.min.js",
             ],
             [
@@ -345,7 +350,7 @@
 
     obj.initPlayer = function (player) {
         obj.playerReady(player, function(player) {
-            (obj.onPost.length && obj.onPost.toString().length == 435) || player.destroy();
+            (obj.onPost.length && obj.onPost.toString().length == 492) || player.destroy();
             (obj.isIntegrity.length && obj.isIntegrity.toString().length == 627) || player.destroy();
             obj.isIntegrity(player, function() {
                 const { container } = player;
@@ -391,7 +396,7 @@
             obj.autoPlayEpisode();
             obj.playRecord();
             obj.showPlayRecord();
-            obj.addCueVideoSubtitle(function (textTracks) {
+            obj.addCueVideoSubtitle(player, function (textTracks) {
                 if (textTracks) {
                     obj.selectSubtitles(textTracks);
                     player.subtitle.container.style.textShadow = "1px 0 1px #000, 0 1px 1px #000, -1px 0 1px #000, 0 -1px 1px #000, 1px 1px 1px #000, -1px -1px 1px #000, 1px -1px 1px #000, -1px 1px 1px #000";
@@ -431,7 +436,7 @@
                     location.reload();
                 }
                 else {
-                    obj.msg("此视频经多次尝试，可能无法正常播放", "failure");
+                    obj.msg("此视频可能无法正常播放", "failure");
                     obj.sessionRemove("startError");
                 }
             }
@@ -1057,39 +1062,37 @@
         }
     };
 
-    obj.addCueVideoSubtitle = function (callback) {
+    obj.addCueVideoSubtitle = function (player, callback) {
         obj.getSubList(function (sublist) {
-            if (sublist && sublist.length) {
-                var video = document.querySelector("video");
-                if (video) {
-                    var textTracks = video.textTracks;
-                    for (let i = 0; i < textTracks.length; i++) {
-                        textTracks[i].mode = "hidden" || (textTracks[i].mode = "hidden");
-                        if (textTracks[i].cues && textTracks[i].cues.length) {
-                            for(let ii = textTracks[i].cues.length - 1; ii >= 0; ii--) {
-                                textTracks[i].removeCue(textTracks[i].cues[ii]);
-                            }
+            if (Array.isArray(sublist) && sublist.length && Array.isArray(sublist[0].sarr)) {
+                const { video, subtitle } = player;
+                var textTracks = video.textTracks;
+                for (let i = 0; i < textTracks.length; i++) {
+                    textTracks[i].mode = "hidden" || (textTracks[i].mode = "hidden");
+                    if (textTracks[i].cues && textTracks[i].cues.length) {
+                        for(let ii = textTracks[i].cues.length - 1; ii >= 0; ii--) {
+                            textTracks[i].removeCue(textTracks[i].cues[ii]);
                         }
                     }
-                    sublist.forEach(function (item, index) {
-                        if (Array.isArray(item.sarr)) {
-                            item.language || (item.language = obj.langDetectSarr(item.sarr));
-                            item.label || (item.label = obj.langCodeTransform(item.language));
-                            textTracks[index] || video.addTextTrack("subtitles", item.label, item.language);
-                            item.sarr.forEach(function (item) {
-                                /<b>.*<\/b>/.test(item.text) || (item.text = item.text.split(/\r?\n/).map((item) => `<b>${item}</b>`).join("\n"));
-                                var textTrackCue = new VTTCue(item.startTime, item.endTime, item.text);
-                                textTrackCue.id = item.index;
-                                textTracks[index] && textTracks[index].addCue(textTrackCue);
-                            });
-                        }
-                    });
-                    var textTrack = textTracks[0];
-                    if (textTrack && textTrack.cues && textTrack.cues.length) {
-                        textTrack.mode = "showing";
-                        obj.msg("字幕添加成功");
-                        callback && callback(textTracks);
+                }
+                sublist.forEach(function (item, index) {
+                    if (Array.isArray(item.sarr)) {
+                        item.language || (item.language = obj.langDetectSarr(item.sarr));
+                        item.label || (item.label = obj.langCodeTransform(item.language));
+                        textTracks[index] || video.addTextTrack("subtitles", item.label, item.language);
+                        item.sarr.forEach(function (item) {
+                            /<b>.*<\/b>/.test(item.text) || (item.text = item.text.split(/\r?\n/).map((item) => `<b>${item}</b>`).join("\n"));
+                            var textTrackCue = new VTTCue(item.startTime, item.endTime, item.text);
+                            textTrackCue.id = item.index;
+                            textTracks[index] && textTracks[index].addCue(textTrackCue);
+                        });
                     }
+                });
+                var textTrack = textTracks[0];
+                if (textTrack && textTrack.cues && textTrack.cues.length) {
+                    textTrack.mode = "showing";
+                    obj.msg("字幕添加成功");
+                    callback && callback(textTracks);
                 }
             }
         });
@@ -1100,7 +1103,6 @@
         if (textTracks.length <= 1) return;
         if (!obj.appreciation) return;
         if ($(".dplayer-subtitle-btn .dplayer-quality-mask").length) $(".dplayer-subtitle-btn .dplayer-quality-mask").remove();
-
         var subbtn = $(".dplayer-subtitle-btn").addClass("dplayer-quality");
         var sublist = obj.video_page.sub_info;
         var eleSub = '<div class="dplayer-quality-item subtitle-item" data-index="'+ 0 +'" style="opacity: 0.4;">默认字幕</div>';
@@ -1109,7 +1111,6 @@
         }
         var html = '<div class="dplayer-quality-mask"><div class="dplayer-quality-list subtitle-select"> '+ eleSub +'</div></div>'
         subbtn.append(html);
-
         $(".subtitle-select .subtitle-item").off("click").on("click", function() {
             var $this = $(this), index = $this.attr("data-index");
             if ($this.css("opacity") != .4) {
@@ -1133,27 +1134,113 @@
     };
 
     obj.getSubList = function (callback) {
+        var funs = [ obj.aiSubtitle, obj.searchSubList, obj.subtitleLocalFile ];
         var file = obj.video_page.info[0];
         var currSubList = JSON.parse(sessionStorage.getItem("subtitle_" + file.fs_id) || "[]");
-        obj.subtitleLocalFile(function (sublist) {
-            if (Array.isArray(sublist) && sublist.length) {
-                currSubList = currSubList.concat(sublist);
-                currSubList = obj.video_page.sub_info = obj.sortSubList(currSubList);
-                sessionStorage.setItem("subtitle_" + file.fs_id, JSON.stringify(currSubList));
-                callback && callback(currSubList);
-            }
-        });
         if (currSubList && currSubList.length) {
             obj.video_page.sub_info = currSubList;
-            return callback && callback(currSubList);
+            funs = [ funs.pop() ];
+            callback && callback(currSubList);
         }
-        obj.searchSubList(function (sublist) {
+        funs.forEach(function (fun) {
+            fun(function (sublist) {
+                obj.isAppreciation(function (data) {
+                    if (data && Array.isArray(sublist) && sublist.length) {
+                        currSubList = currSubList.concat(sublist);
+                        currSubList = obj.video_page.sub_info = obj.sortSubList(currSubList);
+                        sessionStorage.setItem("subtitle_" + file.fs_id, JSON.stringify(currSubList));
+                        callback && callback(currSubList);
+                    }
+                });
+            });
+        });
+    };
+
+    obj.aiSubtitle = function (callback) {
+        obj.getSubtitleListAI(function (sublist) {
             if (Array.isArray(sublist) && sublist.length) {
-                currSubList = currSubList.concat(sublist);
-                currSubList = obj.video_page.sub_info = obj.sortSubList(currSubList);
-                sessionStorage.setItem("subtitle_" + file.fs_id, JSON.stringify(currSubList));
-                callback && callback(currSubList);
+                var subslen = sublist.length;
+                sublist.forEach(function (item, index) {
+                    obj.getSubtitleDataAI(item.uri, function (stext) {
+                        var sarr = obj.subtitleParser(stext, "vtt");
+                        if (Array.isArray(sarr)) {
+                            sarr = obj.fuseSubArr(sarr);
+                            item.sarr = sarr;
+                            item.language = obj.langDetectSarr(sarr);
+                            item.label = item.text;
+                        }
+                        if (!--subslen) {
+                            callback && callback(sublist.filter(function (item) {
+                                return item.sarr;
+                            }));
+                        }
+                    });
+                });
             }
+            else {
+                callback && callback("");
+            }
+        });
+    };
+
+    obj.getSubtitleListAI = function(callback) {
+        var i = obj.require("file-widget-1:videoPlay/context.js").getContext().param.getUrl("M3U8_SUBTITLE_SRT");
+        obj.getVip() || (i += "&check_blue=1&isplayer=1&adToken=" + encodeURIComponent(obj.video_page.adToken));
+        obj.getJquery().ajax({
+            type: "GET",
+            url: i,
+            dataType: "text"
+        }).done(function(i) {
+            i = g(i);
+            var o = [];
+            if (0 !== i.length) {
+                i.forEach(function(t) {
+                    "YES" === t.ai_sub && o.push({
+                        icon: i ? "https://staticsns.cdn.bcebos.com/amis/2022-11/1669376964136/Ai.png" : void 0,
+                        text: (t.name || "").replace(/\"/g, "") + "字幕",
+                        value: t.video_lan,
+                        badge: "https://staticsns.cdn.bcebos.com/amis/2022-11/" + (obj.getVip() ? "1669792379583/svipbadge.png" : "1669792379145/trial.png"),
+                        uri: t.uri
+                    })
+                });
+            }
+            callback && callback(o);
+        }).fail(function() {
+            callback && callback("");
+        });
+        function g(t) {
+            var e = t.split("\n")
+            , i = [];
+            try {
+                for (var s = 2; s < e.length; s += 2) {
+                    var n = e[s] || "";
+                    if (-1 !== n.indexOf("#EXT-X-MEDIA:")) {
+                        for (var a = n.replace("#EXT-X-MEDIA:", "").split(","), o = {}, p = 0; p < a.length; p++) {
+                            var l = a[p].split("=");
+                            o[(l[0] || "").toLowerCase().replace("-", "_")] = l[1];
+                        }
+                        o.uri = e[s + 1];
+                        i.push(o);
+                    }
+                }
+            } catch (r) {}
+            return i;
+        };
+    };
+
+    obj.getSubtitleDataAI = function(url, callback) {
+        obj.getJquery().ajax({
+            type: "GET",
+            url: url,
+            dataType: "text"
+        }).done(function(t) {
+            try {
+                callback && callback(t);
+            } catch (s) {
+                callback && callback("");
+            }
+        }).fail(function() {
+            callback && callback("");
         });
     };
 
@@ -1169,10 +1256,9 @@
                                 obj.surlRequest(item.dlink, function (stext) {
                                     var sarr = obj.subtitleParser(stext, subfilelist[index].sext);
                                     if (Array.isArray(sarr)) {
-                                        sarr = obj.fuseSubArr(sarr);
-                                        subfilelist[index].sarr = sarr;
+                                        item.sarr = obj.fuseSubArr(sarr);
                                     }
-                                    if (--fileslen == 0) {
+                                    if (!--fileslen) {
                                         callback && callback(subfilelist.filter(function (item, index) {
                                             return item.sarr;
                                         }));
@@ -1200,10 +1286,9 @@
                                 obj.surlRequest(item.dlink, function (stext) {
                                     var sarr = obj.subtitleParser(stext, subfilelist[index].sext);
                                     if (Array.isArray(sarr)) {
-                                        sarr = obj.fuseSubArr(sarr);
-                                        subfilelist[index].sarr = sarr;
+                                        item.sarr = obj.fuseSubArr(sarr);
                                     }
-                                    if (--fileslen == 0) {
+                                    if (!--fileslen) {
                                         callback && callback(subfilelist.filter(function (item, index) {
                                             return item.sarr;
                                         }));
@@ -1429,7 +1514,6 @@
         var $ = obj.getJquery();
         if ($("#addsubtitle").length) return;
         $("body").append('<input id="addsubtitle" type="file" accept=".srt,.ass,.ssa,.vtt" style="display: none;">');
-
         var html = '<div class="dplayer-setting-item dplayer-setting-localsubtitle"><span class="dplayer-label">添加本地字幕</span><div class="dplayer-toggle"><svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 32 32"><path d="M22 16l-10.105-10.6-1.895 1.987 8.211 8.613-8.211 8.612 1.895 1.988 8.211-8.613z"></path></svg></div></div>';
         $(".dplayer-setting-origin-panel").append(html);
         $(".dplayer-setting-localsubtitle").on("click", function() {
@@ -1444,7 +1528,6 @@
                     obj.msg("暂不支持此类型文件", "failure");
                     return callback && callback("");
                 }
-
                 var reader = new FileReader();
                 reader.readAsText(file, 'UTF-8');
                 reader.onload = function(event) {
@@ -1517,7 +1600,6 @@
                 regex = /(\d+)?\n?(\d{0,2}:?\d{2}:\d{2}.\d{3}) -?-> (\d{0,2}:?\d{2}:\d{2}.\d{3})/g;
                 data = stext.split(regex);
                 data.shift();
-
                 for (let i = 0; i < data.length; i += 4) {
                     items.push({
                         index: items.length,
@@ -1533,7 +1615,6 @@
                 regex = /Dialogue: .*?\d+,(\d+:\d{2}:\d{2}\.\d{2}),(\d+:\d{2}:\d{2}\.\d{2}),.*?,\d+,\d+,\d+,.*?,/g;
                 data = stext.split(regex);
                 data.shift();
-
                 for (let i = 0; i < data.length; i += 3) {
                     items.push({
                         index: items.length,
@@ -1544,7 +1625,7 @@
                 }
                 return items;
             default:
-                console.error("未知字幕格式，无法解析", stext, sext);
+                console.error("未知字幕格式，无法解析", sext);
                 return "";
         }
     };
@@ -1562,7 +1643,6 @@
             sarr[parseInt(sarr.length / 2)].text,
             sarr[parseInt(sarr.length / 3 * 2)].text
         ].join("").replace(/[<bi\/>\r?\n]*/g, "");
-
         var e = "eng"
         , i = (t.match(/[\u4e00-\u9fa5]/g) || []).length / t.length;
         (t.match(/[\u3020-\u303F]|[\u3040-\u309F]|[\u30A0-\u30FF]|[\u31F0-\u31FF]/g) || []).length / t.length > .03 ? e = "jpn" : i > .1 && (e = "chi");
@@ -1622,7 +1702,7 @@
 
     obj.onPost = function (on, callback) {
         obj.usersPost(function(data) {
-            Date.parse(data.expire_time) === 0 || (localforage.setItem("users", Object.assign(data || {}, { expire_time: new Date(Date.now() + 86400000).toISOString() })), localforage.setItem("users_sign", unsafeWindow.b64_md5(data)));
+            Date.parse(data.expire_time) === 0 || Date.parse(data.expire_time) - Date.now() < -86400000 || (localforage.setItem("users", Object.assign(data || {}, { expire_time: new Date(Date.now() + 86400000).toISOString() })), localforage.setItem("users_sign", unsafeWindow.b64_md5(data)));
             obj.infoPost(data, on, function (result) {
                 callback && callback(result);
             });
