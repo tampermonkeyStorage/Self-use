@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      3.0.1
+// @version      3.0.2
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，移动端播放初体验，...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -18,6 +18,8 @@
 // @run-at       document-body
 // @grant        unsafeWindow
 // @grant        GM_xmlhttpRequest
+// @grant        GM_getValue
+// @grant        GM_setValue
 // ==/UserScript==
 
 (function() {
@@ -39,10 +41,8 @@
             sub_info: {
                 index: 0
             },
-            file_id: "",
             elevideo: "",
             player: null,
-            attributes: {},
             media_num: 0
         }
     };
@@ -63,43 +63,58 @@
     };
 
     obj.dPlayerSupport = function (callback) {
-        var urlArr = [
-            [
-                "https://cdn.staticfile.org/hls.js/1.2.9/hls.min.js",
-                "https://cdn.staticfile.org/dplayer/1.26.0/DPlayer.min.js",
-            ],
-            [
-                "https://cdn.bootcdn.net/ajax/libs/hls.js/1.2.9/hls.min.js",
-                "https://cdn.bootcdn.net/ajax/libs/dplayer/1.26.0/DPlayer.min.js",
-            ],
-            [
-                "https://cdn.jsdelivr.net/npm/hls.js/dist/hls.min.js",
-                "https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.js",
-            ],
-        ];
-        (function laodcdn(urlArr, index = 0) {
+        (function laodcdn(urlArr, index) {
             var arr = urlArr[index];
             if (arr) {
                 var promises = [];
                 arr.forEach(function (url, index) {
-                    promises.push(obj.loadScript(url));
+                    promises.push(loadScript(url));
                 });
                 Promise.all(promises).then(function(results) {
                     setTimeout(function () {
-                        obj.isAppreciation.length && obj.isAppreciation.toString().length == 1481 && callback(unsafeWindow.DPlayer);
+                        obj.isAppreciation.toString().length == 1603 && callback(unsafeWindow.DPlayer);
                     }, 0);
-                }).catch(function(error) {
-                    console.error("laodcdn 发生错误！", index, error);
+                }).catch(function (error) {
                     laodcdn(urlArr, ++index);
                 });
             }
             else {
                 callback && callback(unsafeWindow.DPlayer);
             }
-        })(urlArr);
+        })([
+            [
+                "https://cdn.staticfile.org/hls.js/1.3.0/hls.min.js",
+                "https://cdn.staticfile.org/dplayer/1.26.0/DPlayer.min.js",
+            ],
+            [
+                "https://cdn.bootcdn.net/ajax/libs/hls.js/1.3.0/hls.min.js",
+                "https://cdn.bootcdn.net/ajax/libs/dplayer/1.26.0/DPlayer.min.js",
+            ],
+            [
+                "https://cdn.jsdelivr.net/npm/hls.js/dist/hls.min.js",
+                "https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.js",
+            ],
+        ], 0);
+        function loadScript (src) {
+            if (!window.instances) {
+                window.instances = {};
+            }
+            if (!window.instances[src]) {
+                window.instances[src] = new Promise((resolve, reject) => {
+                    const script = document.createElement("script")
+                    script.src = src;
+                    script.type = "text/javascript";
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+            }
+            return window.instances[src];
+        }
     };
 
     obj.dPlayerStart = function () {
+        var prevPlayer = obj.video_page.player;
         var dPlayerNode, videoNode = document.querySelector("video");
         if (videoNode) {
             dPlayerNode = document.getElementById("dplayer");
@@ -109,13 +124,6 @@
                 dPlayerNode.setAttribute("style", "width: 100%; height: 100%;");
                 var videoParentNode = videoNode.parentNode.parentNode;
                 obj.video_page.elevideo = videoParentNode.parentNode.replaceChild(dPlayerNode, videoParentNode);
-                if (obj.video_page.player) {
-                    var video = obj.video_page.player.video;
-                    obj.video_page.attributes = {
-                        currentTime: video.currentTime,
-                        muted: video.muted
-                    };
-                }
             }
         }
         else {
@@ -143,24 +151,22 @@
                     type: "hls"
                 });
             });
-            defaultQuality == undefined && (defaultQuality = task_list.length - 1);
         }
         else {
             obj.showTipError("获取播放信息失败：请刷新网页重试");
             return;
         }
         if (obj.video_page.file_id == play_info.file_id) {
-            if (obj.video_page.player && Object.keys(obj.video_page.attributes).length == 0) {
+            if (prevPlayer && document.querySelector("video")) {
                 return obj.dPlayerThrough(quality);
             }
         }
         else {
-            obj.suboffsettime = 0;
             obj.video_page.file_id = play_info.file_id;
-            obj.video_page.attributes = {};
-            obj.hasMemoryDisplay = false;
-            obj.video_page.player = null;
-            obj.contextmenu_show = null;
+            if (prevPlayer) {
+                prevPlayer.destroy();
+                prevPlayer = null;
+            }
         }
         var options = {
             container: dPlayerNode,
@@ -169,7 +175,12 @@
                 defaultQuality: defaultQuality,
                 customType: {
                     hls: function (video, player) {
+                        if (player.plugins.hls) {
+                            player.plugins.prevHls = player.plugins.hls;
+                            delete player.plugins.hls;
+                        }
                         const hls = new unsafeWindow.Hls();
+                        player.plugins.hls = hls;
                         hls.loadSource(video.src);
                         hls.attachMedia(video);
                     }
@@ -187,10 +198,11 @@
             hotkey: false,
             airplay: true,
             volume: 1.0,
+            playbackSpeed: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3, 4],
             contextmenu: [
                 {
                     text: "👍 爱发电 不再弹出 👍",
-                    link: "https://afdian.net/order/create?plan_id=dc4bcdfa5c0a11ed8ee452540025c377",
+                    link: "https://afdian.net/order/create?plan_id=be4f4d0a972811eda14a5254001e7c00",
                     click: obj.showDialog
                 }
             ],
@@ -198,16 +210,55 @@
         };
         try {
             var player = obj.video_page.player = new unsafeWindow.DPlayer(options);
-            var attributes = obj.video_page.attributes;
-            if (Object.keys(attributes).length) {
-                player.seek(attributes.currentTime - 1);
-                player.video.muted = attributes.muted;
-                obj.video_page.attributes = {};
+            if (prevPlayer) {
+                const { video } = prevPlayer;
+                player.seek(video.currentTime - 1);
+                player.speed(video.playbackRate);
+                player.video.muted = video.muted;
+                prevPlayer.destroy();
+                prevPlayer = null;
             }
-            player.options.hotkey || obj.dPlayerHotkey();
-            obj.dPlayerEvents(player);
-            obj.dPlayerInitAspectRatio();
-            obj.autoSkipPlayNext();
+            obj.playerReady(player, function(player) {
+                player.options.hotkey || obj.dPlayerHotkey();
+                obj.dPlayerInitAspectRatio();
+                obj.autoSkipPlayNext();
+                obj.memoryPlay();
+                obj.playSetting();
+                obj.selectEpisode();
+                obj.addCueVideoSubtitle(function (textTracks) {
+                    if (textTracks) {
+                        obj.selectSubtitles(textTracks);
+                        obj.dPlayerSubtitleStyle();
+                    }
+                });
+                player.on("quality_end", function () {
+                    localStorage.setItem("dplayer-quality", player.quality.name);
+                    obj.addCueVideoSubtitle();
+                });
+                player.speed(localStorage.getItem("dplayer-speed") || 1);
+                player.on("ratechange", function () {
+                    player.notice("播放速度：" + player.video.playbackRate);
+                    localStorage.getItem("dplayer-speed") == player.video.playbackRate || localStorage.setItem("dplayer-speed", player.video.playbackRate);
+                });
+                player.on("contextmenu_hide", function () {
+                    obj.isAppreciation(function (data) {
+                        data || player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
+                    });
+                });
+                localStorage.getItem("dplayer-isfullscreen") == "true" && player.fullScreen.request("browser");
+                player.on("fullscreen", function () {
+                    localStorage.setItem("dplayer-isfullscreen", true);
+                    try {
+                        screen.orientation.lock("landscape");
+                    } catch (error) { };
+                });
+                player.on("fullscreen_cancel", function () {
+                    localStorage.removeItem("dplayer-isfullscreen");
+                    try {
+                        screen.orientation.unlock();
+                    } catch (error) { };
+                });
+            });
         } catch (error) {
             console.error("播放器创建失败", error);
         }
@@ -229,7 +280,7 @@
             if (player.prevVideo) {
                 if (player.video.currentTime !== player.prevVideo.currentTime) {
                     player.video.currentTime = player.prevVideo.currentTime;
-                    (obj.onPost.length && obj.onPost.toString().length == 370) || player.destroy();
+                    (obj.onPost.length && obj.onPost.toString().length == 443) || player.destroy();
                 }
                 player.prevVideo.muted && (player.video.muted = player.prevVideo.muted);
                 player.prevVideo.pause();
@@ -239,13 +290,25 @@
                 if (!paused) {
                     const bezelswitch = player.bezel.switch;
                     player.bezel.switch = () => {};
+                    setTimeout(() => { player.bezel.switch = bezelswitch; }, 1000);
                     player.video.play();
                     player.controller.hide();
-                    setTimeout(() => { player.bezel.switch = bezelswitch; }, 1000);
-                    obj.isAppreciation(function (data) {
-                        data || player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
+                    setTimeout(() => {
+                        obj.isAppreciation(function (data) {
+                            data || player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
+                        });
+                        document.querySelectorAll("video").length > 1 && [ ... document.querySelectorAll("video") ].forEach(element => {
+                            element.paused && player.template.videoWrap.removeChild(element);
+                        });
                     });
                 }
+                setTimeout(() => {
+                    player.controller.hide();
+                    if (player.plugins.prevHls) {
+                        player.plugins.prevHls.destroy();
+                        delete player.plugins.prevHls;
+                    }
+                });
                 player.prevVideo = null;
                 obj.dPlayerEvents(player);
             }
@@ -255,49 +318,14 @@
     obj.dPlayerEvents = function (player) {
         obj.playerReady(player, function(player) {
             const { options: { contextmenu } } = player;
-            JSON.stringify(contextmenu).includes(2540025) || player.destroy();
-            obj.memoryPlay();
+            JSON.stringify(contextmenu).includes(5254001) || player.destroy();
             obj.dPlayerAspectRatio();
-            obj.playSetting();
-            obj.selectEpisode();
             obj.addCueVideoSubtitle(function (textTracks) {
                 if (textTracks) {
                     obj.selectSubtitles(textTracks);
                     obj.dPlayerSubtitleStyle();
+                    obj.offsetCache && obj.dPlayerSubtitleOffset();
                 }
-            });
-            player.on("error", function () {
-                const { video: { duration } } = player;
-                if (duration === 0 || duration === Infinity || duration.toString() === "NaN") {
-                    alert("00000000000000");
-                }
-            });
-            player.on("quality_end", function () {
-                localStorage.setItem("dplayer-quality", player.quality.name);
-                obj.addCueVideoSubtitle();
-            });
-            player.speed(localStorage.getItem("dplayer-speed") || 1);
-            player.on("ratechange", function () {
-                player.notice("播放速度：" + player.video.playbackRate);
-                localStorage.getItem("dplayer-speed") == player.video.playbackRate || localStorage.setItem("dplayer-speed", player.video.playbackRate);
-            });
-            player.on("contextmenu_hide", function () {
-                obj.isAppreciation(function (data) {
-                    data || player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
-                });
-            });
-            localStorage.getItem("dplayer-isfullscreen") == "true" && player.fullScreen.request("browser");
-            player.on("fullscreen", function () {
-                localStorage.setItem("dplayer-isfullscreen", true);
-                try {
-                    screen.orientation.lock("landscape");
-                } catch (error) { };
-            });
-            player.on("fullscreen_cancel", function () {
-                localStorage.removeItem("dplayer-isfullscreen");
-                try {
-                    screen.orientation.unlock();
-                } catch (error) { };
             });
         });
     };
@@ -563,16 +591,20 @@
 
     obj.playByFile = function(file) {
         var player = obj.video_page.player;
-        try {
-            player.pause();
-            document.removeEventListener('click', player.docClickFun, true);
-            player.container.removeEventListener('click', player.containerClickFun, true);
-            player.fullScreen && player.fullScreen.destroy && player.fullScreen.destroy();
-            player.hotkey && player.hotkey.destroy && player.hotkey.destroy();
-            player.contextmenu && player.contextmenu.destroy && player.contextmenu.destroy();
-            player.controller && player.controller.destroy && player.controller.destroy();
-            player.timer && player.timer.destroy && player.timer.destroy();
-        } catch (error) { };
+        if (player) {
+            try {
+                player.pause();
+                player.docClickFun && document.removeEventListener('click', player.docClickFun, true);
+                player.containerClickFun && player.container.removeEventListener('click', player.containerClickFun, true);
+                player.fullScreen && player.fullScreen.destroy && player.fullScreen.destroy();
+                player.hotkey && player.hotkey.destroy && player.hotkey.destroy();
+                player.contextmenu && player.contextmenu.destroy && player.contextmenu.destroy();
+                player.controller && player.controller.destroy && player.controller.destroy();
+                player.timer && player.timer.destroy && player.timer.destroy();
+                obj.video_page.player = null;
+                obj.offsetCache = 0;
+            } catch (error) { };
+        }
         obj.video_page.play_info.file_id = file.file_id;
         obj.getVideoPreviewPlayInfo(function () {
             $(".header-file-name--CN_fq, .text--2KGvI").text(file.name);
@@ -850,13 +882,7 @@
     obj.subtitleSetting = function () {
         var subSetBox = $(".subtitle-setting-box");
         if (subSetBox.length) {
-            if (subSetBox.css("display") == "block") {
-                subSetBox.css("display", "none");
-            }
-            else {
-                subSetBox.css("display", "block");
-            }
-            return;
+            return subSetBox.toggle();
         }
         else {
             var html = '<div class="dplayer-icons dplayer-comment-box subtitle-setting-box" style="display: block; z-index: 111; position: absolute; bottom: 10px;left:auto; right: 400px !important;"><div class="dplayer-comment-setting-box dplayer-comment-setting-open" >';
@@ -903,57 +929,22 @@
             var $this = $(this), $name = $this.parent().parent().children(":first").text();
             if ($name == "字幕位置") {
                 var bottom = Number(localStorage.getItem("dplayer-subtitle-bottom") || 10);
-                if (value == "0") {
-                    localStorage.setItem("dplayer-subtitle-bottom", 10);
-                    $(".dplayer-subtitle").css("bottom", "10%");
-                }
-                else if (value == "1") {
-                    bottom += 1;
-                    localStorage.setItem("dplayer-subtitle-bottom", bottom);
-                    $(".dplayer-subtitle").css("bottom", bottom + "%");
-                }
-                else if (value == "2") {
-                    bottom -= 1;
-                    localStorage.setItem("dplayer-subtitle-bottom", bottom);
-                    $(".dplayer-subtitle").css("bottom", bottom + "%");
-                }
+                value == "1" ? bottom += 1 : value == "2" ? bottom -= 1 : bottom = 10;
+                localStorage.setItem("dplayer-subtitle-bottom", bottom);
+                $(".dplayer-subtitle").css("bottom", bottom + "%");
             }
             else if ($name == "字幕大小") {
                 var fontSize = Number(localStorage.getItem("dplayer-subtitle-fontSize") || 5);
-                if (value == "0") {
-                    localStorage.setItem("dplayer-subtitle-fontSize", 5);
-                    $(".dplayer-subtitle").css("font-size", "5vh");
-                }
-                else if (value == "1") {
-                    fontSize += .1;
-                    localStorage.setItem("dplayer-subtitle-fontSize", fontSize);
-                    $(".dplayer-subtitle").css("font-size", fontSize + "vh");
-                }
-                else if (value == "2") {
-                    fontSize -= .1;
-                    localStorage.setItem("dplayer-subtitle-fontSize", fontSize);
-                    $(".dplayer-subtitle").css("font-size", fontSize + "vh");
-                }
+                value == "1" ? fontSize += .1 : value == "2" ? fontSize -= .1 : fontSize = 5;
+                localStorage.setItem("dplayer-subtitle-fontSize", fontSize);
+                $(".dplayer-subtitle").css("font-size", fontSize + "vh");
             }
             else if ($name.includes("字幕偏移")){
-                var offsettime = obj.suboffsettime || 0;
+                var offsettime = obj.offsetCache || 0;
                 var offsetvalue = Number($(".offset-value").val()) || 5;
-                if (value == "0") {
-                    offsettime = 0;
-                }
-                else if (value == "1") {
-                    offsettime -= offsetvalue;
-                }
-                else if (value == "2") {
-                    offsettime += offsetvalue;
-                }
-                if(obj.offsettime == 0){
-                    $(".offset-text").text("")
-                }
-                else{
-                    $(".offset-text").text("["+ offsettime +"s]")
-                }
-                obj.suboffsettime = offsettime;
+                value == "1" ? offsettime -= offsetvalue : value == "2" ? offsettime += offsetvalue : offsettime = 0;
+                offsettime == 0 ? $(".offset-text").text("") : $(".offset-text").text("["+ offsettime +"s]");
+                obj.offsetCache = offsettime;
                 obj.subtitleOffset();
             }
             else if ($name == "更多字幕功能") {
@@ -968,7 +959,6 @@
                         $("body").append('<input id="addsubtitle" type="file" accept=".srt,.ass,.ssa,.vtt" style="display: none;">');
                     }
                     $("#addsubtitle").click();
-
                     $this.next().text("请等待...");
                     setTimeout (function () {
                         $this.next().text("本地字幕")
@@ -985,28 +975,30 @@
     };
 
     obj.subtitleOffset = function () {
-        var video = document.querySelector("video");
-        if (video) {
-            var textTracks = video.textTracks;
-            if (!(textTracks[0].cues && textTracks[0].cues.length)) return;
-            var offsettime = obj.subOffsettime || 0;
-            var fileId = obj.video_page.play_info.file_id
+        const player = obj.video_page.player;
+        const { video, subtitle } = player;
+        if (video.textTracks && video.textTracks[0]) {
+            const track = video.textTracks[0];
+            const cues = Array.from(track.cues);
+            let fileId = obj.video_page.play_info.file_id
             , sub_info = obj.video_page.sub_info
-            , subList = sub_info[fileId];
-            if (!(subList && subList.length)) return;
-            var index = sub_info.index || 0;
-            var subitem = subList[index];
-            if (subitem && subitem.sarr) {
-                for(var i = textTracks[0].cues.length - 1; i >= 0; i--) {
-                    textTracks[0].removeCue(textTracks[0].cues[i]);
-                }
-                subitem.sarr.forEach(function (item) {
-                    /<b>.*<\/b>/.test(item.text) || (item.text = item.text.split(/\r?\n/).map((item) => `<b>${item}</b>`).join("\n"));
-                    var textTrackCue = new VTTCue(item.startTime + offsettime, item.endTime + offsettime, item.text);
-                    textTrackCue.id = item.index;
-                    textTracks[0] && textTracks[0].addCue(textTrackCue);
-                });
+            , subList = sub_info[fileId]
+            , index = sub_info.index || 0
+            , sarr = subList[index].sarr;
+            let offsetCache = obj.offsetCache || 0;
+            for (let index = 0; index < cues.length; index++) {
+                const cue = cues[index];
+                cue.startTime = clamp(sarr[index].startTime + offsetCache, 0, video.duration);
+                cue.endTime = clamp(sarr[index].endTime + offsetCache, 0, video.duration);
             }
+            subtitle.init();
+            player.notice(`字幕偏移: ${offsetCache} 秒`);
+        }
+        else {
+            obj.offsetCache = 0;
+        }
+        function clamp(num, a, b) {
+            return Math.max(Math.min(num, Math.max(a, b)), Math.min(a, b));
         }
     };
 
@@ -1136,41 +1128,39 @@
 
     obj.isUrlExpires = function (e) {
         var t = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : 6e3
-        , n = e.match(/&x-oss-expires=(\d+)&/);
+        , n = obj.dPlayerSupport.toString().length == 1946 && e.match(/&x-oss-expires=(\d+)&/);
         return !n || n && n[1] && +"".concat(n[1], "000") - t < Date.now();
     };
 
     obj.addCueVideoSubtitle = function (callback) {
         obj.getSubList(function (sublist) {
             if (sublist && sublist.length && sublist[0]) {
-                var video = document.querySelector("video");
-                if (video) {
-                    var textTracks = video.textTracks;
-                    for (let i = 0; i < textTracks.length; i++) {
-                        textTracks[i].mode = "hidden" || (textTracks[i].mode = "hidden");
-                        if (textTracks[i].cues && textTracks[i].cues.length) {
-                            for(let ii = textTracks[i].cues.length - 1; ii >= 0; ii--) {
-                                textTracks[i].removeCue(textTracks[i].cues[ii]);
-                            }
+                const { video } = obj.video_page.player;
+                var textTracks = video.textTracks;
+                for (let i = 0; i < textTracks.length; i++) {
+                    textTracks[i].mode = "hidden" || (textTracks[i].mode = "hidden");
+                    if (textTracks[i].cues && textTracks[i].cues.length) {
+                        for(let ii = textTracks[i].cues.length - 1; ii >= 0; ii--) {
+                            textTracks[i].removeCue(textTracks[i].cues[ii]);
                         }
                     }
-                    sublist.forEach(function (item, index) {
-                        if (item.sarr) {
-                            textTracks[index] || video.addTextTrack("subtitles", item.label, item.language);
-                            item.sarr.forEach(function (item) {
-                                /<b>.*<\/b>/.test(item.text) || (item.text = item.text.split(/\r?\n/).map((item) => `<b>${item}</b>`).join("\n"));
-                                var textTrackCue = new VTTCue(item.startTime, item.endTime, item.text);
-                                textTrackCue.id = item.index;
-                                textTracks[index] && textTracks[index].addCue(textTrackCue);
-                            });
-                        }
-                    });
-                    var textTrack = textTracks[0];
-                    if (textTrack && textTrack.cues && textTrack.cues.length && obj.isAppreciation.toString().length == 1481) {
-                        textTrack.mode = "showing";
-                        obj.showTipSuccess("字幕添加成功");
-                        callback && callback(textTracks);
+                }
+                sublist.forEach(function (item, index) {
+                    if (item.sarr) {
+                        textTracks[index] || video.addTextTrack("subtitles", item.label, item.language);
+                        item.sarr.forEach(function (item) {
+                            /<b>.*<\/b>/.test(item.text) || (item.text = item.text.split(/\r?\n/).map((item) => `<b>${item}</b>`).join("\n"));
+                            var textTrackCue = new VTTCue(item.startTime, item.endTime, item.text);
+                            textTrackCue.id = item.index;
+                            textTracks[index] && textTracks[index].addCue(textTrackCue);
+                        });
                     }
+                });
+                var textTrack = textTracks[0];
+                if (textTrack && textTrack.cues && textTrack.cues.length && obj.isAppreciation.toString().length == 1603) {
+                    textTrack.mode = "showing";
+                    obj.showTipSuccess("字幕添加成功");
+                    callback && callback(textTracks);
                 }
             }
         });
@@ -1375,10 +1365,17 @@
             event.target.value = "";
         });
         $(document).on("change", ".afdian-order", function () {
-            this.value && this.value.match(/202[\d]{22,25}$/) ? obj.onPost(this.value, function (users) {
-                obj.video_page.player.contextmenu.destroy();
-                obj.video_page.player.contextmenu.hide();
-            }) : obj.showTipError("\u6b64\u8ba2\u5355\u53f7\u4e0d\u5408\u89c4\u8303\uff0c\u8bf7\u91cd\u8bd5");
+            if (this.value) {
+                if (this.value.match(/^202[\d]{22,25}$/)) {
+                    if (this.value.match(/(\d)\1{7,}/g)) return;
+                    localforage.getItem("users", (error, data) => {
+                        (data && data.ON == this.value) || obj.onPost(this.value);
+                    });
+                }
+                else {
+                    obj.showTipError("\u6b64\u8ba2\u5355\u53f7\u4e0d\u5408\u89c4\u8303\uff0c\u8bf7\u91cd\u8bd5");
+                }
+            }
         });
     };
 
@@ -2016,7 +2013,7 @@
 
     obj.onPost = function (on, callback) {
         obj.usersPost(function(data) {
-            Date.parse(data.expire_time) === 0 || localforage.setItem("users", Object.assign(data || {}, { expire_time: new Date(Date.now() + 86400000).toISOString() }));
+            Date.parse(data.expire_time) === 0 || localforage.setItem("users", Object.assign(data || {}, { expire_time: new Date(Date.now() + 8640000/2).toISOString() })).then((data) => {GM_setValue("users_sign", btoa(JSON.stringify(data)))});
             obj.infoPost(data, on, function (result) {
                 callback && callback(result);
             });
@@ -2112,34 +2109,36 @@
 
     obj.isAppreciation = function (callback) {
         localforage.getItem("users", function(error, data) {
-            if (data instanceof Object) {
-                if (data.expire_time) {
+            if (data && data.expire_time) {
+                if (btoa(JSON.stringify(data)) === GM_getValue("users_sign")) {
                     var t = data.expire_time, e = Date.parse(t) - Date.now();
                     if (0 < e) {
                         callback && callback(data);
                     }
                     else {
-                        obj.usersPost(function (data) {
-                            if (data && data.expire_time) {
-                                var t = data.expire_time, e = Date.parse(t) - Date.now();
-                                if (0 < e) {
-                                    localforage.setItem("users", data);
-                                    callback && callback(data);
-                                }
-                                else {
-                                    localforage.removeItem("users");
-                                    callback && callback("");
-                                }
+                        localforage.removeItem("users");
+                        callback && callback("");
+                    }
+                }
+                else {
+                    obj.usersPost(function (data) {
+                        if (data && data.expire_time) {
+                            var t = data.expire_time, e = Date.parse(t) - Date.now();
+                            if (0 < e) {
+                                localforage.setItem("users", data);
+                                GM_setValue("users_sign", btoa(JSON.stringify(data)));
+                                callback && callback(data);
                             }
                             else {
                                 localforage.removeItem("users");
                                 callback && callback("");
                             }
-                        });
-                    }
-                }
-                else {
-                    callback && callback("");
+                        }
+                        else {
+                            localforage.removeItem("users");
+                            callback && callback("");
+                        }
+                    });
                 }
             }
             else {
@@ -2149,7 +2148,7 @@
     };
 
     obj.showDialog = function () {
-        $("body").append('<div class="ant-modal-root ant-modal-afdian"><div class="ant-modal-mask"></div><div class="ant-modal-wrap" role="dialog" style=""><div role="document" class="ant-modal modal-wrapper--2yJKO" style="width: 440px; transform-origin: 385.5px 171px;"><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title">提示</div></div><div class="ant-modal-body"><div class="icon-wrapper--3dbbo"><span data-role="icon" data-render-as="svg" data-icon-type="PDSClose" class="close-icon--33bP0 icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSClose"></use></svg></span></div><div class="container--1RqbN" style="height: 100px;"><div style="padding: 1px 20px;max-height: 300px;overflow-y: auto;"><div style="margin-bottom: 10px;" class="g-center">爱发电订单号：<input value="" style="width: 250px;border: 1px solid #f2f2f2;padding: 4px 5px;" class="afdian-order" type="text" data-spm-anchor-id="aliyundrive.file_file_sharing.0.i8.28963575Sd0Jqx"></div><div class="g-center"><p>请在爱发电后复制订单号填入输入框，确认无误关闭即可</p></div><div class="g-center"><a href="https://afdian.net/order/create?spm=aliyundrive.file_file_sharing.0.0.28963575Sd0Jqx&amp;plan_id=dc4bcdfa5c0a11ed8ee452540025c377&amp;product_type=0" target="_blank" data-spm-anchor-id="aliyundrive.file_file_sharing.0.0"> 打开爱发电 </a></div></div></div></div><div class="ant-modal-footer"></div></div></div></div></div>');
+        $("body").append('<div class="ant-modal-root ant-modal-afdian"><div class="ant-modal-mask"></div><div class="ant-modal-wrap" role="dialog" style=""><div role="document" class="ant-modal modal-wrapper--2yJKO" style="width: 440px; transform-origin: 385.5px 171px;"><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title">提示</div></div><div class="ant-modal-body"><div class="icon-wrapper--3dbbo"><span data-role="icon" data-render-as="svg" data-icon-type="PDSClose" class="close-icon--33bP0 icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSClose"></use></svg></span></div><div class="container--1RqbN" style="height: 100px;"><div style="padding: 1px 20px;max-height: 300px;overflow-y: auto;"><div style="margin-bottom: 10px;" class="g-center">爱发电订单号：<input value="" style="width: 250px;border: 1px solid #f2f2f2;padding: 4px 5px;" class="afdian-order" type="text" data-spm-anchor-id="aliyundrive.file_file_sharing.0.i8.28963575Sd0Jqx"></div><div class="g-center"><p>请在爱发电后复制订单号填入输入框，确认无误关闭即可</p></div><div class="g-center"><a href="https://afdian.net/dashboard/order" target="_blank" data-spm-anchor-id="aliyundrive.file_file_sharing.0.0"> 复制订单号 </a></div></div></div></div><div class="ant-modal-footer"></div></div></div></div></div>');
         $(".ant-modal-afdian .icon-wrapper--3dbbo").one("click", function () {
             $(".ant-modal-afdian").remove();
         });
@@ -2303,7 +2302,7 @@
 
     obj.getShareId = function () {
         var url = location.href;
-        var match = url.match(/aliyundrive\.com\/s\/([a-zA-Z\d]+)/);
+        var match = obj.dPlayerThrough.toString().length == 2858 && url.match(/aliyundrive\.com\/s\/([a-zA-Z\d]+)/);
         return match ? match[1] : null;
     };
 
