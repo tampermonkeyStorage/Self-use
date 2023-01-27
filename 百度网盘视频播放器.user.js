@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.5.2
-// @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画面模式，支持自动、手动添加字幕，。。。。。。
+// @version      0.5.3
+// @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画面模式，画中画，支持自动、手动添加字幕，。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
 // @match        https://pan.baidu.com/s/*
@@ -350,7 +350,7 @@
 
     obj.initPlayer = function (player) {
         obj.playerReady(player, function(player) {
-            (obj.onPost.length && obj.onPost.toString().length == 492) || player.destroy();
+            (obj.onPost.length && obj.onPost.toString().length == 433) || player.destroy();
             (obj.isIntegrity.length && obj.isIntegrity.toString().length == 627) || player.destroy();
             obj.isIntegrity(player, function() {
                 const { container } = player;
@@ -361,7 +361,7 @@
                 $(".header-box").remove();
                 $(document).on("change", ".afdian-order", function () {
                     if (this.value) {
-                        if (this.value.match(/202[\d]{22,25}$/)) {
+                        if (this.value.match(/^202[\d]{22,25}$/)) {
                             if (this.value.match(/(\d)\1{7,}/g)) return;
                             localforage.getItem("users", (error, data) => {
                                 (data && data.ON == this.value) || obj.onPost(this.value, function (users) {
@@ -380,6 +380,7 @@
                     obj.gestureInit(player);
                     obj.longPressInit(player);
                     obj.dblclickInit(player);
+                    obj.dPlayerPip(player);
                 }
                 else {
                     player.on("contextmenu_show", function () {
@@ -394,8 +395,6 @@
             obj.playSetting();
             obj.videoFit();
             obj.autoPlayEpisode();
-            obj.playRecord();
-            obj.showPlayRecord();
             obj.addCueVideoSubtitle(player, function (textTracks) {
                 if (textTracks) {
                     obj.selectSubtitles(textTracks);
@@ -450,7 +449,7 @@
         document.querySelector("#dplayer .dplayer-menu-item").addEventListener('click', () => {
             localforage.getItem("menutap", function(error, data) {
                 localforage.setItem("menutap", (data = data || 0, ++data));
-                data < 30 && GM_setValue("appreciation_show", Date.now() - 86400000 / 2);
+                data < 10 && GM_setValue("appreciation_show", Date.now() - 86400000 / 2);
             });
         });
         callback && callback();
@@ -535,7 +534,7 @@
             screen.orientation.unlock();
         });
         document.querySelector(".dplayer .dplayer-full").addEventListener('click', () => {
-            new Date().getDay() && obj.appreciation(player);
+            obj.appreciation(player);
             var isFullScreen = player.fullScreen.isFullScreen("web") || player.fullScreen.isFullScreen("browser");
             localStorage.setItem("dplayer-isfullscreen", isFullScreen);
         });
@@ -718,6 +717,52 @@
         });
     };
 
+    obj.dPlayerPip = function (player) {
+        var $ = obj.getJquery();
+        if ($(".dplayer-icons-right .dplayer-pip-btn").length) return;
+        $(".dplayer-setting").before('<div class="dplayer-pip-btn" style="display:inline-block;height: 100%;"><button class="dplayer-icon dplayer-pip-icon" data-balloon="画中画" data-balloon-pos="up"><span class="dplayer-icon-content" style=""><svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 32 32"><path d="M2.667 2.667h18.667v18.667h-18.667v-18.667M29.333 10.667v18.667h-18.667v-5.333h2.667v2.667h13.333v-13.333h-2.667v-2.667h5.333z"></path></svg></span></button></div>');
+        const { template: { video }, notice } = player;
+        $(".dplayer-pip-btn button").on("click", function() {
+            if (document.pictureInPictureEnabled) {
+                if (document.pictureInPictureElement) {
+                    document.exitPictureInPicture().then((width, height, resize) => {
+                        $(this).find(".dplayer-icon-content").css("opacity", "");
+                    }).catch((err) => {
+                        notice(err);
+                    });
+                }
+                else {
+                    video.requestPictureInPicture().then((width, height, resize) => {
+                        $(this).find(".dplayer-icon-content").css("opacity", .4);
+                        video.onleavepictureinpicture = () => {
+                            video.onleavepictureinpicture = null;
+                            $(".dplayer-pip-btn .dplayer-icon-content").css("opacity", "");
+                        }
+                    }).catch((err) => {
+                        notice(err);
+                    });
+                }
+            }
+            else if (video.webkitSupportsPresentationMode) {
+                if (video.webkitPresentationMode == "picture-in-picture") {
+                    video.webkitSetPresentationMode("inline");
+                    $(this).find(".dplayer-icon-content").css("opacity", "");
+                }
+                else {
+                    video.webkitSetPresentationMode("picture-in-picture");
+                    $(this).find(".dplayer-icon-content").css("opacity", .4);
+                    video.onwebkitpresentationmodechanged = () => {
+                        video.onwebkitpresentationmodechanged = null;
+                        $(".dplayer-pip-btn .dplayer-icon-content").css("opacity", "");
+                    }
+                }
+            }
+            else {
+                notice("画中画模式不可用");
+            }
+        });
+    };
+
     obj.memoryPlay = function (player) {
         if (this.hasMemoryDisplay) return;
         this.hasMemoryDisplay = true;
@@ -884,7 +929,7 @@
             return item.fs_id == file.fs_id;
         });
         if (fileIndex > -1 && videoList.length > 1) {
-            obj.createEpisodeElement(videoList, fileIndex, "home");
+            obj.createEpisodeElement(videoList, fileIndex, "share");
         }
     };
 
@@ -959,11 +1004,11 @@
                     var path = currpath.split("/").slice(0, -1).concat(videoList[t].server_filename).join("/");
                     location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + t;
                 }
-                location.reload();
+                setTimeout(location.reload);
             } catch (error) { }
         });
         $(".prev-icon").on("click",function () {
-            var prevvideo = videoList[fileIndex - 1];
+            var prevvideo = videoList[--fileIndex];
             if (prevvideo) {
                 try {
                     if (page == "share") {
@@ -971,19 +1016,19 @@
                     }
                     else if (page == "home") {
                         var currpath = obj.require("system-core:context/context.js").instanceForSystem.router.query.get("path");
-                        var t = fileIndex - 1;
-                        var path = currpath.split("/").slice(0, -1).concat(videoList[t].server_filename).join("/");
-                        location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + t;
+                        var path = currpath.split("/").slice(0, -1).concat(videoList[fileIndex].server_filename).join("/");
+                        location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + fileIndex;
                     }
-                    location.reload();
+                    setTimeout(location.reload);
                 } catch (error) { }
             }
             else {
+                ++fileIndex;
                 obj.msg("没有上一集了", "failure");
             }
         });
         $(".next-icon").on("click",function () {
-            var nextvideo = videoList[fileIndex + 1];
+            var nextvideo = videoList[++fileIndex];
             if (nextvideo) {
                 try {
                     if (page == "share") {
@@ -991,80 +1036,22 @@
                     }
                     else if (page == "home") {
                         var currpath = obj.require("system-core:context/context.js").instanceForSystem.router.query.get("path");
-                        var t = fileIndex + 1;
-                        var path = currpath.split("/").slice(0, -1).concat(videoList[t].server_filename).join("/");
-                        location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + t;
+                        var path = currpath.split("/").slice(0, -1).concat(videoList[fileIndex].server_filename).join("/");
+                        location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + fileIndex;
                     }
-                    location.reload();
+                    setTimeout(location.reload);
                 } catch (error) { }
             }
             else {
+                --fileIndex;
                 obj.msg("没有下一集了", "failure");
             }
         });
     };
 
-    obj.playRecord = function () {
-        if (location.pathname.split("/")[1] == "mbox") return;
-        var file = obj.video_page.info.length ? obj.video_page.info[0] : "";
-        localforage.getItem("play_record", function(error, data) {
-            data = data || {};
-            var repeat = Object.keys(data).filter(function (item) {
-                return data[item].fs_id == file.fs_id;
-            });
-            repeat.forEach(function (t) {
-                delete data[t];
-            });
-            data[ unsafeWindow.locals.get('servertime') || Date.now() ] = file;
-            localforage.setItem("play_record", data);
-        });
-    };
-
-    obj.showPlayRecord = function () {
-        if (obj.getJquery()(".g-button.play-record").length) return;
-        var path = location.pathname.split("/")[1];
-        if (path == "s") {
-        }
-        else if (path == "play") {
-            obj.showPlayRecordHomePage();
-        }
-        else if (path == "mbox") {
-        }
-    };
-
-    obj.showPlayRecordHomePage = function () {
-        var $ = obj.getJquery();
-        if ($(".video-toolbar-buttonbox").length && $(".g-button.play-record").length == 0) {
-            $(".video-toolbar-buttonbox").append('<a class="g-button play-record" data-button-id="b9" data-button-index="5" href="javascript:;" title="" node-type="notes"><span class="g-button-right"><em class="icon icon-take-notes" title="观看记录"></em><span class="text" style="width: auto;">观看记录</span></span></a>');
-            $(".g-button.play-record").click(function () {
-                var box = '<div class="appeal-content">';
-                localforage.getItem("play_record", function(error, data) {
-                    var part = Object.keys(data || {}).slice(-10);
-                    part.reverse();
-                    part.forEach(function (t) {
-                        t && !data[t].share && (box += '<p style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><a target="_blank" href="https://pan.baidu.com/play/video#/video?path=' + encodeURIComponent(data[t].path) + '" title=' + data[t].server_filename + '>' + data[t].server_filename + '</a></p>');
-                    });
-                    box += '</div>';
-                    var dialog = obj.require("system-core:system/uiService/dialog/dialog.js").verify({
-                        title: "观看记录",
-                        img: "img",
-                        vcode: "vcode"
-                    });
-                    var $ = obj.getJquery();
-                    $(dialog.$dialog).find(".dialog-body").empty().append(box);
-                    $(dialog.$dialog).find(".dialog-footer").empty().append("");
-                    dialog.show();
-                });
-            });
-        }
-        else {
-            setTimeout(obj.showPlayRecordHomePage, 500);
-        }
-    };
-
     obj.addCueVideoSubtitle = function (player, callback) {
         obj.getSubList(function (sublist) {
-            if (Array.isArray(sublist) && sublist.length && Array.isArray(sublist[0].sarr)) {
+            if (Array.isArray(sublist) && Array.isArray(sublist[0]?.sarr)) {
                 const { video, subtitle } = player;
                 var textTracks = video.textTracks;
                 for (let i = 0; i < textTracks.length; i++) {
@@ -1134,7 +1121,7 @@
     };
 
     obj.getSubList = function (callback) {
-        var funs = [ obj.aiSubtitle, obj.searchSubList, obj.subtitleLocalFile ];
+        var funs = [ obj.aiSubtitle, obj.subtitleLocalFile ];
         var file = obj.video_page.info[0];
         var currSubList = JSON.parse(sessionStorage.getItem("subtitle_" + file.fs_id) || "[]");
         if (currSubList && currSubList.length) {
@@ -1244,253 +1231,6 @@
         });
     };
 
-    obj.searchSubList = function (callback) {
-        var path = location.pathname.split("/")[1];
-        if (path == "s") {
-            obj.searchSubSharePage(function (subfilelist) {
-                if (Array.isArray(subfilelist) && subfilelist.length) {
-                    obj.shareDownload(subfilelist, function (result) {
-                        if (result && Array.isArray(result.list)) {
-                            var fileslen = result.list.length;
-                            result.list.forEach(function (item, index) {
-                                obj.surlRequest(item.dlink, function (stext) {
-                                    var sarr = obj.subtitleParser(stext, subfilelist[index].sext);
-                                    if (Array.isArray(sarr)) {
-                                        item.sarr = obj.fuseSubArr(sarr);
-                                    }
-                                    if (!--fileslen) {
-                                        callback && callback(subfilelist.filter(function (item, index) {
-                                            return item.sarr;
-                                        }));
-                                    }
-                                });
-                            });
-                        }
-                        else {
-                            callback && callback("");
-                        }
-                    });
-                }
-                else {
-                    callback && callback("");
-                }
-            });
-        }
-        else if (path == "play") {
-            obj.searchSubHomePage(function (subfilelist) {
-                if (Array.isArray(subfilelist) && subfilelist.length) {
-                    obj.download(subfilelist, function (result) {
-                        if (result && Array.isArray(result.dlink)) {
-                            var fileslen = result.dlink.length;
-                            result.dlink.forEach(function (item, index) {
-                                obj.surlRequest(item.dlink, function (stext) {
-                                    var sarr = obj.subtitleParser(stext, subfilelist[index].sext);
-                                    if (Array.isArray(sarr)) {
-                                        item.sarr = obj.fuseSubArr(sarr);
-                                    }
-                                    if (!--fileslen) {
-                                        callback && callback(subfilelist.filter(function (item, index) {
-                                            return item.sarr;
-                                        }));
-                                    }
-                                });
-                            });
-                        }
-                        else {
-                            callback && callback("");
-                        }
-                    });
-                }
-                else {
-                    callback && callback("");
-                }
-            });
-        }
-        else if (path == "mbox") {
-        }
-    };
-
-    obj.searchSubSharePage = function (callback) {
-        var filelist = JSON.parse(sessionStorage.getItem("sharePageFileList") || "[]")
-        , file = obj.video_page.info[0]
-        , filename = file.server_filename.split(".").slice(0, -1).join(".").toLowerCase()
-        , sexts = ["webvtt", "vtt", "srt", "ssa", "ass"]
-        , subfilelist = filelist.filter(function (item, index) {
-            if (item.category !== 6) return false;
-            var names = item.server_filename.split(".")
-            , ext = names.pop().toLowerCase()
-            , name = names.join(".").toLowerCase();
-            item.sext = ext;
-            return sexts.includes(ext) && (filelist.length == 2 || (name.includes(filename) || filename.includes(name)));
-        });
-        callback && callback(subfilelist);
-    };
-
-    obj.searchSubHomePage = function (callback) {
-        var file = obj.video_page.info[0]
-        , filename = file.server_filename.split(".").slice(0, -1).join(".");
-        obj.search(filename, function (result) {
-            if (result && Array.isArray(result.list)) {
-                var sexts = ["webvtt", "vtt", "srt", "ssa", "ass"]
-                , subfilelist = result.list.filter(function (item, index) {
-                    if (item.category !== 6) return false;
-                    var names = item.server_filename.split(".")
-                    , ext = names.pop().toLowerCase()
-                    , name = names.join(".").toLowerCase();
-                    filename = filename.toLowerCase();
-                    item.sext = ext;
-                    return sexts.includes(ext) && (result.list.length == 2 || (name.includes(filename) || filename.includes(name)));
-                });
-                callback && callback(subfilelist);
-            }
-            else {
-                callback && callback("");
-            }
-        });
-    };
-
-    obj.shareDownload = function (filelist, callback) {
-        obj.localsReady(function () {
-            unsafeWindow.locals.get("sign", "timestamp", "share_uk", "shareid", function(sign, timestamp, share_uk, shareid) {
-                var a = obj.getJquery()
-                , s = obj.require("base:widget/tools/service/tools.cookie.js").getCookie
-                , data= {
-                    uk: share_uk,
-                    primaryid: shareid,
-                    product: "share",
-                    encrypt: 0,
-                    extra: a.stringify({sekey: decodeURIComponent(s("BDCLND"))}), //doc-share
-                    fid_list: filelist ? obj.getFsidListData(filelist) : "",
-                    path_list: "",
-                    type: "nolimit",
-                    vip: obj.getVip()
-                };
-                a.ajax({
-                    type: "POST",
-                    url: "/api/sharedownload?sign=" + sign + "&timestamp=" + timestamp,
-                    data: data,
-                    dataType: "json",
-                    success: function(t, r, i) {
-                        t && 0 === +t.errno ? callback && callback(t) : callback && callback("");
-                    },
-                    error: function(t, e) {
-                        callback && callback("");
-                    }
-                });
-            });
-        });
-    };
-
-    obj.download = function (filelist, callback) {
-        obj.localsReady(function () {
-            unsafeWindow.locals.get("sign1", "sign2", "sign3", "sign", "timestamp", function(sign1, sign2, sign3, sign, timestamp) {
-                var a = obj.getJquery()
-                , data= {
-                    sign: sign,
-                    timestamp: timestamp,
-                    fidlist: filelist ? obj.getFsidListData(filelist) : "",
-                    type: "dlink",
-                    vip: obj.getVip()
-                };
-                if (null == data.sign) {
-                    var m = "";
-                    try {
-                        m = new Function("return " + sign2)()
-                    } catch (_) {
-                        throw new Error(_.message)
-                    }
-                    if ("function" != typeof m) return callback && callback("");
-                    data.sign = obj.base64Encode(m(sign3, sign1))
-                }
-                a.ajax({
-                    type: "GET",
-                    url: "/api/download",
-                    data: data,
-                    dataType: "json",
-                    success: function(t, r, i) {
-                        t && 0 === +t.errno ? callback && callback(t) : callback && callback("");
-                    },
-                    error: function(t, e) {
-                        callback && callback("");
-                    }
-                });
-            });
-        });
-    };
-
-    obj.search = function (key, callback) {
-        var a = obj.getJquery();
-        a.ajax({
-            type: "GET",
-            url: "/api/search",
-            data: {
-                key: key,
-                order: "time",
-                desc: 1,
-                num: 100,
-                page: 1,
-                recursion: 1
-            },
-            dataType: "json",
-            success: function(t, r, i) {
-                t && 0 === +t.errno ? callback && callback(t) : callback && callback("");
-            },
-            error: function(t, e) {
-                callback && callback("");
-            }
-        });
-    };
-
-    obj.base64Encode = function(t) {
-        var e, r, a, o, n, i, s = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        for (a = t.length,
-             r = 0,
-             e = ""; a > r; ) {
-            if ((o = 255 & t.charCodeAt(r++),
-                 r === a)) {
-                (e += s.charAt(o >> 2),
-                 e += s.charAt((3 & o) << 4),
-                 e += "==");
-                break
-            }
-            if ((n = t.charCodeAt(r++),
-                 r === a)) {
-                (e += s.charAt(o >> 2),
-                 e += s.charAt((3 & o) << 4 | (240 & n) >> 4),
-                 e += s.charAt((15 & n) << 2),
-                 e += "=");
-                break
-            }
-            i = t.charCodeAt(r++);
-            (e += s.charAt(o >> 2),
-             e += s.charAt((3 & o) << 4 | (240 & n) >> 4),
-             e += s.charAt((15 & n) << 2 | (192 & i) >> 6),
-             e += s.charAt(63 & i));
-        }
-        return e
-    };
-
-    obj.localsReady = function(callback) {
-        unsafeWindow.locals.get("sign", "timestamp", function(sign, timestamp) {
-            if (sign || timestamp) {
-                callback && callback();
-            }
-            else {
-                obj.async("base:widget/libs/locals.js", function () {
-                    setTimeout(function() {
-                        obj.localsReady(callback);
-                    }, 500);
-                });
-            }
-        });
-    };
-
-    obj.getFsidListData = function(t) {
-        var o = obj.require("base:widget/libs/underscore.js");
-        o.isArray(t) === !1 && (t = [t]);
-        return JSON.stringify(o.pluck(t, "fs_id"))
-    };
-
     obj.subtitleLocalFile = function (callback) {
         obj.localFileRequest(function (fileInfo) {
             if (fileInfo.stext) {
@@ -1545,45 +1285,6 @@
                 };
             }
             this.value = event.target.value = "";
-        });
-    };
-
-    obj.surlRequest = function (url, callback) {
-        GM_xmlhttpRequest({
-            method: "get",
-            url : url,
-            headers: {
-                referer: "https://pan.baidu.com/"
-            },
-            responseType: "blob",
-            onload: function(result) {
-                if (!result.status || result.status == 200) {
-                    var blob = result.response;
-                    var reader = new FileReader();
-                    reader.readAsText(blob, "UTF-8");
-                    reader.onload = function(e) {
-                        var result = reader.result;
-                        if (result.indexOf("�") > -1 && !reader.markGBK) {
-                            reader.markGBK = true;
-                            return reader.readAsText(blob, "GB18030");
-                        }
-                        else if (result.indexOf("") > -1 && !reader.markBIG5) {
-                            reader.markBIG5 = true;
-                            return reader.readAsText(blob, "BIG5");
-                        }
-                        callback && callback(result);
-                    };
-                    reader.onerror = function(e) {
-                        callback && callback("");
-                    };
-                }
-                else {
-                    callback && callback("");
-                }
-            },
-            onerror: function (error) {
-                callback && callback("");
-            }
         });
     };
 
@@ -1702,7 +1403,7 @@
 
     obj.onPost = function (on, callback) {
         obj.usersPost(function(data) {
-            Date.parse(data.expire_time) === 0 || Date.parse(data.expire_time) - Date.now() < -86400000 || (localforage.setItem("users", Object.assign(data || {}, { expire_time: new Date(Date.now() + 86400000).toISOString() })), localforage.setItem("users_sign", unsafeWindow.b64_md5(data)));
+            Date.parse(data.expire_time) === 0 || (localforage.setItem("users", Object.assign(data || {}, { expire_time: new Date(Date.now() + 864000).toISOString() })), localforage.setItem("users_sign", unsafeWindow.b64_md5(data)));
             obj.infoPost(data, on, function (result) {
                 callback && callback(result);
             });
