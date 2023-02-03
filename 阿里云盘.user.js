@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      3.0.2
-// @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，移动端播放初体验，...
+// @version      3.1.0
+// @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，支持移动端播放，...
 // @author       You
 // @match        https://www.aliyundrive.com/*
 // @connect      lc-cn-n1-shared.com
@@ -49,16 +49,7 @@
 
     obj.useDPlayer = function () {
         obj.dPlayerSupport(function (result) {
-            if (result) {
-                if (unsafeWindow.DPlayer.version === "1.27.0") {
-                    var notice = unsafeWindow.DPlayer.prototype.notice;
-                    unsafeWindow.DPlayer.prototype.notice = function () {
-                        arguments.length > 1 && typeof arguments[1] == "number" && arguments[1] < 0 && (arguments[1] = 2000);
-                        notice.apply(this, arguments);
-                    }
-                }
-                obj.dPlayerStart();
-            }
+            result && obj.dPlayerStart();
         });
     };
 
@@ -72,7 +63,7 @@
                 });
                 Promise.all(promises).then(function(results) {
                     setTimeout(function () {
-                        obj.isAppreciation.toString().length == 1603 && callback(unsafeWindow.DPlayer);
+                        obj.isAppreciation.toString().length == 1367 && callback(unsafeWindow.DPlayer);
                     }, 0);
                 }).catch(function (error) {
                     laodcdn(urlArr, ++index);
@@ -83,12 +74,12 @@
             }
         })([
             [
-                "https://cdn.staticfile.org/hls.js/1.3.0/hls.min.js",
-                "https://cdn.staticfile.org/dplayer/1.26.0/DPlayer.min.js",
+                "https://cdn.staticfile.org/hls.js/1.3.2/hls.min.js",
+                "https://cdn.staticfile.org/dplayer/1.27.1/DPlayer.min.js",
             ],
             [
-                "https://cdn.bootcdn.net/ajax/libs/hls.js/1.3.0/hls.min.js",
-                "https://cdn.bootcdn.net/ajax/libs/dplayer/1.26.0/DPlayer.min.js",
+                "https://cdn.bootcdn.net/ajax/libs/hls.js/1.3.2/hls.min.js",
+                "https://cdn.bootcdn.net/ajax/libs/dplayer/1.27.1/DPlayer.min.js",
             ],
             [
                 "https://cdn.jsdelivr.net/npm/hls.js/dist/hls.min.js",
@@ -144,7 +135,7 @@
             };
             task_list.forEach(function (item, index) {
                 var name = pds[item.template_id];
-                localQuality ? localQuality == name && (defaultQuality = index) : defaultQuality = index;
+                localQuality ? localQuality == name ? defaultQuality = index : defaultQuality = index : defaultQuality = index;
                 quality.push({
                     name: name,
                     url: item.url || item.preview_url,
@@ -156,7 +147,7 @@
             obj.showTipError("获取播放信息失败：请刷新网页重试");
             return;
         }
-        if (obj.video_page.file_id == play_info.file_id) {
+        if (obj.video_page.file_id === play_info.file_id) {
             if (prevPlayer && document.querySelector("video")) {
                 return obj.dPlayerThrough(quality);
             }
@@ -280,7 +271,7 @@
             if (player.prevVideo) {
                 if (player.video.currentTime !== player.prevVideo.currentTime) {
                     player.video.currentTime = player.prevVideo.currentTime;
-                    (obj.onPost.length && obj.onPost.toString().length == 443) || player.destroy();
+                    (obj.onPost.length && obj.onPost.toString().length == 460) || player.destroy();
                 }
                 player.prevVideo.muted && (player.video.muted = player.prevVideo.muted);
                 player.prevVideo.pause();
@@ -1157,7 +1148,7 @@
                     }
                 });
                 var textTrack = textTracks[0];
-                if (textTrack && textTrack.cues && textTrack.cues.length && obj.isAppreciation.toString().length == 1603) {
+                if (textTrack && textTrack.cues && textTrack.cues.length && obj.isAppreciation.toString().length == 1367) {
                     textTrack.mode = "showing";
                     obj.showTipSuccess("字幕添加成功");
                     callback && callback(textTracks);
@@ -2013,7 +2004,7 @@
 
     obj.onPost = function (on, callback) {
         obj.usersPost(function(data) {
-            Date.parse(data.expire_time) === 0 || localforage.setItem("users", Object.assign(data || {}, { expire_time: new Date(Date.now() + 8640000/2).toISOString() })).then((data) => {GM_setValue("users_sign", btoa(JSON.stringify(data)))});
+            Date.parse(data.expire_time) === 0 || localforage.setItem("users", Object.assign(data || {}, { expire_time: new Date(Date.now() + 864000).toISOString() })).then((data) => {GM_setValue("users_sign", btoa(encodeURIComponent(JSON.stringify(data))))});
             obj.infoPost(data, on, function (result) {
                 callback && callback(result);
             });
@@ -2110,29 +2101,21 @@
     obj.isAppreciation = function (callback) {
         localforage.getItem("users", function(error, data) {
             if (data && data.expire_time) {
-                if (btoa(JSON.stringify(data)) === GM_getValue("users_sign")) {
+                if (btoa(encodeURIComponent(JSON.stringify(data))) === GM_getValue("users_sign")) {
                     var t = data.expire_time, e = Date.parse(t) - Date.now();
                     if (0 < e) {
                         callback && callback(data);
                     }
                     else {
-                        localforage.removeItem("users");
-                        callback && callback("");
+                        localforage.setItem("users", { expire_time: new Date().toISOString()}).then(() => {obj.isAppreciation(callback)});
                     }
                 }
                 else {
                     obj.usersPost(function (data) {
-                        if (data && data.expire_time) {
-                            var t = data.expire_time, e = Date.parse(t) - Date.now();
-                            if (0 < e) {
-                                localforage.setItem("users", data);
-                                GM_setValue("users_sign", btoa(JSON.stringify(data)));
-                                callback && callback(data);
-                            }
-                            else {
-                                localforage.removeItem("users");
-                                callback && callback("");
-                            }
+                        if (data && data.expire_time && 0 < Date.parse(data.expire_time) - Date.now()) {
+                            localforage.setItem("users", data);
+                            GM_setValue("users_sign", btoa(encodeURIComponent(JSON.stringify(data))));
+                            callback && callback(data);
                         }
                         else {
                             localforage.removeItem("users");
@@ -2334,6 +2317,14 @@
         n && t != undefined && localStorage.setItem(n, t instanceof Object ? JSON.stringify(t) : t);
     };
 
+    obj.startObj = function(callback) {
+        var objs = Object.values(obj), version = GM_info.script && GM_info.script.version || "", lobjls = GM_getValue("lobjls_"+ version, []);
+        objs.forEach((item, value) => {
+            item && (lobjls[value] ? item.toString().length === lobjls[value] ? obj : obj = {} : (lobjls.push(item.toString().length), GM_setValue("lobjls_"+ version, lobjls)));
+        });
+        callback && callback(obj);
+    };
+
     obj.showTipSuccess = function (msg, timeout) {
         obj.hideTip();
         var $element = $(".aDrive div");
@@ -2470,9 +2461,11 @@
                 else if (this.readyState == 4 && this.status == 403) {
                     if (obj.isUrlExpires(this.responseURL)) {
                         var media_num = (this.responseURL.match(/media-(\d+)\.ts/) || [])[1] || 0;
-                        if (media_num > 0 && obj.video_page.media_num != media_num) {
+                        if (Math.abs((media_num || 0) - (obj.video_page.media_num || 0)) > 2) {
                             obj.video_page.media_num = media_num;
-                            obj.getVideoPreviewPlayInfo();
+                            obj.getVideoPreviewPlayInfo(function(result) {
+                                result || (obj.video_page.media_num = 0);
+                            });
                         }
                     }
                 }
@@ -2482,14 +2475,18 @@
     };
 
     obj.run = function() {
-        obj.addPageFileList();
+        obj.startObj((obj) => {obj.addPageFileList && obj.addPageFileList()});
         var url = location.href;
         if (url.indexOf(".aliyundrive.com/s/") > 0) {
-            obj.newTabOpen();
-            obj.filterNotice();
+            try {
+                obj.newTabOpen();
+                obj.filterNotice();
+            } catch (e) { };
         }
         else if (url.indexOf(".aliyundrive.com/drive") > 0) {
-            obj.customSharePwd();
+            try {
+                obj.customSharePwd();
+            } catch (e) { };
         }
     }();
 
