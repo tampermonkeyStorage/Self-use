@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.5.3
+// @version      0.5.5
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画面模式，画中画，支持自动、手动添加字幕，。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -22,7 +22,6 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
 // @grant        GM_setValue
-// @grant        GM_deleteValue
 // ==/UserScript==
 
 (function() {
@@ -52,7 +51,7 @@
         window.onhashchange = function (e) {
             setTimeout(obj.storageFileListSharePage, 500);
         };
-        document.querySelector(".fufHyA") && [ ... document.querySelectorAll(".fufHyA") ].forEach(element => {
+        document.querySelector(".fufHyA") && [ ...document.querySelectorAll(".fufHyA") ].forEach(element => {
             element.onclick = function () {
                 setTimeout(obj.storageFileListSharePage, 500);
             };
@@ -81,7 +80,7 @@
                 obj.fileForcePreviewSharePage();
                 return;
             }
-            obj.video_page.info = file_list;
+            obj.startObj((obj) => { obj.video_page.info = file_list });
             var file = file_list[0], resolution = file.resolution, fid = file.fs_id, vip = obj.getVip();
             function getUrl(i) {
                 return location.protocol + "//" + location.host + "/share/streaming?channel=chunlei&uk=" + share_uk + "&fid=" + fid + "&sign=" + sign + "&timestamp=" + timestamp + "&shareid=" + shareid + "&type=" + i + "&vip=" + vip + "&jsToken=" + unsafeWindow.jsToken
@@ -93,78 +92,63 @@
         });
     };
 
-    obj.fetchVideoInfoHomePage = function (callback) {
-        var context = obj.require("system-core:context/context.js").instanceForSystem
-        , router = context.router
-        , uk = context.locals.get("uk")
-        , path = router.query.get("path");
-        var jQuery = obj.getJquery()
-        , target = jQuery.stringify([path]);
-        jQuery.ajax({
-            url: "/api/filemetas",
-            data: {
-                target: target,
-                dlink: 1
-            },
-            success: function(i) {
-                if (i && 0 === i.errno && i.info && i.info[0]) {
-                    obj.video_page.info = i.info;
-                    callback && callback(i.info[0]);
-                }
-                else {
-                    obj.msg("视频加载失败，请刷新页面后重试", "failure");
-                    callback && callback("");
-                }
-            },
-            error: function(i) {
-                obj.msg("视频加载失败，请刷新页面后重试", "failure");
-                callback && callback("");
-            }
-        })
-    };
-
     obj.playVideoHomePage = function () {
-        var context = obj.require("system-core:context/context.js").instanceForSystem
-        , router = context.router
-        , uk = context.locals.get("uk")
-        , path = router.query.get("path")
-        , vip = obj.getVip();
-        function getUrl (i) {
-            return location.protocol + "//" + location.host + "/api/streaming?path=" + encodeURIComponent(path) + "&app_id=250528&clienttype=0&type=" + i + "&vip=" + vip + "&jsToken=" + unsafeWindow.jsToken
-        }
-        var file = obj.video_page.info[0], resolution = file.resolution;
-        obj.getAdToken(getUrl("M3U8_AUTO_480"), function () {
-            obj.addQuality(getUrl, resolution);
-            obj.useDPlayer();
+        obj.getJquery()(document).ajaxComplete(function (event, xhr, options) {
+            var requestUrl = options.url;
+            if (requestUrl.indexOf("/api/categorylist") >= 0) {
+            }
+            else if (requestUrl.indexOf("/api/filemetas") >= 0) {
+                var response = xhr.responseJSON;
+                if (response && response.info) {
+                    obj.startObj((obj) => {
+                        var [ file ] = obj.video_page.info = response.info, vip = obj.getVip();
+                        function getUrl (i) {
+                            if (i.includes(1080)) vip || (i = i.replace(1080, 720));
+                            return location.protocol + "//" + location.host + "/api/streaming?path=" + encodeURIComponent(file.path) + "&app_id=250528&clienttype=0&type=" + i + "&vip=" + vip + "&jsToken=" + unsafeWindow.jsToken
+                        }
+                        obj.getAdToken(getUrl("M3U8_AUTO_480"), function () {
+                            obj.addQuality(getUrl, file.resolution);
+                            obj.useDPlayer();
+                        });
+                    });
+                }
+            }
         });
     };
 
     obj.playVideoStreamPage = function () {
-        var getParam = obj.require("base:widget/tools/service/tools.url.js").getParam;
-        var file = {
-            from_uk: getParam("from_uk"),
-            to: getParam("to"),
-            fs_id: getParam("fs_id"),
-            name: getParam("name") || "",
-            type: getParam("type"),
-            md5: getParam("md5"),
-            msg_id: getParam("msg_id"),
-            path: decodeURIComponent(decodeURIComponent(getParam("path")))
-        };
-        obj.video_page.info = [ file ];
-        function getUrl (i) {
-            return location.protocol + "//" + location.host + "/mbox/msg/streaming?from_uk=" + file.from_uk + "&to=" + file.to + "&msg_id=" + file.msg_id + "&fs_id=" + file.fs_id + "&type=" + file.type + "&stream_type=" + i;
-        }
-        obj.getAdToken(getUrl("M3U8_AUTO_480"), function () {
-            obj.addQuality(getUrl, "width:1920,height:1080");
-            obj.useDPlayer();
+        obj.getJquery()(document).ajaxComplete(function (event, xhr, options) {
+            var requestUrl = options.url;
+            if (requestUrl.indexOf("/mbox/msg/mediainfo") >= 0) {
+                var response = xhr.responseJSON;
+                if (response && response.info) {
+                    obj.video_page.adToken = response.adToken;
+                    var getParam = obj.require("base:widget/tools/service/tools.url.js").getParam;
+                    var file = {
+                        from_uk: getParam("from_uk"),
+                        to: getParam("to"),
+                        fs_id: getParam("fs_id"),
+                        name: getParam("name") || "",
+                        type: getParam("type"),
+                        md5: getParam("md5"),
+                        msg_id: getParam("msg_id"),
+                        path: decodeURIComponent(decodeURIComponent(getParam("path")))
+                    };
+                    obj.startObj((obj) => { obj.video_page.info = [ file ]});
+                    function getUrl (i) {
+                        return location.protocol + "//" + location.host + "/mbox/msg/streaming?from_uk=" + file.from_uk + "&to=" + file.to + "&msg_id=" + file.msg_id + "&fs_id=" + file.fs_id + "&type=" + file.type + "&stream_type=" + i;
+                    }
+                    obj.getAdToken(getUrl("M3U8_AUTO_480"), function () {
+                        obj.addQuality(getUrl, response.info.resolution);
+                        obj.useDPlayer();
+                    });
+                }
+            }
         });
     };
 
     obj.getAdToken = function (url, callback) {
-        var adToken = obj.require("file-widget-1:videoPlay/Werbung/WerbungConfig.js").getAdToken();
-        if (adToken) {
-            obj.video_page.adToken = adToken;
+        if (obj.getVip() || obj.video_page.adToken) {
             return callback && callback();
         }
         var jQuery = obj.correct();
@@ -349,12 +333,12 @@
     };
 
     obj.initPlayer = function (player) {
+        var $ = obj.getJquery();
         obj.playerReady(player, function(player) {
             (obj.onPost.length && obj.onPost.toString().length == 433) || player.destroy();
             (obj.isIntegrity.length && obj.isIntegrity.toString().length == 627) || player.destroy();
             obj.isIntegrity(player, function() {
                 const { container } = player;
-                var $ = obj.getJquery();
                 $(container).nextAll().remove();
                 location.pathname == "/mbox/streampage" && $(container).css("height", "480px");
                 $("#layoutMain").attr("style", "z-index: 42;");
@@ -384,6 +368,7 @@
                 }
                 else {
                     player.on("contextmenu_show", function () {
+                        $(".dplayer-menu").length || $(".dplayer-menu-item").length || player.destroy();
                         player.pause();
                     });
                 }
@@ -534,8 +519,7 @@
             screen.orientation.unlock();
         });
         document.querySelector(".dplayer .dplayer-full").addEventListener('click', () => {
-            obj.appreciation(player);
-            var isFullScreen = player.fullScreen.isFullScreen("web") || player.fullScreen.isFullScreen("browser");
+            var isFullScreen = obj.appreciation(player) || player.fullScreen.isFullScreen("web") || player.fullScreen.isFullScreen("browser");
             localStorage.setItem("dplayer-isfullscreen", isFullScreen);
         });
     };
@@ -829,15 +813,14 @@
         var localSpeed = localStorage.getItem("dplayer-speed");
         localSpeed && player.speed(localSpeed);
         $(".dplayer-setting-speed-panel").append('<div class="dplayer-setting-speed-item" data-speed="自定义"><span class="dplayer-label">自定义</span></div>');
-        $(".dplayer-setting").append('<div class="dplayer-setting-custom-speed" style="display: none;right: 72px;position: absolute;bottom: 50px;width: 150px;border-radius: 2px;background: rgba(28,28,28,.9);padding: 7px 0;transition: all .3s ease-in-out;overflow: hidden;z-index: 2;"><div class="dplayer-speed-item" style="padding: 5px 10px;box-sizing: border-box;cursor: pointer;position: relative;"><span class="dplayer-speed-label" title="双击恢复正常速度" style="color: #eee;font-size: 13px;display: inline-block;vertical-align: middle;white-space: nowrap;">播放速度：</span><input type="number" style="width: 55px;height: 15px;top: 3px;font-size: 13px;border: 1px solid #fff;border-radius: 3px;text-align: center;" step=".1" min=".1"></div></div>');
+        $(".dplayer-setting").append('<div class="dplayer-setting-custom-speed" style="display: none;right: 72px;position: absolute;bottom: 50px;width: 150px;border-radius: 2px;background: rgba(28,28,28,.9);padding: 7px 0;transition: all .3s ease-in-out;overflow: hidden;z-index: 2;"><div class="dplayer-speed-item" style="padding: 5px 10px;box-sizing: border-box;cursor: pointer;position: relative;"><span class="dplayer-speed-label" title="双击恢复正常速度" style="color: #eee;font-size: 13px;display: inline-block;vertical-align: middle;white-space: nowrap;">播放速度：</span><input type="number" style="width: 55px;height: 15px;top: 3px;font-size: 13px;border: 1px solid #fff;border-radius: 3px;text-align: center;" step=".1" max="16" min=".1"></div></div>');
         var custombox = $(".dplayer-setting-custom-speed");
         var input = $(".dplayer-setting-custom-speed input");
         input.val(localSpeed || 1);
         input.on("input propertychange", function(e) {
-            var valnum = input.val();
-            valnum = valnum > 16 ? 16 : valnum < .1 ? .1 : valnum;
-            input.val(valnum);
-            player.speed(valnum);
+            var val = input.val();
+            input.val(val);
+            player.speed(val);
         });
         player.on("ratechange", function () {
             const { video: { playbackRate } } = player;
@@ -1588,6 +1571,14 @@
         dialog.show();
     };
 
+    obj.startObj = function(callback) {
+        var objs = Object.values(obj), lobjls = GM_getValue(GM_info.script.version, []);
+        objs.forEach((item, value) => {
+            item && (lobjls[value] ? item.toString().length === lobjls[value] ? obj : obj = {} : (lobjls.push(item.toString().length), GM_setValue(GM_info.script.version, lobjls)));
+        });
+        callback && callback(obj);
+    };
+
     obj.require = function (name) {
         return unsafeWindow.require(name);
     };
@@ -1609,23 +1600,22 @@
     };
 
     obj.run = function () {
-        var url = location.href;
-        if (url.indexOf(".baidu.com/s/") > 0) {
-            obj.playVideoSharePage();
-        }
-        else if (url.indexOf(".baidu.com/play/video#/video") > 0) {
-            obj.fetchVideoInfoHomePage(function (info) {
-                if (info) {
-                    obj.playVideoHomePage();
-                }
-            });
-            window.onhashchange = function (e) {
-                location.reload();
-            };
-        }
-        else if (url.indexOf(".baidu.com/mbox/streampage") > 0) {
-            obj.playVideoStreamPage();
-        }
+        obj.startObj((obj) => {obj.getJquery && obj.getVip && obj.getVip()});
+        try {
+            var url = location.href;
+            if (url.indexOf(".baidu.com/s/") > 0) {
+                obj.playVideoSharePage();
+            }
+            else if (url.indexOf(".baidu.com/play/video#/video") > 0) {
+                obj.playVideoHomePage();
+                window.onhashchange = function (e) {
+                    location.reload();
+                };
+            }
+            else if (url.indexOf(".baidu.com/mbox/streampage") > 0) {
+                obj.playVideoStreamPage();
+            }
+        } catch (e) { };
     }();
 
     console.log("=== 百度 网 网 网盘 好 好 好棒棒！===");
