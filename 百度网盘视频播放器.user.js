@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.5.5
+// @version      0.5.7
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画面模式，画中画，支持自动、手动添加字幕，。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -103,7 +103,7 @@
                     obj.startObj((obj) => {
                         var [ file ] = obj.video_page.info = response.info, vip = obj.getVip();
                         function getUrl (i) {
-                            if (i.includes(1080)) vip || (i = i.replace(1080, 720));
+                            if (i.includes(1080)) vip > 1 || (i = i.replace(1080, 720));
                             return location.protocol + "//" + location.host + "/api/streaming?path=" + encodeURIComponent(file.path) + "&app_id=250528&clienttype=0&type=" + i + "&vip=" + vip + "&jsToken=" + unsafeWindow.jsToken
                         }
                         obj.getAdToken(getUrl("M3U8_AUTO_480"), function () {
@@ -122,25 +122,26 @@
             if (requestUrl.indexOf("/mbox/msg/mediainfo") >= 0) {
                 var response = xhr.responseJSON;
                 if (response && response.info) {
-                    obj.video_page.adToken = response.adToken;
-                    var getParam = obj.require("base:widget/tools/service/tools.url.js").getParam;
-                    var file = {
-                        from_uk: getParam("from_uk"),
-                        to: getParam("to"),
-                        fs_id: getParam("fs_id"),
-                        name: getParam("name") || "",
-                        type: getParam("type"),
-                        md5: getParam("md5"),
-                        msg_id: getParam("msg_id"),
-                        path: decodeURIComponent(decodeURIComponent(getParam("path")))
-                    };
-                    obj.startObj((obj) => { obj.video_page.info = [ file ]});
-                    function getUrl (i) {
-                        return location.protocol + "//" + location.host + "/mbox/msg/streaming?from_uk=" + file.from_uk + "&to=" + file.to + "&msg_id=" + file.msg_id + "&fs_id=" + file.fs_id + "&type=" + file.type + "&stream_type=" + i;
-                    }
-                    obj.getAdToken(getUrl("M3U8_AUTO_480"), function () {
-                        obj.addQuality(getUrl, response.info.resolution);
-                        obj.useDPlayer();
+                    obj.startObj((obj) => {
+                        obj.video_page.adToken = response.adToken;
+                        var getParam = obj.require("base:widget/tools/service/tools.url.js").getParam;
+                        var [ file ] = obj.video_page.info = [{
+                            from_uk: getParam("from_uk"),
+                            to: getParam("to"),
+                            fs_id: getParam("fs_id"),
+                            name: getParam("name") || "",
+                            type: getParam("type"),
+                            md5: getParam("md5"),
+                            msg_id: getParam("msg_id"),
+                            path: decodeURIComponent(decodeURIComponent(getParam("path")))
+                        }];
+                        function getUrl (i) {
+                            return location.protocol + "//" + location.host + "/mbox/msg/streaming?from_uk=" + file.from_uk + "&to=" + file.to + "&msg_id=" + file.msg_id + "&fs_id=" + file.fs_id + "&type=" + file.type + "&stream_type=" + i;
+                        }
+                        obj.getAdToken(getUrl("M3U8_AUTO_480"), function () {
+                            obj.addQuality(getUrl, response.info.resolution);
+                            obj.useDPlayer();
+                        });
                     });
                 }
             }
@@ -148,21 +149,22 @@
     };
 
     obj.getAdToken = function (url, callback) {
-        if (obj.getVip() || obj.video_page.adToken) {
+        var adToken = obj.require("file-widget-1:videoPlay/Werbung/WerbungConfig.js").getAdToken();
+        if (obj.video_page.adToken = adToken || obj.getVip() > 1) {
             return callback && callback();
         }
-        var jQuery = obj.correct();
-        obj.getJquery().ajax({
+        var jQuery = obj.getJquery();
+        jQuery.ajax({
             url: url,
         }).done(function(n) {
             if (133 === n.errno && 0 !== n.adTime) {
-                obj.video_page.adToken = n.adToken;
+                obj.video_page.adToken = obj.correct() || n.adToken;
             }
             callback && callback();
         }).fail(function(n) {
             var t = jQuery.parseJSON(n.responseText);
             if (t && 133 === t.errno && 0 !== t.adTime) {
-                obj.video_page.adToken = t.adToken;
+                obj.video_page.adToken = obj.correct() || t.adToken;
             }
             callback && callback();
         });
@@ -285,17 +287,12 @@
                 defaultQuality: defaultQuality < 0 ? 0 : defaultQuality || 0,
                 customType: {
                     hls: function (video, player) {
-                        const hls = new unsafeWindow.Hls();
+                        const hls = new unsafeWindow.Hls({ maxBufferLength: 30 * 2 * 10 });
                         hls.loadSource(video.src);
                         hls.attachMedia(video);
                     },
                 },
                 pic: obj.getPoster()
-            },
-            pluginOptions: {
-                hls: {
-                    maxBufferLength: 30 * 2 * 10
-                }
             },
             subtitle: {
                 url: "",
@@ -341,8 +338,6 @@
                 const { container } = player;
                 $(container).nextAll().remove();
                 location.pathname == "/mbox/streampage" && $(container).css("height", "480px");
-                $("#layoutMain").attr("style", "z-index: 42;");
-                $(".header-box").remove();
                 $(document).on("change", ".afdian-order", function () {
                     if (this.value) {
                         if (this.value.match(/^202[\d]{22,25}$/)) {
@@ -407,24 +402,22 @@
         }
         setTimeout(function () {
             if (player.isReady) {
-                obj.sessionRemove("startError");
+                sessionStorage.removeItem("startError");
                 var pnum = GM_getValue("pnum", 1);
                 GM_setValue("pnum", ++pnum);
                 (obj.appreciation.length && obj.appreciation.toString().length == 738) || player.destroy();
                 setTimeout(() => { obj.appreciation(player) }, player.video.duration / 2 * 1000);
             }
             else {
-                var startError = obj.sessionGet("startError") || 0;
-                if (++startError <= 3) {
-                    obj.sessionSet("startError", startError);
-                    location.reload();
+                if (sessionStorage.getItem("startError")) {
+                    sessionStorage.removeItem("startError");
                 }
                 else {
-                    obj.msg("此视频可能无法正常播放", "failure");
-                    obj.sessionRemove("startError");
+                    sessionStorage.setItem("startError", 1);
+                    location.reload();
                 }
             }
-        }, 5000 + 1500 * obj.sessionGet("startError"));
+        }, 8000);
     };
 
     obj.isIntegrity = function (player, callback) {
@@ -507,15 +500,19 @@
         player.on("quality_end", function () {
             localStorage.setItem("dplayer-quality", player.quality.name);
         });
+        player.on("webfullscreen", function () {
+            obj.getJquery()("#layoutHeader,.header-box").css("display", "none");
+        });
+        player.on("webfullscreen_cancel", function () {
+            obj.getJquery()("#layoutHeader,.header-box").css("display", "block");
+        });
         if (localStorage.getItem("dplayer-isfullscreen") == "true") {
             player.fullScreen.request("web");
         }
         player.on("fullscreen", function () {
-            localStorage.setItem("dplayer-isfullscreen", true);
             screen.orientation.lock("landscape");
         });
         player.on("fullscreen_cancel", function () {
-            player.fullScreen.isFullScreen("web") || localStorage.removeItem("dplayer-isfullscreen");
             screen.orientation.unlock();
         });
         document.querySelector(".dplayer .dplayer-full").addEventListener('click', () => {
@@ -903,7 +900,7 @@
     };
 
     obj.selectEpisodeSharePage = function () {
-        var fileList = obj.sessionGet("sharePageFileList") || []
+        var fileList = sessionStorage.getItem("sharePageFileList") || []
         , videoList = fileList.filter(function (item, index) {
             return item.category == 1;
         })
@@ -1167,7 +1164,7 @@
                 i.forEach(function(t) {
                     "YES" === t.ai_sub && o.push({
                         icon: i ? "https://staticsns.cdn.bcebos.com/amis/2022-11/1669376964136/Ai.png" : void 0,
-                        text: (t.name || "").replace(/\"/g, "") + "字幕",
+                        text: t.name,
                         value: t.video_lan,
                         badge: "https://staticsns.cdn.bcebos.com/amis/2022-11/" + (obj.getVip() ? "1669792379583/svipbadge.png" : "1669792379145/trial.png"),
                         uri: t.uri
@@ -1185,9 +1182,9 @@
                 for (var s = 2; s < e.length; s += 2) {
                     var n = e[s] || "";
                     if (-1 !== n.indexOf("#EXT-X-MEDIA:")) {
-                        for (var a = n.replace("#EXT-X-MEDIA:", "").split(","), o = {}, p = 0; p < a.length; p++) {
-                            var l = a[p].split("=");
-                            o[(l[0] || "").toLowerCase().replace("-", "_")] = l[1];
+                        for (var a = n.replace("#EXT-X-MEDIA:", "").split(","), o = {}, l = 0; l < a.length; l++) {
+                            var p = a[l].split("=");
+                            o[(p[0] || "").toLowerCase().replace("-", "_")] = String(p[1]).replace(/"/g, "");
                         }
                         o.uri = e[s + 1];
                         i.push(o);
@@ -1454,7 +1451,6 @@
             method: option.type || "get",
             url: option.url,
             headers: option.headers,
-            headers: option.headers,
             responseType: option.dataType,
             onload: function(result) {
                 if (parseInt(result.status / 100) == 2) {
@@ -1473,11 +1469,12 @@
             details.data = Object.keys(option.data).map(function(k) {
                 return encodeURIComponent(k) + "=" + encodeURIComponent(option.data[k]).replace("%20", "+");
             }).join("&");
-        } else {
-            details.data = option.data
+        }
+        else {
+            details.data = option.data;
         }
         if (option.type.toUpperCase() == "GET" && details.data) {
-            details.url = option.url + "?" + details.data;
+            details.url = option.url + (option.url.includes("?") ? "&" : "?") + details.data;
             delete details.data;
         }
         GM_xmlhttpRequest(details);
@@ -1525,22 +1522,6 @@
                 }
             }) : callback && callback("");
         });
-    };
-
-    obj.sessionGet = function (key) {
-        var item = sessionStorage.getItem(key);
-        if (item) {
-            try { item = JSON.parse(item) } catch (error) {};
-        }
-        return item;
-    };
-
-    obj.sessionSet = function (key, value) {
-        sessionStorage.setItem(key, JSON.stringify(value));
-    };
-
-    obj.sessionRemove = function (key) {
-        sessionStorage.removeItem(key);
     };
 
     obj.resetPlayer = function () {
@@ -1600,7 +1581,6 @@
     };
 
     obj.run = function () {
-        obj.startObj((obj) => {obj.getJquery && obj.getVip && obj.getVip()});
         try {
             var url = location.href;
             if (url.indexOf(".baidu.com/s/") > 0) {
