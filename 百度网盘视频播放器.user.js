@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.5.7
+// @version      0.5.8
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画面模式，画中画，支持自动、手动添加字幕，。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -150,7 +150,7 @@
 
     obj.getAdToken = function (url, callback) {
         var adToken = obj.require("file-widget-1:videoPlay/Werbung/WerbungConfig.js").getAdToken();
-        if (obj.video_page.adToken = adToken || obj.getVip() > 1) {
+        if (obj.video_page.adToken || (obj.video_page.adToken = adToken) || obj.getVip() > 1) {
             return callback && callback();
         }
         var jQuery = obj.getJquery();
@@ -158,15 +158,15 @@
             url: url,
         }).done(function(n) {
             if (133 === n.errno && 0 !== n.adTime) {
-                obj.video_page.adToken = obj.correct() || n.adToken;
+                obj.video_page.adToken = n.adToken;
             }
-            callback && callback();
+            callback && callback(obj.correct());
         }).fail(function(n) {
             var t = jQuery.parseJSON(n.responseText);
             if (t && 133 === t.errno && 0 !== t.adTime) {
-                obj.video_page.adToken = obj.correct() || t.adToken;
+                obj.video_page.adToken = t.adToken;
             }
-            callback && callback();
+            callback && callback(obj.correct());
         });
     };
 
@@ -900,7 +900,7 @@
     };
 
     obj.selectEpisodeSharePage = function () {
-        var fileList = sessionStorage.getItem("sharePageFileList") || []
+        var fileList = JSON.parse(sessionStorage.getItem("sharePageFileList") || "[]")
         , videoList = fileList.filter(function (item, index) {
             return item.category == 1;
         })
