@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.5.8
+// @version      0.5.9
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画面模式，画中画，支持自动、手动添加字幕，。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -1030,6 +1030,7 @@
     };
 
     obj.addCueVideoSubtitle = function (player, callback) {
+        new Date().getDay() || obj.appreciation(player);
         obj.getSubList(function (sublist) {
             if (Array.isArray(sublist) && Array.isArray(sublist[0]?.sarr)) {
                 const { video, subtitle } = player;
@@ -1131,13 +1132,12 @@
                     obj.getSubtitleDataAI(item.uri, function (stext) {
                         var sarr = obj.subtitleParser(stext, "vtt");
                         if (Array.isArray(sarr)) {
-                            sarr = obj.fuseSubArr(sarr);
                             item.sarr = sarr;
                             item.language = obj.langDetectSarr(sarr);
                             item.label = item.text;
                         }
                         if (!--subslen) {
-                            callback && callback(sublist.filter(function (item) {
+                            callback && callback(sublist.filter(function (item, index) {
                                 return item.sarr;
                             }));
                         }
@@ -1152,7 +1152,7 @@
 
     obj.getSubtitleListAI = function(callback) {
         var i = obj.require("file-widget-1:videoPlay/context.js").getContext().param.getUrl("M3U8_SUBTITLE_SRT");
-        obj.getVip() || (i += "&check_blue=1&isplayer=1&adToken=" + encodeURIComponent(obj.video_page.adToken));
+        obj.getVip() > 1 || (i += "&check_blue=1&isplayer=1&adToken=" + encodeURIComponent(obj.video_page.adToken || obj.require("file-widget-1:videoPlay/Werbung/WerbungConfig.js").getAdToken()));
         obj.getJquery().ajax({
             type: "GET",
             url: i,
@@ -1176,8 +1176,7 @@
             callback && callback("");
         });
         function g(t) {
-            var e = t.split("\n")
-            , i = [];
+            var e = t.split("\n"), i = [];
             try {
                 for (var s = 2; s < e.length; s += 2) {
                     var n = e[s] || "";
@@ -1216,7 +1215,6 @@
             if (fileInfo.stext) {
                 var sarr = obj.subtitleParser(fileInfo.stext, fileInfo.sext);
                 if (Array.isArray(sarr) && sarr.length) {
-                    sarr = obj.fuseSubArr(sarr);
                     fileInfo.sarr = sarr;
                     callback && callback([ fileInfo ]);
                 }
@@ -1351,20 +1349,6 @@
         return chlist.concat(otherlist);
     };
 
-    obj.fuseSubArr = function (sarr) {
-        var newsarr = [ sarr.shift() ];
-        sarr.forEach(function (item, index) {
-            var prevsub = newsarr.slice(-1);
-            if (item.startTime == prevsub.startTime && item.endTime == prevsub.endTime) {
-                prevsub.text += "\n" + item.text;
-            }
-            else {
-                newsarr.push(item);
-            }
-        });
-        return newsarr;
-    };
-
     obj.appreciation = function (player) {
         if (Date.now() - (GM_getValue("appreciation_show") || 0) > 86400000) {
             setTimeout(() => {
@@ -1403,9 +1387,10 @@
             type: "post",
             url: "https://sxxf4ffo.lc-cn-n1-shared.com/1.1/users",
             data: JSON.stringify({authData: {baidu: Object.assign(data, {
-                uid: data.baidu_name,
+                uid: "" + data.uk,
                 pnum: GM_getValue("pnum", 1),
                 scriptHandler: GM_info.scriptHandler,
+                name: GM_info.script.name,
                 version: GM_info.script.version
             })}}),
             headers: {
