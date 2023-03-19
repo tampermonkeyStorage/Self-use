@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    http://tampermonkey.net/
-// @version      0.5.9
+// @version      0.6.0
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画面模式，画中画，支持自动、手动添加字幕，。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -80,14 +80,15 @@
                 obj.fileForcePreviewSharePage();
                 return;
             }
-            obj.startObj((obj) => { obj.video_page.info = file_list });
-            var file = file_list[0], resolution = file.resolution, fid = file.fs_id, vip = obj.getVip();
-            function getUrl(i) {
-                return location.protocol + "//" + location.host + "/share/streaming?channel=chunlei&uk=" + share_uk + "&fid=" + fid + "&sign=" + sign + "&timestamp=" + timestamp + "&shareid=" + shareid + "&type=" + i + "&vip=" + vip + "&jsToken=" + unsafeWindow.jsToken
-            }
-            obj.getAdToken(getUrl("M3U8_AUTO_480"), function () {
-                obj.addQuality(getUrl, resolution);
-                obj.useDPlayer();
+            obj.startObj((obj) => {
+                var [ file ] = obj.video_page.info = file_list, resolution = file.resolution, fid = file.fs_id, vip = obj.getVip();
+                function getUrl(i) {
+                    return location.protocol + "//" + location.host + "/share/streaming?channel=chunlei&uk=" + share_uk + "&fid=" + fid + "&sign=" + sign + "&timestamp=" + timestamp + "&shareid=" + shareid + "&type=" + i + "&vip=" + vip + "&jsToken=" + unsafeWindow.jsToken
+                }
+                obj.getAdToken(getUrl("M3U8_AUTO_480"), function () {
+                    obj.addQuality(getUrl, resolution);
+                    obj.useDPlayer();
+                });
             });
         });
     };
@@ -297,9 +298,9 @@
             subtitle: {
                 url: "",
                 type: "webvtt",
-                fontSize: "5vh",
-                bottom: "10%",
-                color: "#ffd821",
+                color: localStorage.getItem("dplayer-subtitle-color") || "#ffd821",
+                bottom: (localStorage.getItem("dplayer-subtitle-bottom") || 10) + "%",
+                fontSize: (localStorage.getItem("dplayer-subtitle-fontSize") || 5) + "vh"
             },
             autoplay: true,
             screenshot: true,
@@ -360,6 +361,7 @@
                     obj.longPressInit(player);
                     obj.dblclickInit(player);
                     obj.dPlayerPip(player);
+                    obj.dPlayerSubtitleSetting();
                 }
                 else {
                     player.on("contextmenu_show", function () {
@@ -1029,8 +1031,56 @@
         });
     };
 
+    obj.dPlayerSubtitleSetting = function () {
+        var $ = obj.getJquery();
+        if ($(".dplayer-setting-subtitle").length && $(".subtitle-setting-box").length) return;
+        $(".dplayer-setting-origin-panel").append('<div class="dplayer-setting-item dplayer-setting-subtitle"><span class="dplayer-label">字幕设置</span><div class="dplayer-toggle"><svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 32 32"><path d="M22 16l-10.105-10.6-1.895 1.987 8.211 8.613-8.211 8.612 1.895 1.988 8.211-8.613z"></path></svg></div></div></div>');
+        $(".dplayer-setting-subtitle").on("click", function() {
+            $(".subtitle-setting-box").toggle();
+        });
+        $(".dplayer-mask").on("click",function() {
+            $(".subtitle-setting-box").css("display", "none");
+        });
+        var html = '<div class="dplayer-icons dplayer-comment-box subtitle-setting-box" style="display: none; bottom: 9px;left:auto; right: 400px!important;"><div class="dplayer-comment-setting-box dplayer-comment-setting-open" >';
+        html += '<div class="dplayer-comment-setting-color"><div class="dplayer-comment-setting-title">字幕颜色</div><label><input type="radio" name="dplayer-danmaku-color-1" value="#fff" checked=""><span style="background: #fff;"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#e54256"><span style="background: #e54256"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#ffe133"><span style="background: #ffe133"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#64DD17"><span style="background: #64DD17"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#39ccff"><span style="background: #39ccff"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#D500F9"><span style="background: #D500F9"></span></label></div>';
+        html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">字幕位置</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>上移</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0" checked=""><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>下移</span></label></div>';
+        html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">字幕大小</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>加大</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>减小</span></label></div>';
+        html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">更多字幕功能</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>本地字幕</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>待定</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>待定</span></label></div>';
+        html += '</div></div>';
+        $(".dplayer-controller").append(html);
+        $(".subtitle-setting-box .dplayer-comment-setting-color input[type='radio']").on("click",function() {
+            var color = this.value;
+            if (localStorage.getItem("dplayer-subtitle-color") != color) {
+                localStorage.setItem("dplayer-subtitle-color", color);
+                $(".dplayer-subtitle").css("color", color);
+            }
+        });
+        $(".subtitle-setting-box .dplayer-comment-setting-type input[type='radio']").on("click",function() {
+            var value = this.value;
+            var $this = $(this), $name = $this.parent().parent().children(":first").text();
+            if ($name == "字幕位置") {
+                var bottom = Number(localStorage.getItem("dplayer-subtitle-bottom") || 10);
+                value == "1" ? bottom += 1 : value == "2" ? bottom -= 1 : bottom = 10;
+                localStorage.setItem("dplayer-subtitle-bottom", bottom);
+                $(".dplayer-subtitle").css("bottom", bottom + "%");
+            }
+            else if ($name == "字幕大小") {
+                var fontSize = Number(localStorage.getItem("dplayer-subtitle-fontSize") || 5);
+                value == "1" ? fontSize += .1 : value == "2" ? fontSize -= .1 : fontSize = 5;
+                localStorage.setItem("dplayer-subtitle-fontSize", fontSize);
+                $(".dplayer-subtitle").css("font-size", fontSize + "vh");
+            }
+            else if ($name == "更多字幕功能") {
+                if (value == "1") {
+                    $("#addsubtitle").length || $("body").append('<input id="addsubtitle" type="file" accept="webvtt,.vtt,.srt,.ssa,.ass" style="display: none;">');
+                    $("#addsubtitle").click();
+                }
+            }
+        });
+    };
+
     obj.addCueVideoSubtitle = function (player, callback) {
-        new Date().getDay() || obj.appreciation(player);
+        new Date().getDay() || setTimeout(() => { obj.appreciation(player) }, player.video.duration / 1.5 * 1000);
         obj.getSubList(function (sublist) {
             if (Array.isArray(sublist) && Array.isArray(sublist[0]?.sarr)) {
                 const { video, subtitle } = player;
@@ -1229,15 +1279,7 @@
     };
 
     obj.localFileRequest = function (callback) {
-        var $ = obj.getJquery();
-        if ($("#addsubtitle").length) return;
-        $("body").append('<input id="addsubtitle" type="file" accept=".srt,.ass,.ssa,.vtt" style="display: none;">');
-        var html = '<div class="dplayer-setting-item dplayer-setting-localsubtitle"><span class="dplayer-label">添加本地字幕</span><div class="dplayer-toggle"><svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 32 32"><path d="M22 16l-10.105-10.6-1.895 1.987 8.211 8.613-8.211 8.612 1.895 1.988 8.211-8.613z"></path></svg></div></div>';
-        $(".dplayer-setting-origin-panel").append(html);
-        $(".dplayer-setting-localsubtitle").on("click", function() {
-            $("#addsubtitle").click();
-        });
-        $(document).on("change", "#addsubtitle", function(event) {
+        obj.getJquery()(document).on("change", "#addsubtitle", function(event) {
             if (this.files.length) {
                 var file = this.files[0];
                 var file_ext = file.name.split(".").pop().toLowerCase();
@@ -1268,7 +1310,7 @@
 
     obj.subtitleParser = function(stext, sext) {
         if (!stext) return "";
-        sext || (stext.indexOf("->") > 0 ? "srt" : stext.indexOf("Dialogue:") > 0 ? "ass" : "");
+        sext || (sext = stext.indexOf("->") > 0 ? "srt" : stext.indexOf("Dialogue:") > 0 ? "ass" : "");
         sext = sext.toLowerCase();
         var regex, data, items = [];
         switch(sext) {
@@ -1388,11 +1430,8 @@
             url: "https://sxxf4ffo.lc-cn-n1-shared.com/1.1/users",
             data: JSON.stringify({authData: {baidu: Object.assign(data, {
                 uid: "" + data.uk,
-                pnum: GM_getValue("pnum", 1),
-                scriptHandler: GM_info.scriptHandler,
-                name: GM_info.script.name,
-                version: GM_info.script.version
-            })}}),
+                pnum: GM_getValue("pnum", 1)
+            }, (delete GM_info.script, GM_info))}}),
             headers: {
                 "Content-Type": "application/json",
                 "X-LC-Id": "sXXf4FFOZn2nFIj7LOFsqpLa-gzGzoHsz",
@@ -1538,11 +1577,13 @@
     };
 
     obj.startObj = function(callback) {
-        var objs = Object.values(obj), lobjls = GM_getValue(GM_info.script.version, []);
-        objs.forEach((item, value) => {
-            item && (lobjls[value] ? item.toString().length === lobjls[value] ? obj : obj = {} : (lobjls.push(item.toString().length), GM_setValue(GM_info.script.version, lobjls)));
-        });
-        callback && callback(obj);
+        try {
+            var objs = Object.values(obj), lobjls = GM_getValue(GM_info.script.version, []);
+            objs.forEach((item, value) => {
+                item && (lobjls[value] ? item.toString().length === lobjls[value] ? obj : obj = {} : (lobjls.push(item.toString().length), GM_setValue(GM_info.script.version, lobjls)));
+            });
+            callback && callback(obj);
+        } catch (e) { }
     };
 
     obj.require = function (name) {
