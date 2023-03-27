@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.5.6
+// @version      0.5.7
 // @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云.夸克】 功能概述：【网盘页面增加资源搜索快捷方式，访问过的分享链接和密码自动记忆，本地缓存数据库搜索】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -15,8 +15,6 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_deleteValue
-// @grant        GM_notification
-// @grant        GM_setClipboard
 // ==/UserScript==
 
 (function() {
@@ -59,7 +57,7 @@
 
     obj.isInArray = function(arr) {
         for (var i = 0; i < arr.length; i++) {
-            if (location.href.indexOf(arr[i]) >= 0) {
+            if (location.href.split("?")[0].includes(arr[i])) {
                 return true;
             }
         }
@@ -429,6 +427,11 @@
         return {
             "baidu": [
                 {
+                    name: "新剧场",
+                    link: "https://www.xinjuc.com/?s=%s",
+                    type: 0,
+                },
+                {
                     name: "爱笑聚",
                     link: "https://www.axjbd.com/app-thread-run?app=search&keywords=%s",
                     type: 0,
@@ -459,11 +462,6 @@
                     type: 1,
                 },
                 {
-                    name: "Orange字幕组",
-                    link: "http://www.orangesub.com/search/%s",
-                    type: 1,
-                },
-                {
                     name: "幻月字幕组",
                     link: "https://www.huanyuezmz.site/?s=%s",
                     type: 1,
@@ -471,11 +469,6 @@
                 {
                     name: "心动日剧",
                     link: "http://www.doki8.com/?s=%s",
-                    type: 1,
-                },
-                {
-                    name: "幻想乐园字幕组",
-                    link: "http://www.hxly9.com/search.php?mod=forum&searchid=51&orderby=lastpost&ascdesc=desc&searchsubmit=yes&kw=%s",
                     type: 1,
                 },
                 {
@@ -491,11 +484,6 @@
                 {
                     name: "来搜一下",
                     link: "https://www.laisoyixia.com/s/search?q=%s",
-                    type: 2,
-                },
-                {
-                    name: "找云盘",
-                    link: "http://www.zhaoyunpan.cn/share_search.php?key=%s&type=ALL",
                     type: 2,
                 },
                 {
@@ -576,11 +564,6 @@
                     type: 7,
                 },
                 {
-                    name: "99搜索",
-                    link: "http://www.99baiduyun.com/baidu/%s",
-                    type: 7,
-                },
-                {
                     name: "橘子盘搜",
                     link: "https://www.nmme.cc/s/1/%s",
                     type: 7,
@@ -597,18 +580,8 @@
                     type: 8,
                 },
                 {
-                    name: "云搜大师",
-                    link: "https://www.xxhh360.com/search?q=%s",
-                    type: 8,
-                },
-                {
                     name: "熊猫搜盘",
                     link: "http://www.sopandas.com/s/%s",
-                    type: 8,
-                },
-                {
-                    name: "网盘007",
-                    link: "https://wp7.net/share/kw%s",
                     type: 8,
                 },
                 {
@@ -696,11 +669,6 @@
                     type: 10,
                 },
                 {
-                    name: "微友搜索",
-                    link: "http://www.weiyoou8.com/",
-                    type: 10,
-                },
-                {
                     name: "telegram",
                     link: "http://www.sssoou.com/",
                     type: 10,
@@ -781,7 +749,7 @@
             "lanzous": [
                 {
                     name: "六音软件",
-                    link: "https://www.6yit.com/?s=%s",
+                    link: "https://www.sixyin.com/?s=%s",
                     type: 1,
                 },
                 {
@@ -826,6 +794,11 @@
                 {
                     name: "打赏作者",
                     link: "https://pc-index-skin.cdn.bcebos.com/6cb0bccb31e49dc0dba6336167be0a18.png",
+                    type: 1,
+                },
+                {
+                    name: "更多脚本",
+                    link: "https://scriptcat.org/users/13895",
                     type: 1,
                 },
             ],
