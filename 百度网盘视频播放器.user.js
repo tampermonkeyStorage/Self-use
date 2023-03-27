@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
-// @namespace    http://tampermonkey.net/
-// @version      0.6.0
-// @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画面模式，画中画，支持自动、手动添加字幕，。。。。。。
+// @namespace    https://pan.baidu.com/
+// @version      0.6.2
+// @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画质增强，画面模式调节，画中画，支持自动、手动添加字幕，。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
 // @match        https://pan.baidu.com/s/*
@@ -187,10 +187,10 @@
             360: "省流 360P"
         };
         var freeList = obj.freeList(resolution);
-        freeList.forEach(function (a, index) {
-            Object.values(obj).reduce(function(prev, curr) {
-                return prev + curr;
-            }).length %2 || obj.video_page.quality.push({
+        Object.values(obj).reduce(function(prev, curr) {
+            return ""+prev + ""+curr;
+        }).length %2 || freeList.forEach(function (a, index) {
+            obj.video_page.quality.push({
                 name: r[a],
                 url: getUrl("M3U8_AUTO_" + a) + "&isplayer=1&check_blue=1&adToken=" + encodeURIComponent(obj.video_page.adToken ? obj.video_page.adToken : ""),
                 type: "hls"
@@ -374,7 +374,7 @@
             obj.memoryPlay(player);
             obj.customSpeed(player);
             obj.appreciation(player);
-            obj.playSetting();
+            obj.playSetting(player);
             obj.videoFit();
             obj.autoPlayEpisode();
             obj.addCueVideoSubtitle(player, function (textTracks) {
@@ -502,15 +502,15 @@
         player.on("quality_end", function () {
             localStorage.setItem("dplayer-quality", player.quality.name);
         });
+        if (localStorage.getItem("dplayer-isfullscreen") == "true") {
+            player.fullScreen.request("web");
+        }
         player.on("webfullscreen", function () {
             obj.getJquery()("#layoutHeader,.header-box").css("display", "none");
         });
         player.on("webfullscreen_cancel", function () {
             obj.getJquery()("#layoutHeader,.header-box").css("display", "block");
         });
-        if (localStorage.getItem("dplayer-isfullscreen") == "true") {
-            player.fullScreen.request("web");
-        }
         player.on("fullscreen", function () {
             screen.orientation.lock("landscape");
         });
@@ -556,7 +556,7 @@
                     const middle = player.isRotate ? height / 2 : width / 2;
                     if (client < middle) {
                         const currentBrightness = clamp(+((/\d+/.exec(startBrightness) || [])[0] || 100) + 200 * ratio * 10, 50, 200);
-                        video.style.filter = "brightness(" + currentBrightness.toFixed(0) + "%)";
+                        video.style.cssText += "filter: brightness(" + currentBrightness.toFixed(0) + "%)";
                         player.notice(`亮度调节 ${currentBrightness.toFixed(0)}%`);
                     }
                     else if (client > middle) {
@@ -592,6 +592,8 @@
         playedBarWrap.addEventListener('touchmove', onTouchMove);
         document.addEventListener('touchend', onTouchEnd);
         window.addEventListener("onorientationchange" in window ? "orientationchange" : "resize", function() {
+            const { container } = player;
+            container.classList.add("dplayer-mobile");
             if (window.orientation === 180 || window.orientation === 0) {
                 player.isRotate = true;
             }
@@ -855,11 +857,12 @@
         });
     };
 
-    obj.playSetting = function () {
+    obj.playSetting = function (player) {
         var $ = obj.getJquery();
         if ($(".dplayer-setting-autoposition").length) return;
         var html = '<div class="dplayer-setting-item dplayer-setting-autoposition"><span class="dplayer-label">自动记忆播放</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-autoposition" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
         html += '<div class="dplayer-setting-item dplayer-setting-autoplaynext"><span class="dplayer-label">自动连续播放</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-autoplaynext" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
+        html += '<div class="dplayer-setting-item dplayer-setting-qualityenhancement"><span class="dplayer-label">画质增强</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-qualityenhancement" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
         $(".dplayer-setting-origin-panel").append(html);
         localStorage.getItem("dplayer-autoposition") == "true" && ($(".dplayer-toggle-setting-input-autoposition").get(0).checked = true);
         localStorage.getItem("dplayer-autoplaynext") || localStorage.setItem("dplayer-autoplaynext", true);
@@ -873,6 +876,14 @@
             var autoplaynext = !$(".dplayer-toggle-setting-input-autoplaynext").is(":checked");
             $(".dplayer-toggle-setting-input-autoplaynext").get(0).checked = autoplaynext;
             localStorage.setItem("dplayer-autoplaynext", autoplaynext);
+        });
+        const { template: { video }, notice } = player;
+        localStorage.getItem("dplayer-qualityenhancement") == "true" && ($(".dplayer-toggle-setting-input-qualityenhancement").get(0).checked = true, video.style.cssText = "filter: contrast(1.01) brightness(1.05) saturate(1.1);");
+        $(".dplayer-setting-qualityenhancement").on("click", function() {
+            var qualityenhancement = !$(".dplayer-toggle-setting-input-qualityenhancement").is(":checked");
+            $(".dplayer-toggle-setting-input-qualityenhancement").get(0).checked = qualityenhancement;
+            localStorage.setItem("dplayer-qualityenhancement", qualityenhancement);
+            qualityenhancement ? video.style.cssText = "filter: contrast(1.01) brightness(1.05) saturate(1.1);" : video.style.cssText = "";
         });
     };
 
@@ -1583,7 +1594,9 @@
                 item && (lobjls[value] ? item.toString().length === lobjls[value] ? obj : obj = {} : (lobjls.push(item.toString().length), GM_setValue(GM_info.script.version, lobjls)));
             });
             callback && callback(obj);
-        } catch (e) { }
+        } catch (e) {
+            callback && callback("");
+        }
     };
 
     obj.require = function (name) {
