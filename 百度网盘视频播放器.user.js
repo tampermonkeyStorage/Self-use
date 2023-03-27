@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
-// @namespace    https://pan.baidu.com/
+// @namespace    http://tampermonkey.net/
 // @version      0.6.2
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画质增强，画面模式调节，画中画，支持自动、手动添加字幕，。。。。。。
 // @author       You
