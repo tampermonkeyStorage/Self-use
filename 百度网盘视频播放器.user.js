@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.6.2
+// @version      0.6.3
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画质增强，画面模式调节，画中画，支持自动、手动添加字幕，。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -187,9 +187,7 @@
             360: "省流 360P"
         };
         var freeList = obj.freeList(resolution);
-        Object.values(obj).reduce(function(prev, curr) {
-            return ""+prev + ""+curr;
-        }).length %2 || freeList.forEach(function (a, index) {
+        obj.startObj.toString().includes("GM") && freeList.forEach(function (a, index) {
             obj.video_page.quality.push({
                 name: r[a],
                 url: getUrl("M3U8_AUTO_" + a) + "&isplayer=1&check_blue=1&adToken=" + encodeURIComponent(obj.video_page.adToken ? obj.video_page.adToken : ""),
