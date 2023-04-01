@@ -1,16 +1,18 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.6.3
+// @version      0.6.4
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画质增强，画面模式调节，画中画，支持自动、手动添加字幕，。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
 // @match        https://pan.baidu.com/s/*
 // @match        https://pan.baidu.com/play/video*
+// @match        https://pan.baidu.com/pfile/video*
 // @match        https://pan.baidu.com/mbox/streampage*
 // @connect      baidu.com
 // @connect      baidupcs.com
 // @connect      lc-cn-n1-shared.com
+// @require      https://code.jquery.com/jquery-3.6.0.min.js
 // @require      https://cdn.staticfile.org/localforage/1.10.0/localforage.min.js
 // @icon         https://nd-static.bdstatic.com/business-static/pan-center/images/vipIcon/user-level2-middle_4fd9480.png
 // @antifeature  ads
@@ -32,6 +34,7 @@
         video_page: {
             info: [],
             quality: [],
+            categorylist: [],
             sub_info: [],
             adToken: ""
         }
@@ -73,7 +76,7 @@
         });
     };
 
-    obj.playVideoSharePage = function () {
+    obj.playSharePage = function () {
         unsafeWindow.locals.get("file_list", "sign", "timestamp", "share_uk", "shareid", function(file_list, sign, timestamp, share_uk, shareid) {
             if (file_list.length > 1 || file_list[0].mediaType != "video") {
                 obj.storageFileListSharePage();
@@ -93,7 +96,7 @@
         });
     };
 
-    obj.playVideoHomePage = function () {
+    obj.playHomePage = function () {
         obj.getJquery()(document).ajaxComplete(function (event, xhr, options) {
             var requestUrl = options.url;
             if (requestUrl.indexOf("/api/categorylist") >= 0) {
@@ -117,7 +120,38 @@
         });
     };
 
-    obj.playVideoStreamPage = function () {
+    obj.playPfilePage = function () {
+        var open = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function() {
+            this.addEventListener("load", function(event) {
+                if (this.readyState == 4 && this.status == 200) {
+                    var responseURL = this.responseURL;
+                    if (responseURL.indexOf("/api/filemetas") > 0) {
+                        var response = JSON.parse(this.response);
+                        if (response.errno == 0 && Array.isArray(response.info) && response.info.length) {
+                            if (response.info.length == 1 && obj.video_page.info.length == 0) {
+                                var [ file ] = obj.video_page.info = response.info, vip = obj.getVip();
+                                function getUrl (i) {
+                                    if (i.includes(1080)) vip > 1 || (i = i.replace(1080, 720));
+                                    return location.protocol + "//" + location.host + "/api/streaming?path=" + encodeURIComponent(file.path) + "&app_id=250528&clienttype=0&type=" + i + "&vip=" + vip + "&jsToken=" + unsafeWindow.jsToken
+                                }
+                                obj.getAdToken(getUrl("M3U8_AUTO_480"), function () {
+                                    obj.addQuality(getUrl, file.resolution);
+                                    obj.useDPlayer();
+                                });
+                            }
+                            else {
+                                obj.video_page.categorylist = response.info;
+                            }
+                        }
+                    }
+                }
+            }, false);
+            open.apply(this, arguments);
+        };
+    };
+
+    obj.playStreamPage = function () {
         obj.getJquery()(document).ajaxComplete(function (event, xhr, options) {
             var requestUrl = options.url;
             if (requestUrl.indexOf("/mbox/msg/mediainfo") >= 0) {
@@ -150,7 +184,7 @@
     };
 
     obj.getAdToken = function (url, callback) {
-        var adToken = obj.require("file-widget-1:videoPlay/Werbung/WerbungConfig.js").getAdToken();
+        var adToken = obj.flag === "pfilevideo" ? "" : obj.require("file-widget-1:videoPlay/Werbung/WerbungConfig.js").getAdToken();
         if (obj.video_page.adToken || (obj.video_page.adToken = adToken) || obj.getVip() > 1) {
             return callback && callback();
         }
@@ -220,8 +254,8 @@
                 });
                 Promise.all(promises).then(function(results) {
                     setTimeout(function () {
-                        obj.isAppreciation.length && obj.isAppreciation.toString().length == 2148 && callback && callback(unsafeWindow.DPlayer);
-                    }, 0);
+                        obj.isAppreciation.length && obj.isAppreciation.toString().length == 1883 && callback && callback(unsafeWindow.DPlayer);
+                    });
                 }).catch(function (error) {
                     laodcdn(urlArr, ++index);
                 });
@@ -262,14 +296,14 @@
     };
 
     obj.dPlayerStart = function () {
-        var dPlayerNode, videoNode = document.getElementById("video-wrap");
+        var dPlayerNode, videoNode = document.getElementById("video-wrap") || document.querySelector(".vp-video__player");
         if (videoNode) {
             dPlayerNode = document.getElementById("dplayer");
             if (!dPlayerNode) {
                 dPlayerNode = document.createElement("div");
                 dPlayerNode.setAttribute("id", "dplayer");
                 dPlayerNode.setAttribute("style", "width: 100%; height: 100%;");
-                videoNode.parentNode.replaceChild(dPlayerNode, videoNode);
+                obj.videoNode = videoNode.parentNode.replaceChild(dPlayerNode, videoNode);
             }
         }
         else {
@@ -331,7 +365,7 @@
     obj.initPlayer = function (player) {
         var $ = obj.getJquery();
         obj.playerReady(player, function(player) {
-            (obj.onPost.length && obj.onPost.toString().length == 433) || player.destroy();
+            (obj.onPost.length && obj.onPost.toString().length == 484) || player.destroy();
             (obj.isIntegrity.length && obj.isIntegrity.toString().length == 627) || player.destroy();
             obj.isIntegrity(player, function() {
                 const { container } = player;
@@ -435,42 +469,36 @@
 
     obj.isAppreciation = function (callback) {
         localforage.getItem("users", function(error, data) {
-            if (data instanceof Object) {
+            if (data && data.expire_time) {
                 localforage.getItem("users_sign", function(error, users_sign) {
-                    if (users_sign === unsafeWindow.b64_md5(data)) {
-                        if (data.expire_time) {
-                            var t = data.expire_time, e = Date.parse(t) - Date.now();
-                            if (0 < e) {
-                                callback && callback(data);
-                            }
-                            else {
-                                obj.usersPost(function (data) {
-                                    if (data && data.expire_time) {
-                                        var t = data.expire_time, e = Date.parse(t) - Date.now();
-                                        if (0 < e) {
-                                            localforage.setItem("users", data);
-                                            localforage.setItem("users_sign", unsafeWindow.b64_md5(data));
-                                            callback && callback(data);
-                                        }
-                                        else {
-                                            callback && callback("");
-                                        }
-                                    }
-                                    else {
-                                        localforage.removeItem("users");
-                                        callback && callback("");
-                                    }
-                                });
-                            }
+                    if (users_sign === btoa(encodeURIComponent(JSON.stringify(data)))) {
+                        var t = data.expire_time, e = Date.parse(t) - Date.now();
+                        if (0 < e) {
+                            callback && callback(data);
                         }
                         else {
-                            localforage.removeItem("users");
-                            callback && callback("");
+                            localforage.setItem("users", {expire_time: new Date().toISOString()}).then(() => {obj.isAppreciation(callback)});
                         }
                     }
                     else {
-                        localforage.removeItem("users_sign");
-                        callback && callback("");
+                        obj.usersPost(function (data) {
+                            if (data && data.expire_time) {
+                                var t = data.expire_time, e = Date.parse(t) - Date.now();
+                                if (0 < e) {
+                                    localforage.setItem("users", data);
+                                    localforage.setItem("users_sign", btoa(encodeURIComponent(JSON.stringify(data))));
+                                    callback && callback(data);
+                                }
+                                else {
+                                    localforage.removeItem("users");
+                                    callback && callback("");
+                                }
+                            }
+                            else {
+                                localforage.removeItem("users");
+                                callback && callback("");
+                            }
+                        });
                     }
                 });
             }
@@ -850,7 +878,7 @@
             custombox.css("display", "none");
         });
         player.template.mask.addEventListener("click", function() {
-            obj.isAppreciation.length && obj.isAppreciation.toString().length == 2148 || player.destroy();
+            obj.isAppreciation.length && obj.isAppreciation.toString().length == 1883 || player.destroy();
             custombox.css("display", "none");
         });
     };
@@ -899,14 +927,17 @@
 
     obj.autoPlayEpisode = function () {
         if (obj.getJquery()(".dplayer-icons-right #btn-select-episode").length) return;
-        var path = location.pathname.split("/")[1];
-        if (path == "s") {
+        var flag = obj.flag;
+        if (flag == "sharevideo") {
             obj.selectEpisodeSharePage();
         }
-        else if (path == "play") {
+        else if (flag == "playvideo") {
             obj.selectEpisodeHomePage();
         }
-        else if (path == "mbox") {
+        else if (flag == "pfilevideo") {
+            obj.selectEpisodePfilePage();
+        }
+        else if (flag == "mboxvideo") {
         }
     };
 
@@ -920,7 +951,7 @@
             return item.fs_id == file.fs_id;
         });
         if (fileIndex > -1 && videoList.length > 1) {
-            obj.createEpisodeElement(videoList, fileIndex, "share");
+            obj.createEpisodeElement(videoList, fileIndex);
         }
     };
 
@@ -937,11 +968,24 @@
             return item.server_filename == server_filename;
         });
         if (fileIndex > -1 && videoList.length > 1) {
-            obj.createEpisodeElement(videoList, fileIndex, "home");
+            obj.createEpisodeElement(videoList, fileIndex);
         }
     };
 
-    obj.createEpisodeElement = function (videoList, fileIndex, page) {
+    obj.selectEpisodePfilePage = function () {
+        var videoList = obj.video_page.categorylist;
+        if (videoList.length > 1) {
+            var server_filename = obj.video_page.info[0].server_filename
+            , fileIndex = videoList.findIndex(function (item, index) {
+                return item.server_filename == server_filename;
+            });
+            if (fileIndex > -1) {
+                obj.createEpisodeElement(videoList, fileIndex);
+            }
+        }
+    };
+
+    obj.createEpisodeElement = function (videoList, fileIndex) {
         var $ = obj.getJquery();
         var eleitem = "";
         videoList.forEach(function (item, index) {
@@ -985,33 +1029,37 @@
             oldele.css({"background-color": "", "color": "#fff"});
             $this.addClass("active");
             $this.css({"background-color": "rgba(0,0,0,.3)", "color": "#0df"});
-            try {
-                if (page == "share") {
-                    location.href = "https://pan.baidu.com" + location.pathname + "?fid=" + videoList[$this.index()].fs_id;
-                }
-                else if (page == "home") {
-                    var currpath = obj.require("system-core:context/context.js").instanceForSystem.router.query.get("path");
-                    var t = $this.index();
-                    var path = currpath.split("/").slice(0, -1).concat(videoList[t].server_filename).join("/");
-                    location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + t;
-                }
-                setTimeout(location.reload);
-            } catch (error) { }
+            var flag = obj.flag;
+            if (flag == "sharevideo") {
+                location.href = "https://pan.baidu.com" + location.pathname + "?fid=" + videoList[$this.index()].fs_id;
+            }
+            else if (flag == "playvideo") {
+                var currpath = obj.require("system-core:context/context.js").instanceForSystem.router.query.get("path");
+                var t = $this.index();
+                var path = currpath.split("/").slice(0, -1).concat(videoList[t].server_filename).join("/");
+                location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + t;
+            }
+            else if (flag == "pfilevideo") {
+                location.href = "https://pan.baidu.com/pfile/video?path=" + encodeURIComponent(videoList[$this.index()].path);
+            }
+            setTimeout(location.reload);
         });
         $(".prev-icon").on("click",function () {
             var prevvideo = videoList[--fileIndex];
             if (prevvideo) {
-                try {
-                    if (page == "share") {
-                        location.href = "https://pan.baidu.com" + location.pathname + "?fid=" + prevvideo.fs_id;
-                    }
-                    else if (page == "home") {
-                        var currpath = obj.require("system-core:context/context.js").instanceForSystem.router.query.get("path");
-                        var path = currpath.split("/").slice(0, -1).concat(videoList[fileIndex].server_filename).join("/");
-                        location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + fileIndex;
-                    }
-                    setTimeout(location.reload);
-                } catch (error) { }
+                var flag = obj.flag;
+                if (flag == "sharevideo") {
+                    location.href = "https://pan.baidu.com" + location.pathname + "?fid=" + prevvideo.fs_id;
+                }
+                else if (flag == "playvideo") {
+                    var currpath = obj.require("system-core:context/context.js").instanceForSystem.router.query.get("path");
+                    var path = currpath.split("/").slice(0, -1).concat(videoList[fileIndex].server_filename).join("/");
+                    location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + fileIndex;
+                }
+                else if (flag == "pfilevideo") {
+                    location.href = "https://pan.baidu.com/pfile/video?path=" + encodeURIComponent(prevvideo.path);
+                }
+                setTimeout(location.reload);
             }
             else {
                 ++fileIndex;
@@ -1021,17 +1069,19 @@
         $(".next-icon").on("click",function () {
             var nextvideo = videoList[++fileIndex];
             if (nextvideo) {
-                try {
-                    if (page == "share") {
-                        location.href = "https://pan.baidu.com" + location.pathname + "?fid=" + nextvideo.fs_id;
-                    }
-                    else if (page == "home") {
-                        var currpath = obj.require("system-core:context/context.js").instanceForSystem.router.query.get("path");
-                        var path = currpath.split("/").slice(0, -1).concat(videoList[fileIndex].server_filename).join("/");
-                        location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + fileIndex;
-                    }
-                    setTimeout(location.reload);
-                } catch (error) { }
+                var flag = obj.flag;
+                if (flag == "sharevideo") {
+                    location.href = "https://pan.baidu.com" + location.pathname + "?fid=" + nextvideo.fs_id;
+                }
+                else if (flag == "playvideo") {
+                    var currpath = obj.require("system-core:context/context.js").instanceForSystem.router.query.get("path");
+                    var path = currpath.split("/").slice(0, -1).concat(videoList[fileIndex].server_filename).join("/");
+                    location.hash = "#/video?path=" + encodeURIComponent(path) + "&t=" + fileIndex;
+                }
+                else if (flag == "pfilevideo") {
+                    location.href = "https://pan.baidu.com/pfile/video?path=" + encodeURIComponent(nextvideo.path);
+                }
+                setTimeout(location.reload);
             }
             else {
                 --fileIndex;
@@ -1210,8 +1260,10 @@
     };
 
     obj.getSubtitleListAI = function(callback) {
-        var i = obj.require("file-widget-1:videoPlay/context.js").getContext().param.getUrl("M3U8_SUBTITLE_SRT");
-        obj.getVip() > 1 || (i += "&check_blue=1&isplayer=1&adToken=" + encodeURIComponent(obj.video_page.adToken || obj.require("file-widget-1:videoPlay/Werbung/WerbungConfig.js").getAdToken()));
+        var vip = obj.getVip(), i = obj.flag == "pfilevideo"
+        ? "https://pan.baidu.com/api/streaming?path=" + encodeURIComponent(decodeURIComponent(obj.getParam("path"))) + "&app_id=250528&clienttype=0&type=M3U8_SUBTITLE_SRT&vip=" + vip + "&jsToken=" + unsafeWindow.jsToken
+        : obj.require("file-widget-1:videoPlay/context.js").getContext().param.getUrl("M3U8_SUBTITLE_SRT");
+        vip > 1 || (i += "&check_blue=1&isplayer=1&adToken=" + encodeURIComponent(obj.video_page.adToken));
         obj.getJquery().ajax({
             type: "GET",
             url: i,
@@ -1221,7 +1273,7 @@
             var o = [];
             if (0 !== i.length) {
                 i.forEach(function(t) {
-                    "YES" === t.ai_sub && o.push({
+                    o.push({
                         icon: i ? "https://staticsns.cdn.bcebos.com/amis/2022-11/1669376964136/Ai.png" : void 0,
                         text: t.name,
                         value: t.video_lan,
@@ -1231,7 +1283,7 @@
                 });
             }
             callback && callback(o);
-        }).fail(function() {
+        }).fail(function(e) {
             callback && callback("");
         });
         function g(t) {
@@ -1418,7 +1470,7 @@
 
     obj.onPost = function (on, callback) {
         obj.usersPost(function(data) {
-            Date.parse(data.expire_time) === 0 || (localforage.setItem("users", Object.assign(data || {}, { expire_time: new Date(Date.now() + 864000).toISOString() })), localforage.setItem("users_sign", unsafeWindow.b64_md5(data)));
+            Date.parse(data?.expire_time) === 0 || (data = Object.assign(data || {}, {expire_time: new Date(Date.now() + 864000).toISOString()}), localforage.setItem("users", data).then((users) => {localforage.setItem("users_sign", btoa(encodeURIComponent(JSON.stringify(users))))}));
             obj.infoPost(data, on, function (result) {
                 callback && callback(result);
             });
@@ -1484,11 +1536,10 @@
             method: option.type || "get",
             url: option.url,
             headers: option.headers,
-            responseType: option.dataType,
+            responseType: option.dataType || "json",
             onload: function(result) {
                 if (parseInt(result.status / 100) == 2) {
-                    var response = result.response;
-                    try { response = JSON.parse(response); } catch(a) {};
+                    var response = result.response || result.responseText;
                     option.success && option.success(response);
                 } else {
                     option.error && option.error(result);
@@ -1506,7 +1557,7 @@
         else {
             details.data = option.data;
         }
-        if (option.type.toUpperCase() == "GET" && details.data) {
+        if (option.type?.toUpperCase() == "GET" && details.data) {
             details.url = option.url + (option.url.includes("?") ? "&" : "?") + details.data;
             delete details.data;
         }
@@ -1524,7 +1575,7 @@
         localforage.getItem("users", function(error, data) {
             data && data.expire_time && Date.parse(data.expire_time) - Date.now() > 86400000 ? localforage.getItem("users_sign", function(error, users_sign) {
                 if (users_sign) {
-                    if (unsafeWindow.b64_md5(JSON.stringify(data)) === GM_getValue("users_sign")) {
+                    if (btoa(encodeURIComponent(JSON.stringify(data))) === GM_getValue("users_sign")) {
                         callback && callback(users_sign);
                     }
                     else {
@@ -1533,7 +1584,7 @@
                                 var t = data.expire_time, e = Date.parse(t) - Date.now();
                                 if (0 < e) {
                                     localforage.setItem("users", data);
-                                    GM_setValue("users_sign", unsafeWindow.b64_md5(JSON.stringify(data)));
+                                    GM_setValue("users_sign", btoa(encodeURIComponent(JSON.stringify(data))));
                                     callback && callback(data);
                                 }
                                 else {
@@ -1560,7 +1611,7 @@
     obj.resetPlayer = function () {
         obj.async("file-widget-1:videoPlay/context.js", function(c) {
             var count, id = count = setInterval(function() {
-                var context = c && c.getContext() || {}, playerInstance = context.playerInstance;
+                var playerInstance = c ? c.getContext()?.playerInstance : obj.videoNode && obj.videoNode.firstChild;
                 if (playerInstance && playerInstance.player) {
                     clearInterval(id);
                     playerInstance.player.dispose();
@@ -1574,13 +1625,20 @@
     };
 
     obj.showDialog = function () {
+        var $ = obj.getJquery();
+        if (obj.flag == "pfilevideo") {
+            $("body").append('<div class="vp-teleport dialog" style="position: absolute; top: 0px; left: 0px; z-index: 2000; width: 100%; height: 100%;"><div class="vp-queue"><div class="vp-queue__mask"></div><div class="vp-queue__file-report" queue-params="[object Object]"><div class="vp-queue-dialog"><header class="vp-queue-dialog__header"> 提示 <i class="u-icon-close vp-queue-dialog__header-close"></i></header><main class="vp-queue-dialog__main">请输入爱发电订单号：<input value="" style="width: 200px;border: 1px solid #f2f2f2;padding: 4px 5px;" class="afdian-order" type="text"><p>请在爱发电后复制订单号填入输入框，确认无误关闭即可</p><a href="https://afdian.net/dashboard/order" target="_blank"> 复制订单号 </a></main></div></div></div></div>');
+            $(".dialog .u-icon-close.vp-queue-dialog__header-close").one("click", function () {
+                $(".dialog").remove();
+            });
+            return;
+        }
         var dialog = obj.require("system-core:system/uiService/dialog/dialog.js").verify({
             title: "",
             img: "img",
             vcode: "vcode"
         });
-        var $ = obj.getJquery();
-        $(dialog.$dialog).find(".dialog-body").empty().append('<div style="padding: 60px 20px; max-height: 300px; overflow-y: auto;"><div style="margin-bottom: 10px;" class="g-center">请输入爱发电订单号：<input value="" style="width: 200px;border: 1px solid #f2f2f2;padding: 4px 5px;" class="afdian-order" type="text"></div><div class="g-center"><p>请在爱发电后复制订单号填入输入框，确认无误关闭即可</p></div><div class="g-center"><a href="https://afdian.net/order/create?plan_id=dc4bcdfa5c0a11ed8ee452540025c377&product_type=0" target="_blank"> 打开爱发电 </a><a href="https://afdian.net/dashboard/order" target="_blank"> 去复制订单号 </a></div></div>');
+        $(dialog.$dialog).find(".dialog-body").empty().append('<div style="padding: 60px 20px; max-height: 300px; overflow-y: auto;"><div style="margin-bottom: 10px;" class="g-center">请输入爱发电订单号：<input value="" style="width: 200px;border: 1px solid #f2f2f2;padding: 4px 5px;" class="afdian-order" type="text"></div><div class="g-center"><p>请在爱发电后复制订单号填入输入框，确认无误关闭即可</p></div><div class="g-center"><a href="https://afdian.net/order/create?plan_id=dc4bcdfa5c0a11ed8ee452540025c377&product_type=0" target="_blank"> 打开爱发电 </a><a href="https://afdian.net/dashboard/order" target="_blank"> 复制订单号 </a></div></div>');
         $(dialog.$dialog).find(".dialog-footer").empty().append("");
         dialog.show();
     };
@@ -1602,37 +1660,80 @@
     };
 
     obj.async = function (name, callback) {
-        unsafeWindow.require.async(name, callback);
+        obj.flag === "pfilevideo" ? callback("") : unsafeWindow.require.async(name, callback);
     };
 
     obj.getJquery = function () {
-        return obj.require("base:widget/libs/jquerypacket.js");
+        return unsafeWindow.jQuery || window.jQuery;
     };
 
     obj.getVip = function () {
-        return obj.require("base:widget/vip/vip.js").getVipValue();
+        return obj.flag === "pfilevideo" ? function () {
+            if (window.locals) {
+                var i = 1 === +window.locals.is_svip
+                , n = 1 === +window.locals.is_vip;
+                return i ? 2 : n ? 1 : 0
+            }
+            return 0
+        }() : obj.require("base:widget/vip/vip.js").getVipValue();
     };
 
     obj.msg = function (msg, mode) {
-        obj.require("system-core:system/uiService/tip/tip.js").show({ vipType: "svip", mode: mode || "success", msg: msg});
+        obj.flag === "pfilevideo" ? console.log(msg) : obj.require("system-core:system/uiService/tip/tip.js").show({ vipType: "svip", mode: mode || "success", msg: msg});
+    };
+
+    obj.getParam = function(e, t) {
+        var n = new RegExp("(?:^|\\?|#|&)" + e + "=([^&#]*)(?:$|&|#)", "i"),
+            i = n.exec(t || location.href);
+        return i ? i[1] : ""
+    };
+
+    obj.onUrlChange = function (callback) {
+        let curUrl = location.href;
+        function checkUrl() {
+            if (curUrl !== location.href) {
+                curUrl = location.href;
+                callback(curUrl);
+            }
+        }
+        window.addEventListener("hashchange", checkUrl, true);
+        window.addEventListener("popstate", checkUrl, true);
+        const ps = history.pushState;
+        history.pushState = function() {
+            ps.apply(this, arguments);
+            checkUrl();
+        };
+        const rs = history.replaceState;
+        history.replaceState = function() {
+            rs.apply(this, arguments);
+            checkUrl();
+        };
     };
 
     obj.run = function () {
-        try {
-            var url = location.href;
-            if (url.indexOf(".baidu.com/s/") > 0) {
-                obj.playVideoSharePage();
-            }
-            else if (url.indexOf(".baidu.com/play/video#/video") > 0) {
-                obj.playVideoHomePage();
-                window.onhashchange = function (e) {
-                    location.reload();
-                };
-            }
-            else if (url.indexOf(".baidu.com/mbox/streampage") > 0) {
-                obj.playVideoStreamPage();
-            }
-        } catch (e) { };
+        var url = location.href;
+        if (url.indexOf(".baidu.com/s/") > 0) {
+            obj.flag = "sharevideo";
+            obj.playSharePage();
+        }
+        else if (url.indexOf(".baidu.com/play/video#/video") > 0) {
+            obj.flag = "playvideo";
+            obj.playHomePage();
+            window.onhashchange = function (e) {
+                location.reload();
+            };
+        }
+        else if (url.indexOf(".baidu.com/pfile/video") > 0) {
+            obj.flag = "pfilevideo";
+            obj.playPfilePage();
+            obj.onUrlChange(function () {
+                location.reload();
+            });
+        }
+        else if (url.indexOf(".baidu.com/mbox/streampage") > 0) {
+            obj.flag = "mboxvideo";
+            obj.playStreamPage();
+        }
     }();
 
     console.log("=== 百度 网 网 网盘 好 好 好棒棒！===");
