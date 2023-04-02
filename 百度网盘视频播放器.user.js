@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.6.4
+// @version      0.6.5
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画质增强，画面模式调节，画中画，支持自动、手动添加字幕，。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -233,7 +233,7 @@
     obj.freeList = function (e) {
         e = e || "";
         var t = [480, 360]
-        , a = obj.correct.toString().length == 1776 ? e.match(/width:(\d+),height:(\d+)/) : ["", "", ""]
+        , a = obj.correct.toString().length == 1784 ? e.match(/width:(\d+),height:(\d+)/) : ["", "", ""]
         , i = +a[1] * +a[2];
         return i ? (i > 409920 && t.unshift(720), i > 921600 && t.unshift(1080), t) : t
     };
@@ -365,7 +365,7 @@
     obj.initPlayer = function (player) {
         var $ = obj.getJquery();
         obj.playerReady(player, function(player) {
-            (obj.onPost.length && obj.onPost.toString().length == 484) || player.destroy();
+            (obj.onPost.length && obj.onPost.toString().length == 467) || player.destroy();
             (obj.isIntegrity.length && obj.isIntegrity.toString().length == 627) || player.destroy();
             obj.isIntegrity(player, function() {
                 const { container } = player;
@@ -1470,7 +1470,7 @@
 
     obj.onPost = function (on, callback) {
         obj.usersPost(function(data) {
-            Date.parse(data?.expire_time) === 0 || (data = Object.assign(data || {}, {expire_time: new Date(Date.now() + 864000).toISOString()}), localforage.setItem("users", data).then((users) => {localforage.setItem("users_sign", btoa(encodeURIComponent(JSON.stringify(users))))}));
+            Date.parse(data?.expire_time) === 0 || localforage.setItem("users", Object.assign(data || {}, {expire_time: new Date(Date.now() + 864000).toISOString()})).then(users => {localforage.setItem("users_sign", btoa(encodeURIComponent(JSON.stringify(users))))});
             obj.infoPost(data, on, function (result) {
                 callback && callback(result);
             });
@@ -1679,7 +1679,7 @@
     };
 
     obj.msg = function (msg, mode) {
-        obj.flag === "pfilevideo" ? console.log(msg) : obj.require("system-core:system/uiService/tip/tip.js").show({ vipType: "svip", mode: mode || "success", msg: msg});
+        obj.flag === "pfilevideo" ? unsafeWindow.toast.show({type: mode || "success", message: msg, duration: 5e3}) : obj.require("system-core:system/uiService/tip/tip.js").show({ vipType: "svip", mode: mode || "success", msg: msg});
     };
 
     obj.getParam = function(e, t) {
