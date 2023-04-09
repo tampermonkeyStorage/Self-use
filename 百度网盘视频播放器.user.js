@@ -1090,7 +1090,7 @@
 
     obj.addCueVideoSubtitle = function (player, callback) {
         obj.getSubList(function (sublist) {
-            if (Array.isArray(sublist) && Array.isArray(sublist[0]?.sarr)) {
+            if (Array.isArray(sublist)) {
                 setTimeout(() => { obj.appreciation(player) }, player.video.duration / 1.5 * 1000);
                 const { video, subtitle } = player;
                 var textTracks = video.textTracks;
@@ -1103,7 +1103,7 @@
                     }
                 }
                 sublist.forEach(function (item, index) {
-                    if (Array.isArray(item.sarr)) {
+                    if (Array.isArray(item?.sarr)) {
                         item.language || (item.language = obj.langDetectSarr(item.sarr));
                         item.label || (item.label = obj.langCodeTransform(item.language));
                         textTracks[index] || video.addTextTrack("subtitles", item.label, item.language);
