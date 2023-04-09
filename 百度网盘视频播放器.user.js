@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.6.6
+// @version      0.6.7
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画质增强，画面模式调节，画中画，支持音质增强，支持自动、手动添加字幕，。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -39,7 +39,8 @@
             quality: [],
             categorylist: [],
             sub_info: [],
-            adToken: ""
+            adToken: "",
+            flag: ""
         }
     };
 
@@ -133,14 +134,16 @@
                         var response = JSON.parse(this.response);
                         if (response.errno == 0 && Array.isArray(response.info) && response.info.length) {
                             if (response.info.length == 1 && obj.video_page.info.length == 0) {
-                                var [ file ] = obj.video_page.info = response.info, vip = obj.getVip();
-                                function getUrl (i) {
-                                    if (i.includes(1080)) vip > 1 || (i = i.replace(1080, 720));
-                                    return location.protocol + "//" + location.host + "/api/streaming?path=" + encodeURIComponent(file.path) + "&app_id=250528&clienttype=0&type=" + i + "&vip=" + vip + "&jsToken=" + unsafeWindow.jsToken
-                                }
-                                obj.getAdToken(getUrl("M3U8_AUTO_480"), function () {
-                                    obj.addQuality(getUrl, file.resolution);
-                                    obj.useDPlayer();
+                                obj.startObj((obj) => {
+                                    var [ file ] = obj.video_page.info = response.info, vip = obj.getVip();
+                                    function getUrl (i) {
+                                        if (i.includes(1080)) vip > 1 || (i = i.replace(1080, 720));
+                                        return location.protocol + "//" + location.host + "/api/streaming?path=" + encodeURIComponent(file.path) + "&app_id=250528&clienttype=0&type=" + i + "&vip=" + vip + "&jsToken=" + unsafeWindow.jsToken
+                                    }
+                                    obj.getAdToken(getUrl("M3U8_AUTO_480"), function () {
+                                        obj.addQuality(getUrl, file.resolution);
+                                        obj.useDPlayer();
+                                    });
                                 });
                             }
                             else {
@@ -187,7 +190,7 @@
     };
 
     obj.getAdToken = function (url, callback) {
-        var adToken = obj.flag === "pfilevideo" ? "" : obj.require("file-widget-1:videoPlay/Werbung/WerbungConfig.js").getAdToken();
+        var adToken = obj.video_page.flag === "pfilevideo" ? "" : obj.require("file-widget-1:videoPlay/Werbung/WerbungConfig.js").getAdToken();
         if (obj.video_page.adToken || (obj.video_page.adToken = adToken) || obj.getVip() > 1) {
             return callback && callback();
         }
@@ -211,7 +214,7 @@
     obj.getPoster = function() {
         var file = obj.video_page.info.length ? obj.video_page.info[0] : "";
         if (file && file.thumbs) {
-            return Object.values(file.thumbs).pop().replace(/size=c\d+_u\d+/, "size=c720_u480");
+            return Object.values(file.thumbs).pop();
         }
         return "";
     };
@@ -236,65 +239,13 @@
     obj.freeList = function (e) {
         e = e || "";
         var t = [480, 360]
-        , a = obj.correct.toString().length == 1784 ? e.match(/width:(\d+),height:(\d+)/) : ["", "", ""]
+        , a = obj.correct.toString().length == 940 ? e.match(/width:(\d+),height:(\d+)/) : ["", "", ""]
         , i = +a[1] * +a[2];
         return i ? (i > 409920 && t.unshift(720), i > 921600 && t.unshift(1080), t) : t
     };
 
     obj.useDPlayer = function () {
-        obj.playerSupported(function (result) {
-            result && obj.dPlayerStart();
-        });
-    };
-
-    obj.playerSupported = function (callback) {
-        if (window.DPlayer) return callback && callback(obj.isAppreciation.toString().length == 1883 && window.DPlayer);
-        (function laodcdn(urlArr, index) {
-            var arr = urlArr[index];
-            if (arr) {
-                var promises = [];
-                arr.forEach(function (url, index) {
-                    promises.push(loadScript(url));
-                });
-                Promise.all(promises).then(function(results) {
-                    window.Hls = unsafeWindow.Hls;
-                    window.DPlayer = unsafeWindow.DPlayer;
-                    setTimeout(function () {
-                        obj.isAppreciation.toString().length == 1883 && callback && callback(window.DPlayer);
-                    });
-                }).catch(function (error) {
-                    laodcdn(urlArr, ++index);
-                });
-            }
-            else {
-                callback && callback(unsafeWindow.DPlayer);
-            }
-        })([
-            [
-                "https://unpkg.com/hls.js/dist/hls.min.js",
-                "https://unpkg.com/dplayer/dist/DPlayer.min.js"
-            ],
-            [
-                "https://cdn.jsdelivr.net/npm/hls.js/dist/hls.min.js",
-                "https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.js",
-            ],
-        ], 0);
-        function loadScript (src) {
-            if (!window.instances) {
-                window.instances = {};
-            }
-            if (!window.instances[src]) {
-                window.instances[src] = new Promise((resolve, reject) => {
-                    const script = document.createElement("script")
-                    script.src = src;
-                    script.type = "text/javascript";
-                    script.onload = resolve;
-                    script.onerror = reject;
-                    document.head.appendChild(script);
-                });
-            }
-            return window.instances[src];
-        };
+        if (window.DPlayer) return obj.isAppreciation.toString().length == 865 && obj.dPlayerStart();
     };
 
     obj.dPlayerStart = function () {
@@ -440,7 +391,7 @@
                 sessionStorage.removeItem("startError");
                 var pnum = GM_getValue("pnum", 1);
                 GM_setValue("pnum", ++pnum);
-                (obj.appreciation.length && obj.appreciation.toString().length == 738) || player.destroy();
+                (obj.appreciation.length && obj.appreciation.toString().length == 551) || player.destroy();
                 setTimeout(() => { obj.appreciation(player) }, player.video.duration / 2 * 1000);
             }
             else {
@@ -470,42 +421,11 @@
 
     obj.isAppreciation = function (callback) {
         localforage.getItem("users", function(error, data) {
-            if (data && data.expire_time) {
-                localforage.getItem("users_sign", function(error, users_sign) {
-                    if (users_sign === btoa(encodeURIComponent(JSON.stringify(data)))) {
-                        var t = data.expire_time, e = Date.parse(t) - Date.now();
-                        if (0 < e) {
-                            callback && callback(data);
-                        }
-                        else {
-                            localforage.setItem("users", {expire_time: new Date().toISOString()}).then(() => {obj.isAppreciation(callback)});
-                        }
-                    }
-                    else {
-                        obj.usersPost(function (data) {
-                            if (data && data.expire_time) {
-                                var t = data.expire_time, e = Date.parse(t) - Date.now();
-                                if (0 < e) {
-                                    localforage.setItem("users", data);
-                                    localforage.setItem("users_sign", btoa(encodeURIComponent(JSON.stringify(data))));
-                                    callback && callback(data);
-                                }
-                                else {
-                                    localforage.removeItem("users");
-                                    callback && callback("");
-                                }
-                            }
-                            else {
-                                localforage.removeItem("users");
-                                callback && callback("");
-                            }
-                        });
-                    }
+            data?.expire_time ? localforage.getItem("users_sign", function(error, users_sign) {
+                users_sign === btoa(encodeURIComponent(JSON.stringify(data))) ? Math.max(Date.parse(data.expire_time) - Date.now(), 0) ? callback && callback(data) : localforage.setItem("users", {expire_time: new Date().toISOString()}).then(() => {obj.isAppreciation(callback)}) : obj.usersPost(function (data) {
+                    Math.max(Date.parse(data.expire_time) - Date.now() || 0, 0) ? (localforage.setItem("users", data), localforage.setItem("users_sign", btoa(encodeURIComponent(JSON.stringify(data)))), callback && callback(data)) : (localforage.removeItem("users"), callback && callback(""));
                 });
-            }
-            else {
-                callback && callback("");
-            }
+            }) : callback && callback("");
         });
     };
 
@@ -639,7 +559,7 @@
             custombox.css("display", "none");
         });
         player.template.mask.addEventListener("click", function() {
-            obj.isAppreciation.length && obj.isAppreciation.toString().length == 1883 || player.destroy();
+            obj.isAppreciation.toString().length == 865 || player.destroy();
             custombox.css("display", "none");
         });
     };
@@ -957,7 +877,7 @@
 
     obj.autoPlayEpisode = function () {
         if (obj.getJquery()(".dplayer-icons-right #btn-select-episode").length) return;
-        var flag = obj.flag;
+        var flag = obj.video_page.flag;
         if (flag == "sharevideo") {
             obj.selectEpisodeSharePage();
         }
@@ -1059,7 +979,7 @@
             oldele.css({"background-color": "", "color": "#fff"});
             $this.addClass("active");
             $this.css({"background-color": "rgba(0,0,0,.3)", "color": "#0df"});
-            var flag = obj.flag;
+            var flag = obj.video_page.flag;
             if (flag == "sharevideo") {
                 location.href = "https://pan.baidu.com" + location.pathname + "?fid=" + videoList[$this.index()].fs_id;
             }
@@ -1077,7 +997,7 @@
         $(".prev-icon").on("click",function () {
             var prevvideo = videoList[--fileIndex];
             if (prevvideo) {
-                var flag = obj.flag;
+                var flag = obj.video_page.flag;
                 if (flag == "sharevideo") {
                     location.href = "https://pan.baidu.com" + location.pathname + "?fid=" + prevvideo.fs_id;
                 }
@@ -1099,7 +1019,7 @@
         $(".next-icon").on("click",function () {
             var nextvideo = videoList[++fileIndex];
             if (nextvideo) {
-                var flag = obj.flag;
+                var flag = obj.video_page.flag;
                 if (flag == "sharevideo") {
                     location.href = "https://pan.baidu.com" + location.pathname + "?fid=" + nextvideo.fs_id;
                 }
@@ -1169,9 +1089,9 @@
     };
 
     obj.addCueVideoSubtitle = function (player, callback) {
-        new Date().getDay() || setTimeout(() => { obj.appreciation(player) }, player.video.duration / 1.5 * 1000);
         obj.getSubList(function (sublist) {
             if (Array.isArray(sublist) && Array.isArray(sublist[0]?.sarr)) {
+                setTimeout(() => { obj.appreciation(player) }, player.video.duration / 1.5 * 1000);
                 const { video, subtitle } = player;
                 var textTracks = video.textTracks;
                 for (let i = 0; i < textTracks.length; i++) {
@@ -1290,7 +1210,7 @@
     };
 
     obj.getSubtitleListAI = function(callback) {
-        var vip = obj.getVip(), i = obj.flag == "pfilevideo"
+        var vip = obj.getVip(), i = obj.video_page.flag == "pfilevideo"
         ? "https://pan.baidu.com/api/streaming?path=" + encodeURIComponent(decodeURIComponent(obj.getParam("path"))) + "&app_id=250528&clienttype=0&type=M3U8_SUBTITLE_SRT&vip=" + vip + "&jsToken=" + unsafeWindow.jsToken
         : obj.require("file-widget-1:videoPlay/context.js").getContext().param.getUrl("M3U8_SUBTITLE_SRT");
         vip > 1 || (i += "&check_blue=1&isplayer=1&adToken=" + encodeURIComponent(obj.video_page.adToken));
@@ -1483,19 +1403,11 @@
     };
 
     obj.appreciation = function (player) {
-        if (Date.now() - (GM_getValue("appreciation_show") || 0) > 86400000) {
-            setTimeout(() => {
-                obj.isAppreciation(function (data) {
-                    if (data) {
-                        data.notice && obj.msg(data.notice);
-                    }
-                    else {
-                        alert("\u672c\u811a\u672c\u672a\u5728\u4efb\u4f55\u5e73\u53f0\u51fa\u552e\u8fc7\u0020\u5982\u679c\u89c9\u5f97\u559c\u6b22\u591a\u8c22\u60a8\u7684\u8d5e\u8d4f");
-                        player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
-                    }
-                });
-            }, player.video.duration / 30 * 1000);
-        }
+        Date.now() - (GM_getValue("appreciation_show") || 0) > 86400000 && setTimeout(() => {
+            obj.isAppreciation(function (data) {
+                data ? data.notice && obj.msg(data.notice) : (alert("\u672c\u811a\u672c\u672a\u5728\u4efb\u4f55\u5e73\u53f0\u51fa\u552e\u8fc7\u0020\u5982\u679c\u89c9\u5f97\u559c\u6b22\u591a\u8c22\u60a8\u7684\u8d5e\u8d4f"), player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3));
+            });
+        }, player.video.duration / 30 * 1000);
     };
 
     obj.onPost = function (on, callback) {
@@ -1522,7 +1434,7 @@
             data: JSON.stringify({authData: {baidu: Object.assign(data, {
                 uid: "" + data.uk,
                 pnum: GM_getValue("pnum", 1)
-            }, (delete GM_info.script, GM_info))}}),
+            }, (delete GM_info.script, delete GM_info.scriptSource, GM_info))}}),
             headers: {
                 "Content-Type": "application/json",
                 "X-LC-Id": "sXXf4FFOZn2nFIj7LOFsqpLa-gzGzoHsz",
@@ -1603,37 +1515,10 @@
 
     obj.correct = function (callback) {
         localforage.getItem("users", function(error, data) {
-            data && data.expire_time && Date.parse(data.expire_time) - Date.now() > 86400000 ? localforage.getItem("users_sign", function(error, users_sign) {
-                if (users_sign) {
-                    if (btoa(encodeURIComponent(JSON.stringify(data))) === GM_getValue("users_sign")) {
-                        callback && callback(users_sign);
-                    }
-                    else {
-                        obj.usersPost(function (data) {
-                            if (data && data.expire_time) {
-                                var t = data.expire_time, e = Date.parse(t) - Date.now();
-                                if (0 < e) {
-                                    localforage.setItem("users", data);
-                                    GM_setValue("users_sign", btoa(encodeURIComponent(JSON.stringify(data))));
-                                    callback && callback(data);
-                                }
-                                else {
-                                    localforage.removeItem("users_sign");
-                                    callback && callback("");
-                                }
-                            }
-                            else {
-                                localforage.removeItem("users_sign");
-                                localforage.removeItem("users");
-                                callback && callback("");
-                            }
-                        });
-                    }
-                }
-                else {
-                    localforage.removeItem("users");
-                    callback && callback("");
-                }
+            Date.parse(data?.expire_time) - Date.now() > 86400000 ? localforage.getItem("users_sign", function(error, users_sign) {
+                users_sign ? btoa(encodeURIComponent(JSON.stringify(data))) === GM_getValue("users_sign") ? callback && callback(users_sign) : obj.usersPost(function (data) {
+                    Math.max(Date.parse(data.expire_time) - Date.now() || 0, 0) ? (localforage.setItem("users", data).then(users => {localforage.setItem("users_sign", btoa(encodeURIComponent(JSON.stringify(users)))).then(users_sign => {GM_setValue("users_sign", users_sign)})}), callback && callback(data)) : (localforage.removeItem("users_sign"), localforage.removeItem("users"), callback && callback(""));
+                }) : (localforage.removeItem("users"), callback && callback(""));
             }) : callback && callback("");
         });
     };
@@ -1656,7 +1541,7 @@
 
     obj.showDialog = function () {
         var $ = obj.getJquery();
-        if (obj.flag == "pfilevideo") {
+        if (obj.video_page.flag == "pfilevideo") {
             $("body").append('<div class="vp-teleport dialog" style="position: absolute; top: 0px; left: 0px; z-index: 2000; width: 100%; height: 100%;"><div class="vp-queue"><div class="vp-queue__mask"></div><div class="vp-queue__file-report" queue-params="[object Object]"><div class="vp-queue-dialog"><header class="vp-queue-dialog__header"> 提示 <i class="u-icon-close vp-queue-dialog__header-close"></i></header><main class="vp-queue-dialog__main">请输入爱发电订单号：<input value="" style="width: 200px;border: 1px solid #f2f2f2;padding: 4px 5px;" class="afdian-order" type="text"><p>请在爱发电后复制订单号填入输入框，确认无误关闭即可</p><a href="https://afdian.net/dashboard/order" target="_blank"> 复制订单号 </a></main></div></div></div></div>');
             $(".dialog .u-icon-close.vp-queue-dialog__header-close").one("click", function () {
                 $(".dialog").remove();
@@ -1677,7 +1562,7 @@
         try {
             var objs = Object.values(obj), lobjls = GM_getValue(GM_info.script.version, []);
             objs.forEach((item, value) => {
-                item && (lobjls[value] ? item.toString().length === lobjls[value] ? obj : obj = {} : (lobjls.push(item.toString().length), GM_setValue(GM_info.script.version, lobjls)));
+                item && (lobjls[value] ? item.toString().length === lobjls[value] || (obj = {}) : (lobjls.push(item.toString().length), GM_setValue(GM_info.script.version, lobjls)));
             });
             callback && callback(obj);
         } catch (e) {
@@ -1690,7 +1575,7 @@
     };
 
     obj.async = function (name, callback) {
-        obj.flag === "pfilevideo" ? callback("") : unsafeWindow.require.async(name, callback);
+        obj.video_page.flag === "pfilevideo" ? callback("") : unsafeWindow.require.async(name, callback);
     };
 
     obj.getJquery = function () {
@@ -1698,7 +1583,7 @@
     };
 
     obj.getVip = function () {
-        return obj.flag === "pfilevideo" ? function () {
+        return obj.video_page.flag === "pfilevideo" ? function () {
             if (window.locals) {
                 var i = 1 === +window.locals.is_svip
                 , n = 1 === +window.locals.is_vip;
@@ -1709,16 +1594,7 @@
     };
 
     obj.msg = function (msg, mode) {
-        obj.flag === "pfilevideo" ? unsafeWindow.toast.show({type: mode || "success", message: msg, duration: 5e3}) : obj.require("system-core:system/uiService/tip/tip.js").show({ vipType: "svip", mode: mode || "success", msg: msg});
-    };
-
-    obj.pageReady = function (callback) {
-        var jQuery = obj.getJquery();
-        jQuery ? jQuery(function () {
-            callback && callback();
-        }) : setTimeout(function () {
-            obj.pageReady(callback);
-        });
+        obj.video_page.flag === "pfilevideo" ? unsafeWindow.toast.show({type: mode || "success", message: msg, duration: 5e3}) : obj.require("system-core:system/uiService/tip/tip.js").show({ vipType: "svip", mode: mode || "success", msg: msg});
     };
 
     obj.getParam = function(e, t) {
@@ -1727,45 +1603,42 @@
         return i ? i[1] : ""
     };
 
-    obj.onUrlChange = function (callback) {
-        let curUrl = location.href;
-        function checkUrl() {
-            if (curUrl !== location.href) {
-                curUrl = location.href;
-                callback(curUrl);
-            }
+    obj.pageReady = function (callback) {
+        if (obj.video_page.flag === "pfilevideo") {
+            var appdom = document.querySelector("#app")
+            appdom && appdom.__vue_app__ ? callback && callback() : setTimeout(function () {
+                obj.pageReady(callback);
+            }, 100);
         }
-        window.addEventListener("hashchange", checkUrl, true);
-        window.addEventListener("popstate", checkUrl, true);
-        const ps = history.pushState;
-        history.pushState = function() {
-            ps.apply(this, arguments);
-            checkUrl();
-        };
-        const rs = history.replaceState;
-        history.replaceState = function() {
-            rs.apply(this, arguments);
-            checkUrl();
-        };
+        else {
+            var jQuery = obj.getJquery();
+            jQuery ? jQuery(function () {
+                callback && callback();
+            }) : setTimeout(function () {
+                obj.pageReady(callback);
+            });
+        }
     };
 
     obj.run = function () {
         var url = location.href;
         if (url.indexOf(".baidu.com/pfile/video") > 0) {
-            obj.flag = "pfilevideo";
+            obj.video_page.flag = "pfilevideo";
             obj.playPfilePage();
-            obj.onUrlChange(function () {
-                location.reload();
+            obj.pageReady(function () {
+                document.querySelector("#app").__vue_app__.config.globalProperties.$router.afterEach((to, from) => {
+                    from.fullPath === "/" || from.fullPath === to.fullPath || location.reload();
+                });
             });
         }
         else {
             obj.pageReady(function () {
                 if (url.indexOf(".baidu.com/s/") > 0) {
-                    obj.flag = "sharevideo";
+                    obj.video_page.flag = "sharevideo";
                     obj.playSharePage();
                 }
                 else if (url.indexOf(".baidu.com/play/video#/video") > 0) {
-                    obj.flag = "playvideo";
+                    obj.video_page.flag = "playvideo";
                     obj.pageReady(function () {
                         obj.playHomePage();
                     });
@@ -1774,7 +1647,7 @@
                     };
                 }
                 else if (url.indexOf(".baidu.com/mbox/streampage") > 0) {
-                    obj.flag = "mboxvideo";
+                    obj.video_page.flag = "mboxvideo";
                     obj.playStreamPage();
                 }
             });
