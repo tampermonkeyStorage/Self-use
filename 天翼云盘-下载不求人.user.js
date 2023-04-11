@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         天翼云盘-下载不求人
 // @namespace    http://tampermonkey.net/
-// @version      0.7.0
+// @version      0.8.0
 // @description  让下载成为一件愉快的事情
 // @author       You
 // @match        https://cloud.189.cn/web/*
@@ -56,6 +56,42 @@
         var $Vue = (document.querySelector(".content") || document.querySelector(".p-web")).__vue__;
         $Vue.$toast.hide();
         $Vue.$loading.hide();
+    };
+
+    obj.getFinalUrl = function (url) {
+        return new Promise(function (resolve) {
+            const xhr = GM_xmlhttpRequest({
+                url: url,
+                method: "get",
+                onreadystatechange: function(response) {
+                    if (response.readyState === 4 || response.finalUrl !== url) {
+                        xhr.abort();
+                        if (!xhr.mark) {
+                            xhr.mark = true;
+                            resolve(response.finalUrl);
+                        }
+                    }
+                },
+                onerror: function (error) {
+                    resolve("");
+                }
+            });
+        });
+    };
+
+    obj.getAccessToken = function () {
+        var accessToken = localStorage.getItem("accessToken");
+        if (accessToken) return Promise.resolve(accessToken);
+        return obj.getFinalUrl("https://api.cloud.189.cn/open/oauth2/ssoH5.action").then(function (location) {
+            if (location) {
+                var accessToken = (/accessToken=(.+)/.exec(location) || [])[1];
+                accessToken && localStorage.setItem("accessToken", accessToken);
+                return accessToken;
+            }
+            else {
+                return "";
+            }
+        });
     };
 
     obj.getSignature = function (e) {
@@ -119,58 +155,13 @@
         });
     };
 
-    obj.getFinalUrl = function (url) {
-        return new Promise(function (resolve) {
-            const xhr = GM_xmlhttpRequest({
-                url: url,
-                method: "get",
-                onreadystatechange: function(response) {
-                    if (response.readyState === 4 || response.finalUrl !== url) {
-                        xhr.abort();
-                        if (!xhr.mark) {
-                            xhr.mark = true;
-                            resolve(response.finalUrl);
-                        }
-                    }
-                },
-                onerror: function (error) {
-                    resolve("");
-                }
-            });
-        });
-    };
-
-    obj.getAccessToken = function () {
-        return new Promise(function (resolve) {
-            var accessToken = localStorage.getItem("accessToken");
-            if (accessToken) {
-                resolve(accessToken);
-                return;
-            }
-            obj.getFinalUrl("https://api.cloud.189.cn/open/oauth2/ssoH5.action").then(function (location) {
-                if (location) {
-                    var accessToken = (/accessToken=(.+)/.exec(location) || [])[1];
-                    accessToken && localStorage.setItem("accessToken", accessToken);
-                    resolve(accessToken);
-                }
-                else {
-                    resolve("");
-                }
-            });
-        });
-    };
-
     obj.getDownloadUrl = function (fileId, shareId) {
-        return obj.getAccessToken().then(function (accessToken) {
-            if (accessToken) {
-                return obj.getFileDownloadUrl(fileId, shareId);
-            }
-            else {
-                return new Promise(function (resolve) {
-                    resolve("");
-                });
-            }
-        });
+        if (localStorage.getItem("accessToken")) {
+            return obj.getFileDownloadUrl(fileId, shareId);
+        }
+        else {
+            return Promise.resolve("");
+        }
     };
 
     obj.getSelectedFileList = function () {
@@ -228,8 +219,7 @@
 
         var fileList = obj.getSelectedFileList();
         if (fileList.length == 0) {
-            obj.showTipError("getSelectedFileList 获取选中文件出错");
-            return;
+            return obj.showTipError("getSelectedFileList 获取选中文件出错");
         }
 
         obj.showTipLoading("正在获取链接...");
@@ -292,13 +282,15 @@
             this.addEventListener("load", function() {
                 if (this.readyState == 4 && this.status == 200) {
                     var responseURL = this.responseURL;
-                    var response = this.response;
-                    if (response instanceof Object && response.res_code == 0) {
-                        if (responseURL.indexOf("/listShareDir.action") > 0 || responseURL.indexOf("/listFiles.action") > 0) {
-                            if (response.fileListAO) {
-                                obj.initDownloadPage();
-                                obj.showTipSuccess("文件加载完成 共：" + (response.fileListAO.count || (response.fileListAO.fileList || []).length) + "项");
-                            }
+                    if (responseURL.indexOf("/listShareDir.action") > 0 || responseURL.indexOf("/listFiles.action") > 0) {
+                        var response = this.response;
+                        try { response = JSON.parse(response) } catch (error) { };
+                        if (response && response.res_code == 0 && response.fileListAO) {
+                            obj.initDownloadPage();
+                            obj.showTipSuccess("文件加载完成 共：" + (response.fileListAO.count || (response.fileListAO.fileList || []).length) + "项");
+                            obj.getAccessToken().then(function (accessToken) {
+                                if (!accessToken && GM_info.scriptHandler === "Violentmonkey") obj.showTipError("无法适配暴力猴，请更换脚本管理器"); //v2.13.1
+                            });
                         }
                     }
                 }
@@ -307,7 +299,7 @@
         };
     }();
 
-    console.log("=== 天翼云盘 ===");
+    console.info("=== 天翼云盘 好棒棒！===");
 
     // Your code here...
 })();
