@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.6.8
+// @version      0.6.9
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画质增强，画面模式调节，画中画，支持音质增强，支持自动、手动添加字幕，。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -13,10 +13,10 @@
 // @connect      baidupcs.com
 // @connect      lc-cn-n1-shared.com
 // @require      https://code.jquery.com/jquery-3.6.0.min.js
+// @require      https://scriptcat.org/lib/950/1.0.0/Joysound.js
 // @require      https://cdn.staticfile.org/hls.js/1.3.5/hls.min.js
 // @require      https://cdn.staticfile.org/dplayer/1.26.0/DPlayer.min.js
 // @require      https://cdn.staticfile.org/localforage/1.10.0/localforage.min.js
-// @require      https://greasyfork.org/scripts/463654-joysound/code/Joysound.js?version=1173527
 // @icon         https://nd-static.bdstatic.com/business-static/pan-center/images/vipIcon/user-level2-middle_4fd9480.png
 // @run-at       document-start
 // @antifeature  ads
