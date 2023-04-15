@@ -1,15 +1,16 @@
 // ==UserScript==
 // @name         夸克网盘
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.1.2
+// @version      0.1.3
 // @description  你手捏一片金黄，像一个归来的王
 // @author       You
 // @match        https://pan.quark.cn/s/*
 // @match        https://pan.quark.cn/list*
+// @connect      quark.cn
 // @icon         https://pan.quark.cn/favicon.ico
 // @require      https://code.jquery.com/jquery-3.6.0.min.js
 // @run-at       document-body
-// @grant none
+// @grant        GM_xmlhttpRequest
 // ==/UserScript==
 
 (function () {
@@ -247,7 +248,7 @@
         var list = obj.getShareId() ? obj.file_page.share_list : obj.file_page.home_list, fids = [];
         $(".ant-table-body tbody tr").each(function () {
             var $this = $(this);
-            if ($this.find("input").get(0).checked) {
+            if ($this.find("input").get(0)?.checked) {
                 fids.push($this.attr("data-row-key"));
             }
         });
@@ -307,20 +308,29 @@
     };
 
     obj.fetch = function (url, body, method) {
-        return fetch(url, {
-            headers: {
-                "content-type": "application/json"
-            },
-            referrer: "https://pan.quark.cn/",
-            referrerPolicy: "strict-origin-when-cross-origin",
-            body: body ? JSON.stringify(body) : body,
-            method: method || "POST",
-            mode: "cors",
-            credentials: "include"
-        }).then(function (result) {
-            return result.ok ? result.json() : "";
-        }).catch(function(error) {
-            console.error("fetch error", error);
+        return new Promise(function (resolve, reject) {
+            GM_xmlhttpRequest({
+                method: method || "POST",
+                url: url,
+                data: body ? JSON.stringify(body) : body,
+                headers: {
+                    "content-type": "application/json",
+                    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) quark-cloud-drive/2.5.20 Chrome/100.0.4896.160 Electron/18.3.5.4-b478491100 Safari/537.36 Channel/pckk_other_ch"
+                },
+                responseType: "json",
+                onload: function (result) {
+                    var response = result.response || result.responseText;
+                    if (parseInt(result.status / 100) == 2) {
+                        resolve(response);
+                    }
+                    else {
+                        reject(response);
+                    }
+                },
+                onerror: function (result) {
+                    reject(result.error);
+                }
+            });
         });
     };
 
