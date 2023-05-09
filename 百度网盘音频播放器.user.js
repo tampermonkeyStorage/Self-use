@@ -23,7 +23,6 @@
 (function() {
     'use strict';
 
-    GM_addStyle(GM_getResourceText("aplayerCSS"));
     var $ = $ || window.$;
     var obj = {
         audio_page: {
@@ -275,6 +274,7 @@
         return "#" + ("00000" + (Math.random() * 0x1000000 << 0).toString(16)).substr(- 6);
     };
 
+    GM_addStyle(GM_getResourceText("aplayerCSS"));
     $(document.body).on("DOMNodeInserted", ".nd-audio.normal", function () {
         if (!this.only) {
             this.only = true;
