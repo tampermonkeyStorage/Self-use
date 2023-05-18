@@ -57,7 +57,7 @@
             var fileList = element?.__vue__?.fileList;
             if (Array.isArray(fileList) && fileList.length) {
                 var audioFileList = fileList.filter(function(item, index) {
-                    return !item.isdir && (item.category === 2 || item.category === 6 && ["flac", "ape"].includes(item.server_filename.split(".").pop().toLowerCase()));
+                    return item.category === 2 || item.category === 6 && !item.isdir && ["flac", "ape"].includes(item.server_filename.split(".").pop().toLowerCase());
                 });
                 var playbtn = $(".play-btn");
                 if (audioFileList.length) {
