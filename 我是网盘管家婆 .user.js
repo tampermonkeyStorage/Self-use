@@ -2011,7 +2011,7 @@
             weiyun: /(https?:\/\/share\.weiyun\.com\/([a-z\d]{7,32}))([^\w]*(?:提取|访问|密)码[^\w]*([\w]{1,6}))?/gim,
             quark: /(https?:\/\/pan\.quark\.cn\/s\/([a-z\d]{12,32}))([^\w]*(?:提取|访问|密)码[^\w]*([\w]{4}))?/gim,
             caiyun: /(https?:\/\/caiyun\.(?:139|feixin\.10086)\.(?:com|cn)\/(?:m\/i\?|dl\/)([a-z\d]{13,14}))([^\w]*(?:提取|密)码[^\w]*([a-z\d]{4}))?/gim,
-            pan123: /(https?:\/\/www\.123pan\.com\/s\/([a-z\d]{4,6}-[a-z\d]{5})(?:\.html)?)([^\w]*(?:提取|密)码[^\w]*([\w]{4}))?/gim,
+            pan123: /(https?:\/\/www\.123pan\.com\/s\/([a-z\d]{4,6}-[a-z\d]{4,6})(?:\.html)?)([^\w]*(?:提取|密)码[^\w]*([\w]{4}))?/gim,
         };
         var shareList = {};
 
