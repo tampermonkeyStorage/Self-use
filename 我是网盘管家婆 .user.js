@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.5.7
-// @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云.夸克】 功能概述：【网盘页面增加资源搜索快捷方式，访问过的分享链接和密码自动记忆，本地缓存数据库搜索】
+// @version      0.5.8
+// @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云.夸克.123盘】 功能概述：【网盘页面增加资源搜索快捷方式，访问过的分享链接和密码自动记忆，本地缓存数据库搜索】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
 // @match        *://*/*
@@ -90,6 +90,9 @@
         else if (shareLink.indexOf("pan.quark.cn") > 0) {
             return (/pan\.quark\.cn\/s\/([\w]+)/.exec(shareLink) || [])[1];
         }
+        else if (shareLink.indexOf("123pan.com") > 0) {
+            return (/123pan\.com\/s\/([\w-]+)/.exec(shareLink) || [])[1];
+        }
         else {
             return "";
         }
@@ -135,7 +138,6 @@
                 }
             },
             onerror: function(result) {
-                console.error("http请求失败", result);
                 option.error && option.error(result.error);
             }
         };
@@ -180,7 +182,7 @@
             success: function (response) {
                 callback && callback(response);
             },
-            error: function () {
+            error: function (error) {
                 if (shareData.objectId) {
                     delete shareData.objectId;
                     obj.storeSharePwd(shareData, callback);
@@ -371,7 +373,7 @@
                     var oneShare = shareList[shareId];
                     var strShare = Object.values(oneShare).join(" ");
                     if (strShare.indexOf(cacheValue) >= 0) {
-                        var source = {baidu: "百度", lanzous: "蓝奏", ty189: "天翼", xunlei: "迅雷", aliyundrive: "阿里", caiyun: "彩云", weiyun: "微云"}[oneShare.share_source];
+                        var source = {baidu: "百度", lanzous: "蓝奏", ty189: "天翼", xunlei: "迅雷", aliyundrive: "阿里", caiyun: "彩云", weiyun: "微云", quark: "夸克", pan123: "123盘"}[oneShare.share_source];
                         var html = '<div><em>['.concat(++index) + ']</em><span>'.concat('<em>[ ' + source + ' ]</em>').concat(oneShare.share_name || (oneShare.origin_title || "").split("-")[0] || "") + '</span></div>';
                         html += '<div class="item">链接：<a class="cache-link" href="'.concat(oneShare.share_url, '" target="_blank">').concat(oneShare.share_url, '</a><span class="pwd">').concat(oneShare.share_pwd ? "提取码：" + oneShare.share_pwd : "", "</span></div>");
                         $(".dialog-dialog .cache-items").append(html);
@@ -539,6 +541,11 @@
                 {
                     name: "小白盘",
                     link: "https://www.xiaobaipan.com/list-%s.html",
+                    type: 6,
+                },
+                {
+                    name: "盘古侠",
+                    link: "https://panguxia.com/search?q=%s",
                     type: 6,
                 },
 
@@ -792,8 +799,8 @@
             ],
             "": [
                 {
-                    name: "打赏作者",
-                    link: "https://pc-index-skin.cdn.bcebos.com/6cb0bccb31e49dc0dba6336167be0a18.png",
+                    name: "为爱发电",
+                    link: "https://afdian.net/a/vpannice",
                     type: 1,
                 },
                 {
@@ -808,8 +815,8 @@
     var baidu = {};
 
     baidu.submitPwd = function(pwd) {
-        $(".input-area input").val(pwd);
-        $(".input-area .g-button-right").click();
+        $(".verify-input input").val(pwd);
+        $(".verify-input #submitBtn").trigger("click");
     };
 
     baidu.reloadPage = function(randsk) {
@@ -824,7 +831,6 @@
                     return;
                 }
                 if (sessionStorage.getItem(shareId)) {
-                    obj.showTipSuccess("链接失效，此条存储信息已删除");
                     obj.removeSharePwdLocal(shareId);
                 }
                 else {
@@ -969,7 +975,6 @@
                 window.location.href = shareLink;
             },
             error: function(err) {
-                console.error("百度提取码状态查询 error！", err);
                 window.location.href = shareLink;
             }
         });
@@ -996,7 +1001,6 @@
                 callback && callback(-1);
                 break;
             default:
-                console.error("百度网盘-有效性未知", htmlText);
                 obj.showTipError("百度网盘-链接有效性未知");
                 callback && callback(0);
         }
@@ -1037,7 +1041,6 @@
                 })
             },
             error: function() {
-                console.error("百度网盘-链接已失效", shareLink);
                 obj.showTipError("百度网盘-链接已失效");
             }
         });
@@ -1076,7 +1079,6 @@
                 }
             },
             error: function() {
-                console.error("该链接已失效", jumpLink);
                 obj.showTipError("该链接已失效，网盘文件不存在");
             }
         })
@@ -1212,7 +1214,6 @@
             });
         }
         else if ($(".off").length) {
-            obj.showTipSuccess("链接失效，此条存储信息已删除");
             obj.removeSharePwdLocal(shareId);
         }
     };
@@ -1267,9 +1268,7 @@
             var $Vue = (document.querySelector(".get-file-container") || document.querySelector(".verify-panel-container")).__vue__;
             $Vue.accessCode = pwd;
             $Vue.checkAccessCode();
-        } catch (e) {
-            console.error("ty189.submitPwd 错误", e);
-        };
+        } catch (e) { };
     };
 
     ty189.storeSharePwd = function() {
@@ -1310,7 +1309,6 @@
     ty189.autoPaddingPwd = function() {
         var errNode = document.querySelector(".error-content");
         if (errNode && !errNode.style.display) {
-            obj.showTipSuccess("链接失效，此条存储信息已删除");
             obj.removeSharePwdLocal(obj.getShareId());
             return;
         }
@@ -1486,7 +1484,6 @@
         }
         else if ($("#root header").length) {
             if (document.querySelector(".share-error--2N71i") && location.href.indexOf("/folder/") < 0) {
-                obj.showTipSuccess("链接失效，此条存储信息已删除");
                 obj.removeSharePwdLocal(obj.getShareId());
             }
         }
@@ -1552,9 +1549,7 @@
             var $Vue = document.querySelector(".pan-share-web").__vue__;
             $Vue.passCode = pwd;
             $Vue.getShare();
-        } catch (e) {
-            console.error("xunlei.submitPwd 错误", e);
-        };
+        } catch (e) { };
     };
 
     xunlei.storeSharePwd = function () {
@@ -1600,7 +1595,6 @@
             });
         });
         $(document).one("DOMNodeInserted", ".share-status-info", function () {
-            obj.showTipSuccess("链接失效，此条存储信息已删除");
             obj.removeSharePwdLocal(obj.getShareId());
         });
     };
@@ -1652,9 +1646,7 @@
             var $Vue = document.querySelector(".page").__vue__;
             $Vue.token = pwd;
             $Vue.getFiles();
-        } catch (e) {
-            console.error("caiyun.submitPwd 错误", e);
-        };
+        } catch (e) { };
     };
 
     caiyun.storeSharePwd = function () {
@@ -1720,7 +1712,6 @@
             else if (document.querySelector(".main")) {
             }
             else if (document.querySelector(".invalid")) {
-                obj.showTipSuccess("链接失效，此条存储信息已删除");
                 obj.removeSharePwdLocal(obj.getShareId());
             }
             else {
@@ -1748,9 +1739,7 @@
             var $Vue = document.querySelector(".mod-media").__vue__;
             $Vue.password = pwd;
             $Vue.submit();
-        } catch (e) {
-            //console.error("weiyun.submitPwd 错误", e);
-        };
+        } catch (e) { };
     };
 
     weiyun.storeSharePwd = function () {
@@ -1789,7 +1778,6 @@
         if (document.querySelector(".mod-media")) {
             var shareId = obj.getShareId();
             if (document.querySelector(".title")) {
-                obj.showTipSuccess("链接失效，此条存储信息已删除");
                 obj.removeSharePwdLocal(shareId);
                 return;
             }
@@ -1857,6 +1845,7 @@
             share_url: decodeURIComponent(location.href),
             share_name: $(".file-tit").text()
         });
+        delete shareData.share_pwd;
         var share_code_cache = localStorage.share_code_cache;
         if (share_code_cache) {
             var current_code = JSON.parse(share_code_cache).find(function(item) {
@@ -1867,18 +1856,29 @@
             }
         }
         shareData.origin_url || !document.referrer || document.referrer.includes(location.host) || (shareData.origin_url = decodeURIComponent(document.referrer));
-        shareData.share_pwd && (shareData.share_pwd == obj.share_pwd || obj.storeSharePwd(shareData));
+        shareData.share_pwd == obj.share_pwd || obj.storeSharePwd(shareData);
         obj.setSharePwdLocal(shareData);
     };
 
     quark.autoPaddingPwd = function() {
         var shareId = obj.getShareId();
         if (document.querySelector("#ice-container .ant-input")) {
+            $(document).one("DOMNodeInserted", "#ice-container .share-content", quark.storeSharePwd);
             obj.querySharePwd("quark", shareId, function (response) {
                 if (response instanceof Object && response.share_pwd) {
+                    obj.showTipSuccess("查询提取码成功");
                     obj.share_pwd = response.share_pwd;
                     quark.submitPwd(response.share_pwd);
-                    $(document).one("DOMNodeInserted", "#ice-container", obj.storeSharePwd);
+                }
+                else {
+                    var shareData = obj.getSharePwdLocal(shareId);
+                    if (typeof shareData == "object") {
+                        quark.submitPwd(shareData.share_pwd);
+                        obj.showTipSuccess("本地回填密码成功");
+                    }
+                    else {
+                        obj.showTipError("未找到密码");
+                    }
                 }
             });
         }
@@ -1886,7 +1886,6 @@
             quark.storeSharePwd();
         }
         else if (document.querySelector("[class^=ShareError--content]")) {
-            obj.showTipSuccess("链接失效，此条存储信息已删除");
             obj.removeSharePwdLocal(shareId);
         }
         else {
@@ -1899,6 +1898,93 @@
         if (url.indexOf("pan.quark.cn") > 0) {
             if (url.indexOf(".quark.cn/s/") > 0) {
                 quark.autoPaddingPwd();
+            }
+            return true;
+        }
+        return false;
+    };
+
+    var pan123 = {};
+
+    pan123.submitPwd = function(pwd) {
+        var input = document.querySelector(".appinput input");
+        var event = new Event("input", {
+            bubbles: true,
+        });
+        var lastValue = input.value;
+        input.value = pwd;
+        var tracker = input._valueTracker;
+        if (tracker) { tracker.setValue(lastValue) };
+        input.dispatchEvent(event);
+
+        var $button = document.querySelector(".appinput button");
+        $button && $button.click();
+    };
+
+    pan123.storeSharePwd = function () {
+        var open = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function() {
+            this.addEventListener("load", function() {
+                var responseURL = this.responseURL;
+                if (responseURL.indexOf("/b/api/share/get") > 0) {
+                    var sharePwd = (responseURL.match(/SharePwd=([^&]+)/) || [])[1];
+                    var shareId = obj.getShareId();
+                    var shareData = obj.getSharePwdLocal(shareId);
+                    if (typeof shareData == "object" && shareData.share_name) {
+                        return;
+                    }
+                    shareData = Object.assign(shareData || {}, {
+                        share_source: "pan123",
+                        share_id: shareId,
+                        share_pwd: sharePwd,
+                        share_url: decodeURIComponent(location.href),
+                        share_name: document.title.replace("-123云盘", "")
+                    });
+                    shareData.origin_url || !document.referrer || document.referrer.includes(location.host) || (shareData.origin_url = decodeURIComponent(document.referrer));
+                    shareData.share_pwd == obj.share_pwd || obj.storeSharePwd(shareData);
+                    obj.setSharePwdLocal(shareData);
+                }
+            });
+            open.apply(this, arguments);
+        };
+    };
+
+    pan123.autoPaddingPwd = function() {
+        var shareId = obj.getShareId();
+        if (document.querySelector(".appinput")) {
+            obj.querySharePwd("pan123", shareId, function (response) {
+                if (response instanceof Object && response.share_pwd) {
+                    obj.share_pwd = response.share_pwd;
+                    pan123.submitPwd(response.share_pwd);
+                }
+                else {
+                    var shareData = obj.getSharePwdLocal(shareId);
+                    if (typeof shareData == "object") {
+                        pan123.submitPwd(shareData.share_pwd);
+                        obj.showTipSuccess("本地回填密码成功");
+                    }
+                    else {
+                        obj.showTipError("未找到密码");
+                    }
+                }
+            });
+        }
+        else if (document.querySelector(".apphei")) {
+        }
+        else if (document.querySelector(".shareApp404Text")) {
+            obj.removeSharePwdLocal(shareId);
+        }
+        else {
+            setTimeout(pan123.autoPaddingPwd, 500);
+        }
+    };
+
+    pan123.run = function() {
+        var url = location.href;
+        if (url.indexOf(".123pan.com") > 0) {
+            if (url.indexOf(".123pan.com/s/") > 0) {
+                pan123.storeSharePwd();
+                pan123.autoPaddingPwd();
             }
             return true;
         }
@@ -1925,6 +2011,7 @@
             weiyun: /(https?:\/\/share\.weiyun\.com\/([a-z\d]{7,32}))([^\w]*(?:提取|访问|密)码[^\w]*([\w]{1,6}))?/gim,
             quark: /(https?:\/\/pan\.quark\.cn\/s\/([a-z\d]{12,32}))([^\w]*(?:提取|访问|密)码[^\w]*([\w]{4}))?/gim,
             caiyun: /(https?:\/\/caiyun\.(?:139|feixin\.10086)\.(?:com|cn)\/(?:m\/i\?|dl\/)([a-z\d]{13,14}))([^\w]*(?:提取|密)码[^\w]*([a-z\d]{4}))?/gim,
+            pan123: /(https?:\/\/www\.123pan\.com\/s\/([a-z\d]{4,6}-[a-z\d]{5})(?:\.html)?)([^\w]*(?:提取|密)码[^\w]*([\w]{4}))?/gim,
         };
         var shareList = {};
 
@@ -2021,6 +2108,7 @@
             caiyun.run,
             weiyun.run,
             quark.run,
+            pan123.run,
             checkShare.run,
         ];
 
