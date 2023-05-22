@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.5.8
+// @version      0.5.9
 // @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云.夸克.123盘】 功能概述：【网盘页面增加资源搜索快捷方式，访问过的分享链接和密码自动记忆，本地缓存数据库搜索】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -1927,22 +1927,25 @@
             this.addEventListener("load", function() {
                 var responseURL = this.responseURL;
                 if (responseURL.indexOf("/b/api/share/get") > 0) {
-                    var sharePwd = (responseURL.match(/SharePwd=([^&]+)/) || [])[1];
-                    var shareId = obj.getShareId();
-                    var shareData = obj.getSharePwdLocal(shareId);
-                    if (typeof shareData == "object" && shareData.share_name) {
-                        return;
+                    var response = JSON.parse(this.response);
+                    if (response.code == 0) {
+                        var sharePwd = (responseURL.match(/SharePwd=([^&]+)/) || [])[1];
+                        var shareId = obj.getShareId();
+                        var shareData = obj.getSharePwdLocal(shareId);
+                        if (typeof shareData == "object" && shareData.share_name) {
+                            return;
+                        }
+                        shareData = Object.assign(shareData || {}, {
+                            share_source: "pan123",
+                            share_id: shareId,
+                            share_pwd: sharePwd,
+                            share_url: decodeURIComponent(location.href),
+                            share_name: document.title.replace("-123云盘", "")
+                        });
+                        shareData.origin_url || !document.referrer || document.referrer.includes(location.host) || (shareData.origin_url = decodeURIComponent(document.referrer));
+                        shareData.share_pwd == obj.share_pwd || obj.storeSharePwd(shareData);
+                        obj.setSharePwdLocal(shareData);
                     }
-                    shareData = Object.assign(shareData || {}, {
-                        share_source: "pan123",
-                        share_id: shareId,
-                        share_pwd: sharePwd,
-                        share_url: decodeURIComponent(location.href),
-                        share_name: document.title.replace("-123云盘", "")
-                    });
-                    shareData.origin_url || !document.referrer || document.referrer.includes(location.host) || (shareData.origin_url = decodeURIComponent(document.referrer));
-                    shareData.share_pwd == obj.share_pwd || obj.storeSharePwd(shareData);
-                    obj.setSharePwdLocal(shareData);
                 }
             });
             open.apply(this, arguments);
@@ -2011,7 +2014,7 @@
             weiyun: /(https?:\/\/share\.weiyun\.com\/([a-z\d]{7,32}))([^\w]*(?:提取|访问|密)码[^\w]*([\w]{1,6}))?/gim,
             quark: /(https?:\/\/pan\.quark\.cn\/s\/([a-z\d]{12,32}))([^\w]*(?:提取|访问|密)码[^\w]*([\w]{4}))?/gim,
             caiyun: /(https?:\/\/caiyun\.(?:139|feixin\.10086)\.(?:com|cn)\/(?:m\/i\?|dl\/)([a-z\d]{13,14}))([^\w]*(?:提取|密)码[^\w]*([a-z\d]{4}))?/gim,
-            pan123: /(https?:\/\/www\.123pan\.com\/s\/([a-z\d]{4,6}-[a-z\d]{4,6})(?:\.html)?)([^\w]*(?:提取|密)码[^\w]*([\w]{4}))?/gim,
+            pan123: /(https?:\/\/www\.123pan\.com\/s\/([a-z\d]{4,6}-[a-z\d]{5})(?:\.html)?)([^\w]*(?:提取|密)码[^\w]*([\w]{4}))?/gim,
         };
         var shareList = {};
 
