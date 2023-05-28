@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘音频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.1.3
+// @version      0.1.4
 // @description  无视文件大小，无视文件格式，告别卡顿即点即播，连歌词都帮你找好了
 // @author       You
 // @match        https://pan.baidu.com/disk/main*
@@ -12,9 +12,9 @@
 // @require      https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.0/hls.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/aplayer/1.10.1/APlayer.min.js
 // @resource     aplayerCSS https://cdnjs.cloudflare.com/ajax/libs/aplayer/1.10.1/APlayer.min.css
+// @grant        GM_addStyle
 // @grant        unsafeWindow
 // @grant        GM_xmlhttpRequest
-// @grant        GM_addStyle
 // @grant        GM_getResourceText
 // @license      我本将心向明月，奈何明月照沟渠
 // @antifeature  明月几时有
@@ -54,24 +54,27 @@
     obj.insertPrettyPlayer = function () {
         var element = document.querySelector(".nd-new-main-list");
         if (element) {
-            var fileList = element?.__vue__?.fileList;
-            if (Array.isArray(fileList) && fileList.length) {
-                var audioFileList = fileList.filter(function(item, index) {
-                    return item.category === 2 || item.category === 6 && !item.isdir && ["flac", "ape"].includes(item.server_filename.split(".").pop().toLowerCase());
-                });
-                var playbtn = $(".play-btn");
-                if (audioFileList.length) {
-                    obj.audio_page.fileList = audioFileList;
-                    playbtn.length || $(".wp-s-header__right").prepend('<div class="wp-s-agile-tool-bar__h-action is-need-left-sep is-list play-btn" style="border-top-right-radius: 16px;border-bottom-right-radius: 16px;"><button type="button" class="u-button wp-s-agile-tool-bar__h-action-button u-button--text u-button--small" title="音乐播放" style="height: 32px;"><i class="u-icon-play"></i><span>音乐播放</span></button></div>');
-                    $(".play-btn").on("click", obj.aplayerStart);
+            Object.defineProperty(element, "__vue__", {
+                set(__vue__) {
+                    if (__vue__ && Array.isArray(__vue__.fileList) && __vue__.fileList.length) {
+                        var playbtn = $(".wp-s-header__center .play-btn");
+                        (obj.audio_page.fileList = __vue__.fileList.filter(function(item, index) {
+                            return item.category === 2 || item.category === 6 && !item.isdir && ["flac", "ape"].includes(item.real_category.toLowerCase());
+                        })).length ? playbtn.length || $('<div class="wp-s-agile-tool-bar__h-action is-need-left-sep is-list play-btn" style="border-top-right-radius: 16px;border-bottom-right-radius: 16px;"><button type="button" class="u-button wp-s-agile-tool-bar__h-action-button u-button--text u-button--small" title="音乐播放" style="height: 32px;"><i class="u-icon-play"></i><span>音乐播放</span></button></div>').appendTo(".wp-s-header__center").on("click", function () {
+                            obj.aplayerStart();
+                        }) : playbtn.length && playbtn.remove();
+
+                        if (__vue__.selectLength && obj.audio_page.fileList.length) {
+                            var audiofile = __vue__.selectedList.find(function (item) {
+                                return item.category === 2 || item.category === 6 && !item.isdir && ["flac", "ape"].includes(item.real_category.toLowerCase());
+                            });
+                            audiofile && (obj.audio_page.fileIndex = obj.audio_page.fileList.findIndex(function(item, index) {
+                                return item.fs_id == audiofile.fs_id;
+                            }));
+                        }
+                    }
                 }
-                else {
-                    playbtn.length && playbtn.remove();
-                }
-            }
-            else {
-                setTimeout(obj.insertPrettyPlayer, 500);
-            }
+            });
         }
     };
 
@@ -201,7 +204,7 @@
                     author.innerText = "- " + (list.audios[index].artist = author_name);
                 }
                 if (img) {
-                    pic.style.cssText = "background-image: url(" + (list.audios[index].cover = img) + ")";
+                    pic.style.cssText += "background-image: url(" + (list.audios[index].cover = img) + ")";
                 }
             }).catch(function () { });
         }).catch(function () { });
@@ -236,7 +239,7 @@
     obj.searchhashKugou = function (name, hash, size) {
         return new Promise(function (resolve, reject) {
             obj.ajax({
-                url: "https://lyrics.kugou.com/search?ver=1&man=yes&client=pc&keyword=" + name + "&duration=&hash=" + hash,
+                url: "https://lyrics.kugou.com/search?ver=1&man=yes&client=pc&keyword=&duration=&hash=" + hash,
                 headers: {
                     origin: "https://www.kugou.com",
                     referer: "https://www.kugou.com/"
@@ -402,7 +405,7 @@
     };
 
     obj.getRandomColor = function() {
-        return "#" + ("00000" + (Math.random() * 0x1000000 << 0).toString(16)).substr(- 6);
+        return "#" + ("00000" + (Math.random() * 0x1000000 << 0).toString(16)).substr(-6);
     };
 
     obj.run = function () {
