@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘音频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.1.4
+// @version      0.1.5
 // @description  无视文件大小，无视文件格式，告别卡顿即点即播，连歌词都帮你找好了
 // @author       You
 // @match        https://pan.baidu.com/disk/main*
@@ -27,7 +27,7 @@
     var obj = {
         audio_page: {
             fileList: [],
-            fileIndex: 0
+            fileIndex: -1
         }
     };
 
@@ -56,7 +56,7 @@
         if (element) {
             Object.defineProperty(element, "__vue__", {
                 set(__vue__) {
-                    if (__vue__ && Array.isArray(__vue__.fileList) && __vue__.fileList.length) {
+                    if (__vue__ && Array.isArray(__vue__.fileList)) {
                         var playbtn = $(".wp-s-header__center .play-btn");
                         (obj.audio_page.fileList = __vue__.fileList.filter(function(item, index) {
                             return item.category === 2 || item.category === 6 && !item.isdir && ["flac", "ape"].includes(item.real_category.toLowerCase());
@@ -162,15 +162,35 @@
                 lrcType: 1,
                 mutex: true
             });
+            const imgs = [
+                "https://img.soogif.com/qtqfUYC4Nm2lFSqDCxbs3pE40C1JhgBP.gif",
+                "https://img.soogif.com/oyTwiGxYKBRDyAGQGA2T6zyGHkqxpVVe.gif",
+                "https://c-ssl.duitang.com/uploads/item/201806/30/20180630210743_igwje.gif",
+                "https://hbimg.b0.upaiyun.com/18cdc3f95d89d58e10df150663630589c44e3a4da1f42-88Y91f_fw658",
+                "https://attachment.mcbbs.net/data/myattachment/forum/202009/12/222259myynn4oznyolposu.gif",
+                "https://5b0988e595225.cdn.sohucs.com/images/20200309/1bac24692d4c43c5821ecba841f0e471.gif",
+            ];
             player.on("listswitch", function ({index}) {
                 player.hls && player.hls.destroy();
-                obj.reprocessing(player, fileList, index);
+                player.audio.oncanplay = function () {
+                    obj.reprocessing(player, fileList, index);
+                };
+                player.template.list.style.cssText += "background: url(" + imgs[Math.floor(Math.random() * imgs.length)] + ") center center / contain no-repeat;";
             });
             player.on("destroy", function () {
                 player.hls && player.hls.destroy();
             });
             const { list, template: { time, body } } = player;
-            list.audios.length > 1 && list.index !== obj.audio_page.fileIndex ? list.switch(obj.audio_page.fileIndex) : setTimeout(() => { obj.reprocessing(player, fileList, 0) }, 100);
+            const fileIndex = obj.audio_page.fileIndex;
+            if (fileIndex > -1 && list.audios.length > 1 && list.index !== fileIndex) {
+                list.switch(fileIndex);
+            }
+            else {
+                player.audio.oncanplay = function () {
+                    obj.reprocessing(player, fileList, list.index);
+                };
+                player.template.list.style.cssText += "background: url(" + imgs[Math.floor(Math.random() * imgs.length)] + ") center center / contain no-repeat;";
+            }
             $(time).children().css("display", "inline-block");
             $(body).prepend('<i data-v-33739aac="" class="iconfont icon-close" style="position: absolute;right: 9px;font-size: 12px;top: 5px;"></i><a href="https://afdian.net/a/vpannice" target="_blank" title="爱我你就点点我" style="position: absolute;right: 8px;font-size: 12px;top: 22px;"><img src="https://static.afdiancdn.com/favicon.ico" style="width: 14px;"></a>').children(".icon-close").one("click", function () {
                 player.destroy();
