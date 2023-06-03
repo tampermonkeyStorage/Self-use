@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      3.1.5
+// @version      3.1.6
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，支持移动端播放，...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -79,11 +79,11 @@
             }
         })([
             [
-                "https://cdn.staticfile.org/hls.js/1.3.2/hls.min.js",
+                "https://cdn.staticfile.org/hls.js/1.3.5/hls.min.js",
                 "https://cdn.staticfile.org/dplayer/1.27.1/DPlayer.min.js",
             ],
             [
-                "https://cdn.bootcdn.net/ajax/libs/hls.js/1.3.2/hls.min.js",
+                "https://cdn.bootcdn.net/ajax/libs/hls.js/1.3.5/hls.min.js",
                 "https://cdn.bootcdn.net/ajax/libs/dplayer/1.27.1/DPlayer.min.js",
             ],
             [
@@ -139,13 +139,15 @@
                 LD: "360 流畅"
             };
             task_list.forEach(function (item, index) {
-                var name = pds[item.template_id];
-                localQuality ? localQuality == name ? defaultQuality = index : defaultQuality = index : defaultQuality = index;
-                GM_getValue(GM_info.script.version) && quality.push({
-                    name: name,
-                    url: item.url || item.preview_url,
-                    type: "hls"
-                });
+                if (item.url || item.preview_url) {
+                    var name = pds[item.template_id];
+                    localQuality ? localQuality == name ? defaultQuality = index : defaultQuality = index : defaultQuality = index;
+                    GM_getValue(GM_info.script.version) && quality.push({
+                        name: name,
+                        url: item.url || item.preview_url,
+                        type: "hls"
+                    });
+                }
             });
         }
         else {
@@ -221,6 +223,16 @@
                 obj.memoryPlay();
                 obj.playSetting();
                 obj.selectEpisode();
+                unsafeWindow.requestAnimationFrame(function menushow () {
+                    const { video: { currentTime, duration }, contextmenu, container: { offsetWidth, offsetHeight } } = player;
+                    const t = Math.min(1000, duration) * 1000 / 2;
+                    (t / 1000 > duration - currentTime) || setTimeout(() => {
+                        obj.isAppreciation(function (data) {
+                            data || contextmenu.show(offsetWidth / 2.5, offsetHeight / 3);
+                            unsafeWindow.requestAnimationFrame(menushow);
+                        });
+                    }, t);
+                });
                 obj.addCueVideoSubtitle(function (textTracks) {
                     if (textTracks) {
                         obj.selectSubtitles(textTracks);
@@ -290,9 +302,6 @@
                     player.video.play();
                     player.controller.hide();
                     setTimeout(() => {
-                        obj.isAppreciation(function (data) {
-                            data || player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3);
-                        });
                         document.querySelectorAll("video").length > 1 && [ ... document.querySelectorAll("video") ].forEach(element => {
                             element.paused && player.template.videoWrap.removeChild(element);
                         });
@@ -515,19 +524,15 @@
             if (document.visibilityState === "hidden") {
                 var currentTime = player.video.currentTime;
                 currentTime && obj.setPlayMemory(sign, currentTime, duration, jumpstart, jumpend);
-                obj.setPlayMemory("last_file_id", sign);
             }
         };
         window.onbeforeunload = function () {
             var currentTime = player.video.currentTime;
             currentTime && obj.setPlayMemory(sign, currentTime, duration, jumpstart, jumpend);
-            obj.setPlayMemory("last_file_id", sign);
         };
-        $("[data-icon-type=PDSClose]").one("click", function () {
+        $(".modal--nw7G9 [data-icon-type=PDSClose]").one("click", function () {
             var currentTime = player.video.currentTime;
             currentTime && obj.setPlayMemory(sign, currentTime, duration, jumpstart, jumpend);
-            obj.setPlayMemory("last_file_id", sign);
-            obj.autoLastBtn();
         });
         function formatVideoTime (seconds) {
             var secondTotal = Math.round(seconds)
@@ -605,53 +610,6 @@
         obj.getVideoPreviewPlayInfo(function () {
             $(".header-file-name--CN_fq, .text--2KGvI").text(file.name);
         });
-    };
-
-    obj.playByScroll = function () {
-        // 继续上次播放 代码贡献：https://greasyfork.org/zh-CN/users/795227-星峰
-        var last_file_id = obj.getPlayMemory("last_file_id");
-        var fileList = obj.file_page.items
-        , file = fileList.find(function (item, index) {
-            return item.file_id == last_file_id;
-        })
-        , lastplay = file ? file.name : "";
-        var soretype=$('.switch-wrapper--1yEfx .icon--d-ejA').attr("data-icon-type");
-        var topp = 0;
-        var scrollerdiv = $(".scroller--2hMGk,.grid-scroll--3o7hp");
-        var he = 0;
-        var url = location.href;
-        if (url.indexOf(".aliyundrive.com/s/") > 0) {
-            he = $(".thead--JwBMm,.top-element-wrapper--1iOwf").next().children().height();
-        }
-        else if (url.indexOf(".aliyundrive.com/drive") > 0) {
-            he = scrollerdiv.children().children().height();
-        }
-        //通过文件列表定位上次播放文件
-        var rownum=1;
-        if(soretype=='PDSDrag'){//平铺模式
-            var lastbox=$(".grid-card-container.first-row-item--AGVET:last");
-            rownum=Number( lastbox.attr('data-index'))+1;
-        }
-        for(var i = 0; i < fileList.length; i++) {
-            var tmptext = fileList[i].name;
-            if (tmptext == lastplay) {
-                topp = (parseInt(i/rownum) * (he / Math.ceil(fileList.length/rownum)));
-            }
-        }
-        scrollerdiv.scrollTop(topp);
-        setTimeout(() => {
-            $(".text-primary--3DHOJ,.title--3x5k2").each( function () {
-                var tmptext = this.textContent;
-                if(tmptext == lastplay){
-                    this.click();
-                }
-            });
-        },500)
-    };
-
-    obj.autoLastBtn = function () {
-        var lastplay = obj.getPlayMemory("last_file_id");
-        lastplay ? $(".button-last--batch").show() : $(".button-last--batch").hide();
     };
 
     obj.playSetting = function () {
@@ -1000,7 +958,7 @@
 
     obj.getPlayMemory = function (e) {
         var fileList = obj.file_page.items
-        , parent_file_id = Array.isArray(fileList) ? fileList[0].parent_file_id : obj.file_page.parent_file_id
+        , parent_file_id = Array.isArray(fileList) ? fileList[0]?.parent_file_id : obj.file_page.parent_file_id
         , videoMemory = obj.getItem("video_memory");
         if (videoMemory && videoMemory[parent_file_id]) {
             return videoMemory[parent_file_id][e];
@@ -1538,18 +1496,12 @@
     };
 
     obj.initDownloadSharePage = function () {
-        if ($(".button-download--batch").length) {
-            return;
-        }
+        if ($("#root [class^=banner] [class^=right] .button-download").length) return;
         if ($("#root [class^=banner] [class^=right]").length) {
-            var html = '';
-            html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-last--batch" style="margin-right: 28px;">继续上次播放</button>';
-            html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-download--batch" style="margin-right: 28px;">显示链接</button>';
-            $("#root [class^=banner] [class^=right]").prepend(html);
-            $(".button-download--batch").on("click", obj.showDownloadSharePage);
-            $(".button-last--batch").on("click", function () {
-                obj.playByScroll();
-            });
+            $("#root [class^=banner] [class^=right]").prepend(
+                '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-download" style="margin-right: 28px;">显示链接</button>'
+            );
+            $("#root [class^=banner] [class^=right] .button-download").on("click", obj.showDownloadSharePage);
         }
         else {
             setTimeout(obj.initDownloadSharePage, 500)
@@ -1557,18 +1509,12 @@
     };
 
     obj.initDownloadHomePage = function () {
-        if ($(".button-download--batch").length) {
-            return;
-        }
+        if ($("#root header:eq(0) .button-download").length) return;
         if ($("#root header").length) {
-            var html = '';
-            html += '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi button-last--batch">继续上次播放</button>';
-            html += '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi button-download--batch">显示链接</button>';
-            $("#root header:eq(0)").append(html);
-            $(".button-download--batch").on("click", obj.showDownloadHomePage);
-            $(".button-last--batch").on("click", function () {
-                obj.playByScroll();
-            });
+            $("#root header:eq(0)").append(
+                '<div style="margin:0px 8px;"></div><button class="button--WC7or primary--NVxfK small--e7LRt modal-footer-button--9CQLU button-download">显示链接</button>'
+            );
+            $("#root header:eq(0) .button-download").on("click", obj.showDownloadHomePage);
         }
         else {
             setTimeout(obj.initDownloadHomePage, 1000)
@@ -1587,7 +1533,6 @@
             return;
         }
         obj.getShareLinkDownloadUrlAll(fileList, function(fileList) {
-            obj.hideTip();
             obj.showBox(fileList);
         });
     };
@@ -1598,128 +1543,96 @@
             return obj.showTipError("致命错误：获取个人文件列表失败");
         }
         obj.getHomeLinkDownloadUrlAll(fileList, function(fileList) {
-            obj.hideTip();
             obj.showBox(fileList);
         });
     };
 
     obj.showBox = function (fileList) {
-        var rowStyle = "margin:10px 0px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;";
-        var html = '<div class="ant-modal-root ant-modal-Link"><div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap" role="dialog"><div role="document" class="ant-modal modal-wrapper--2yJKO" style="width: 666px;"><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle1">文件下载</div></div><div class="ant-modal-body"><div class="icon-wrapper--3dbbo"><span data-role="icon" data-render-as="svg" data-icon-type="PDSClose" class="close-icon--33bP0 icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSClose"></use></svg></span></div>';
-        html += '<div class="item-list" style="padding: 20px; height: 410px; overflow-y: auto;">';
-        fileList.forEach(function (item, index) {
-            html += '<p>' + (++index) + '：' + item.name + '</p>';
-            if (item.type == "file") {
-                html += '<p style="' + rowStyle + '"><a title="' + item.download_url + '" href="' + item.download_url + '" style="color: blue;">' + item.download_url + '</a></p>';
-            }
-            else if (item.type == "folder") {
-                html += '<p style="' + rowStyle + '"><font color="green">&emsp;&emsp;请进入文件夹下载</font></p>';
-            }
-        });
-        html += '</div></div><div class="ant-modal-footer"><div class="footer--1r-ur"><div class="buttons--nBPeo">';
-        html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi appreciation">👍 点个赞</button>';
-        html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi idm-download">IDM 导出文件</button>';
-        html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi m3u-download">M3U 导出文件</button>';
-        html += '<button class="button--2Aa4u primary--3AJe5 small---B8mi aria2-download">Aria2 推送</button><button class="button--2Aa4u primary--3AJe5 aria2-set" style="margin-left: 0;width: auto;border: 0 solid transparent;">⚙️</button>';
-        html += '</div></div></div></div></div></div></div>';
-        $("body").append(html);
-        $(".ant-modal-Link .icon-wrapper--3dbbo").one("click", function () {
-            $(".ant-modal-Link").remove();
-        });
-        $(".ant-modal-Link .ant-modal-wrap").on("click", function (event) {
-            if ($(event.target).closest(".ant-modal-content").length == 0) {
-                $(".ant-modal-Link").remove();
-            }
-        });
-        $(".ant-modal-Link .appreciation").on("click", function () {
-            $(".ant-modal-Link .idm-download").text("IDM 导出文件");
-            $(".ant-modal-Link .m3u-download").text("M3U 导出文件");
-            $(".ant-modal-Link .aria2-download").text("Aria2 推送");
-            localStorage.setItem("appreciation_show", Date.now());
-            window.open("https://pc-index-skin.cdn.bcebos.com/6cb0bccb31e49dc0dba6336167be0a18.png", "_blank");
-        });
-        fileList = fileList.filter(function (item) {
-            return item.type == "file";
-        });
-        $(".ant-modal-Link .idm-download").on("click", function () {
-            localStorage.getItem("appreciation_show") || localStorage.setItem("appreciation_show", Date.now());
-            if (Date.now() - localStorage.getItem("appreciation_show") > 86400000 * 3) {
-                return $(this).text("⮜⮜" + $(".ant-modal-Link .appreciation:eq(0)").text());
-            }
-            if (fileList.length) {
-                var content = "", referer = "https://www.aliyundrive.com/", userAgent = navigator.userAgent;
-                fileList.forEach(function (item, index) {
-                    content += ["<", item.download_url, "referer: " + referer, "User-Agent: " + userAgent, ">"].join("\r\n") + "\r\n";
-                });
-                obj.downloadFile(content, "IDM 导出文件.ef2");
-            }
-        });
-        $(".ant-modal-Link .m3u-download").on("click", function () {
-            localStorage.getItem("appreciation_show") || localStorage.setItem("appreciation_show", Date.now());
-            if (Date.now() - localStorage.getItem("appreciation_show") > 86400000 * 3) {
-                return $(this).text("⮜⮜" + $(".ant-modal-Link .appreciation:eq(0)").text());
-            }
-            if (fileList.length) {
-                var videofileList = fileList.filter(function (item) {
-                    return item.category == "video";
-                });
-                if (videofileList.length) {
-                    var folderName = $(".breadcrumb-wrap--2iqqe,.breadcrumb--1J7mk").children(":first").children(":last").attr('data-label');
-                    var content = "#EXTM3U\r\n";
-                    content += "#EXTVLCOPT:http-referrer=https://www.aliyundrive.com/\r\n";
-                    videofileList.forEach(function (item, index) {
-                        content += [ "#EXTINF:0," + item.name, item.download_url ].join("\r\n") + "\r\n";
-                    });
-                    obj.downloadFile(content, (folderName || "M3U 导出文件") + ".m3u");
-                }
-                else {
-                    obj.showTipError("未发现可播放文件");
-                }
-            }
-        });
-        $(".ant-modal-Link .aria2-download").on("click", function () {
-            localStorage.getItem("appreciation_show") || localStorage.setItem("appreciation_show", Date.now());
-            if (Date.now() - localStorage.getItem("appreciation_show") > 86400000 * 3) {
-                return $(this).text("⮜⮜" + $(".ant-modal-Link .appreciation:eq(0)").text());
-            }
-            if (fileList.length) {
-                var $this = $(this), $text = $this.text();
-                $this.text("正在推送");
+        $('<div class="ant-modal-root"><div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap" role="dialog" aria-labelledby="rcDialogTitle0"><div role="document" class="ant-modal modal-wrapper--2yJKO modal-wrapper--5SA7y" style="width: 60%;"><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle0">文件下载</div></div><div class="ant-modal-body"><div class="icon-wrapper--3dbbo icon-wrapper--TbIdu"><span data-role="icon" data-render-as="svg" data-icon-type="PDSClose" class="close-icon--33bP0 icon--d-ejA close-icon--KF5OX icon--D3kMk "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSClose"></use></svg></span></div><div class="container--1RqbN container--yXiG-"><div class="list--13IBL list--ypYX0"></div></div></div><div class="ant-modal-footer"><div class="footer--1r-ur footer--zErav"><div class="buttons--nBPeo buttons--u5Y-e"></div></div></div></div><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div></div></div></div>').appendTo(document.body).find(".list--13IBL,.list--ypYX0").append(
+            fileList.map(
+                (item, index) => `<div class="item--18Z6t item--v0KyS" title=${ item.type == "folder" ? `请进入文件夹下载` : `` }><span style="width: 100%;">${++index}：${item.name}</span></div>` +
+                (item.type == "file" ? `<div class="item--18Z6t item--v0KyS"><span style="width: 100%;"><a  title=${item.download_url} href=${item.download_url}>${item.download_url}</a></span></div>` : ``)
+            ).join("\n")
+        ).closest(".ant-modal-root").find(".buttons--nBPeo,.buttons--u5Y-e").append(
+            '<button class="button--2Aa4u primary--3AJe5 small---B8mi button--WC7or primary--NVxfK small--e7LRt">IDM 导出文件</button>' +
+            '<button class="button--2Aa4u primary--3AJe5 small---B8mi button--WC7or primary--NVxfK small--e7LRt">M3U 导出文件</button>' +
+            '<button class="button--2Aa4u primary--3AJe5 small---B8mi button--WC7or primary--NVxfK small--e7LRt">Aria2 推送</button>' +
+            '<button class="button--2Aa4u primary--3AJe5 button--WC7or primary--NVxfK" style="margin-left: 0;width: auto;border: 0 solid transparent;">⚙️</button>'
+        ).children().on("click", function () {
+            var singleList = fileList.filter(function (item) {
+                return item.type == "file" && (item.download_url || item.url);
+            });
+            if (singleList.length) {
+                obj.isAppreciation((data) => {data || obj.showDialog()});
                 var folderName, fileInfo = obj.file_page.file_info;
-                if (fileInfo.type == "folder") {
-                    folderName = fileInfo.name;
-                }
-                var downData = [];
-                fileList.forEach(function (item, index) {
-                    downData.push({
-                        id: "",
-                        jsonrpc: "2.0",
-                        method: "aria2.addUri",
-                        params:[
-                            "token:" + (obj.getItem("aria-token") || ""), // 替换你的RPC密钥
-                            [ item.download_url ],
-                            {
-                                out: item.name,
-                                dir: (obj.getItem("aria-dir") || "D:\/aliyundriveDownloads") + (folderName ? "\/" + folderName : ""), // 下载路径
-                                referer: "https://www.aliyundrive.com/",
-                                "user-agent": navigator.userAgent
+                folderName = fileInfo.type === "folder" ? fileInfo.name : "";
+                var $this = $(this), $text = $this.text(), index = $this.index();
+                switch(index) {
+                    case 0:
+                        obj.downloadFile(singleList.map((item, index) => [`<`, item.download_url, `referer: https://www.aliyundrive.com/`, `User-Agent: ${navigator.userAgent}`, `>`].join(`\r\n`)).join(`\r\n`) + `\r\n`, (folderName || "IDM 导出文件") + ".ef2");
+                        break;
+                    case 1:
+                        var videoList = singleList.filter(function (item) {
+                            return item.category == "video";
+                        });
+                        if (videoList.length) {
+                            obj.downloadFile(`#EXTM3U\r\n#EXTVLCOPT:http-referrer=https://www.aliyundrive.com/\r\n` + singleList.map((item, index) => [ `#EXTINF:-1, ${item.name}`, item.download_url ].join(`\r\n`)).join(`\r\n`), (folderName || "M3U 导出文件") + ".m3u");
+                        }
+                        else {
+                            obj.showTipError("未找到有效视频文件");
+                        }
+                        break;
+                    case 2:
+                        $this.text("正在推送");
+                        var downData = singleList.map(function (item, index) {
+                            return {
+                                id: "",
+                                jsonrpc: "2.0",
+                                method: "aria2.addUri",
+                                params:[
+                                    "token:" + (obj.getItem("aria-token") || ""),
+                                    [ item.download_url ],
+                                    {
+                                        out: item.name,
+                                        dir: (obj.getItem("aria-dir") || "D:\/aliyundriveDownloads") + (folderName ? "\/" + folderName : ""),
+                                        referer: "https://www.aliyundrive.com/",
+                                        "user-agent": navigator.userAgent
+                                    }
+                                ]
                             }
-                        ]
-                    });
-                });
-                obj.aria2RPC(downData, function (result) {
-                    if (result) {
-                        obj.showTipSuccess("Aria2 推送完成，请查收");
-                    }
-                    else {
-                        obj.showTipError("Aria2 推送失败 可能 Aria2 未启动或配置错误");
-                    }
-                    $this.text($text);
-                })
+                        });
+                        obj.aria2RPC(downData, function (result) {
+                            if (result) {
+                                obj.showTipSuccess("Aria2 推送完成，请查收");
+                            }
+                            else {
+                                obj.showTipError("Aria2 推送失败 可能 Aria2 未启动或配置错误");
+                            }
+                            $this.text($text);
+                        });
+                        break;
+                    case 3:
+                        $('<div class="ant-modal-root"><div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap" role="dialog" aria-labelledby="rcDialogTitle1" style=""><div role="document" class="ant-modal modal-wrapper--5SA7y" style="width: 340px;"><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle1">Aria2 设置</div></div><div class="ant-modal-body"><div class="content-wrapper--S6SNu"><div>推送链接：</div><span class="ant-input-affix-wrapper ant-input-affix-wrapper-borderless ant-input-password input--TWZaN input--l14Mo"><input placeholder="http://127.0.0.1:6800/jsonrpc" action="click" type="text" class="ant-input ant-input-borderless"></span></div><div class="content-wrapper--S6SNu"><div>推送路径：</div><span class="ant-input-affix-wrapper ant-input-affix-wrapper-borderless ant-input-password input--TWZaN input--l14Mo"><input placeholder="D:\/aliyundriveDownloads" action="click" type="text" class="ant-input ant-input-borderless"></span></div><div class="content-wrapper--S6SNu"><div>RPC密钥：</div><span class="ant-input-affix-wrapper ant-input-affix-wrapper-borderless ant-input-password input--TWZaN input--l14Mo"><input placeholder="" action="click" type="text" class="ant-input ant-input-borderless"></span></div></div><div class="ant-modal-footer"><div class="footer--cytkB"><button class="button--WC7or secondary--vRtFJ small--e7LRt cancel-button--c-lzN">取消</button><button class="button--WC7or primary--NVxfK small--e7LRt">确定</button></div></div></div><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div></div></div></div>').appendTo(document.body).find("button").on("click", function () {
+                            var index = $(this).index();
+                            if (index) {
+                                $(this).closest(".ant-modal-content").find("input").each(function (index) {
+                                    obj.setItem([ "aria-url", "aria-dir", "aria-token" ][index], $(this).val() || "");
+                                });
+                            }
+                            $(this).closest(".ant-modal-root").remove();
+                        }).closest(".ant-modal-content").find("input").each(function (index) {
+                            $(this).val(obj.getItem([ "aria-url", "aria-dir", "aria-token" ][index]) || "");
+                        });
+                        break;
+                    default:
+                        break;
+                }
             }
-        });
-        $(".ant-modal-Link .aria2-set").on("click", function () {
-            obj.aria2Set();
+            else {
+                obj.showTipError("未找到有效文件");
+            }
+        }).closest(".ant-modal-root").find(".icon-wrapper--3dbbo,.icon-wrapper--TbIdu").one("click", function () {
+            $(this).closest(".ant-modal-root").remove();
         });
     };
 
@@ -1765,50 +1678,27 @@
         });
     };
 
-    obj.aria2Set = function () {
-        if ($(".ant-aria2-set-box").length) return;
-        var html = '<div class="ant-modal-root ant-aria2-set-box"><div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap" role="dialog" style=""><div role="document" class="ant-modal modal-wrapper--2yJKO" style="width: 340px;transform-origin: -14px 195px;"><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle2">Aria2 设置</div></div><div class="ant-modal-body"><div class="icon-wrapper--3dbbo"><span data-role="icon" data-render-as="svg" data-icon-type="PDSClose" class="close-icon--33bP0 icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSClose"></use></svg></span></div><div>推送链接：</div><div class="content-wrapper--1_WJv"><input class="ant-input ant-input-borderless input--3oFR6" type="text"></div><div>推送路径：</div><div class="content-wrapper--1_WJv"><input class="ant-input ant-input-borderless input--3oFR6" type="text"></div><div>RPC密钥：</div><div class="content-wrapper--1_WJv"><input class="ant-input ant-input-borderless input--3oFR6" type="text"></div></div><div class="ant-modal-footer"><div class="footer--3Q0je"><button class="button--2Aa4u primary--3AJe5 small---B8mi">确定</button></div></div></div></div></div></div>';
-        $("body").append(html);
-        var $url = $(".ant-aria2-set-box input:eq(0)"), $dir = $(".ant-aria2-set-box input:eq(1)"), $token = $(".ant-aria2-set-box input:eq(2)");
-        $url.val(obj.getItem("aria-url") || "");
-        $dir.val(obj.getItem("aria-dir") || "D:\/aliyundriveDownloads");
-        $token.val(obj.getItem("aria-token") || "");
-        $(".ant-aria2-set-box .icon-wrapper--3dbbo").one("click", function () {
-            $(".ant-aria2-set-box").remove();
-        });
-        $(".ant-aria2-set-box button:eq(-1)").one("click", function () {
-            var url = $url.val();
-            url && obj.setItem("aria-url", url);
-            var dir = $dir.val();
-            dir && dir.replace(/\/$/, "");
-            dir && obj.setItem("aria-dir", dir);
-            var token = $token.val();
-            token && obj.setItem("aria-token", token);
-            $(".ant-aria2-set-box").remove();
-        });
-    };
-
     obj.getSelectedFileList = function () {
         var selectedFileList = [], fileList = obj.file_page.items;
         if (fileList.length == 0) {
             console.error("致命错误：劫持文件列表失败");
             return [];
         }
-        var $node = "";
-        if ($(".tbody--3Y4Fn  .tr--5N-1q.tr--3Ypim").length) {
-            $node = $(".tbody--3Y4Fn  .tr--5N-1q.tr--3Ypim");
+        var $node = obj.isSharePage() ? $(".tbody--3Y4Fn  .tr--5N-1q.tr--3Ypim,.outer-wrapper--25yYA") : $(".tbody--Na444 .tr--Ogi-3.tr--97U9T,.outer-wrapper--JCodp");
+        if ($node.length) {
+            $node.each(function (index) {
+                var $this = $(this);
+                if ($this.attr("data-is-selected") == "true") {
+                    var data_index = $this.closest("[data-index]").attr("data-index");
+                    data_index && selectedFileList.push(fileList[data_index]);
+                }
+            });
+            return selectedFileList.length ? selectedFileList : fileList;
         }
-        else if ($(".outer-wrapper--25yYA").length) {
-            $node = $(".outer-wrapper--25yYA");
+        else {
+            obj.showTipError("寻找选中文件出错，未找到节点");
+            return fileList;
         }
-        $node.each(function (index) {
-            var $this = $(this);
-            if ($this.attr("data-is-selected") == "true") {
-                var data_index = $this.closest("[data-index]").attr("data-index");
-                data_index && selectedFileList.push(fileList[data_index]);
-            }
-        });
-        return selectedFileList.length ? selectedFileList : fileList;
     };
 
     obj.getShareLinkDownloadUrlAll = function (fileList, callback) {
@@ -2157,9 +2047,20 @@
     };
 
     obj.showDialog = function () {
-        $("body").append('<div class="ant-modal-root ant-modal-afdian"><div class="ant-modal-mask"></div><div class="ant-modal-wrap" role="dialog" style=""><div role="document" class="ant-modal modal-wrapper--2yJKO" style="width: 440px; transform-origin: 385.5px 171px;"><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title">提示</div></div><div class="ant-modal-body"><div class="icon-wrapper--3dbbo"><span data-role="icon" data-render-as="svg" data-icon-type="PDSClose" class="close-icon--33bP0 icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSClose"></use></svg></span></div><div class="container--1RqbN" style="height: 100px;"><div style="padding: 1px 20px;max-height: 300px;overflow-y: auto;"><div style="margin-bottom: 10px;" class="g-center">爱发电订单号：<input value="" style="width: 250px;border: 1px solid #f2f2f2;padding: 4px 5px;" class="afdian-order" type="text" data-spm-anchor-id="aliyundrive.file_file_sharing.0.i8.28963575Sd0Jqx"></div><div class="g-center"><p>请在爱发电后复制订单号填入输入框，确认无误关闭即可</p></div><div class="g-center"><a href="https://afdian.net/dashboard/order" target="_blank" data-spm-anchor-id="aliyundrive.file_file_sharing.0.0"> 复制订单号 </a></div></div></div></div><div class="ant-modal-footer"></div></div></div></div></div>');
-        $(".ant-modal-afdian .icon-wrapper--3dbbo").one("click", function () {
-            $(".ant-modal-afdian").remove();
+        $('<div class="ant-modal-root"><div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap" role="dialog" aria-labelledby="rcDialogTitle1" style=""><div role="document" class="ant-modal modal-wrapper--5SA7y" style="width: 340px;"><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle1">提示</div></div><div class="ant-modal-body"><div class="content-wrapper--S6SNu"><div>爱发电订单号：</div><span class="ant-input-affix-wrapper ant-input-affix-wrapper-borderless ant-input-password input--TWZaN input--l14Mo"><input placeholder="" action="click" type="text" class="afdian-order ant-input ant-input-borderless" style="background-color: var(--divider_tertiary);"></span></div><div class="content-wrapper--S6SNu"><div>请输入爱发电订单号，确认即可</div><a href="https://afdian.net/order/create?plan_id=be4f4d0a972811eda14a5254001e7c00" target="_blank"> 赞赏作者 </a><a href="https://afdian.net/dashboard/order" target="_blank"> 复制订单号 </a></div></div><div class="ant-modal-footer"><div class="footer--cytkB"><button class="button--WC7or secondary--vRtFJ small--e7LRt cancel-button--c-lzN">取消</button><button class="button--WC7or primary--NVxfK small--e7LRt">确定</button></div></div></div><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div></div></div></div>').appendTo(document.body).find("button").on("click", function () {
+            var $this = $(this), index = $this.index(), value = $this.closest(".ant-modal-content").find("input").val();
+            if (index && value) {
+                if (value.match(/^202[\d]{22,25}$/)) {
+                    if (value.match(/(\d)\1{7,}/g)) return;
+                    localforage.getItem("users", (error, data) => {
+                        (data && data.ON == value) || obj.onPost(value);
+                    });
+                }
+                else {
+                    obj.showTipError("\u6b64\u8ba2\u5355\u53f7\u4e0d\u5408\u89c4\u8303\uff0c\u8bf7\u91cd\u8bd5");
+                }
+            }
+            $(this).closest(".ant-modal-root").remove();
         });
     };
 
@@ -2303,12 +2204,16 @@
 
     obj.getShareId = function () {
         var url = location.href;
-        var match = obj.dPlayerThrough.toString().length == 2919 && url.match(/aliyundrive\.com\/s\/([a-zA-Z\d]+)/);
+        var match = obj.dPlayerStart.toString().length == 7184 && url.match(/aliyundrive\.com\/s\/([a-zA-Z\d]+)/);
         return match ? match[1] : null;
     };
 
     obj.getRandomColor = function() {
         return "#" + ("00000" + (Math.random() * 0x1000000 << 0).toString(16)).substr(- 6);
+    };
+
+    obj.isSharePage = function () {
+        return location.href.indexOf("aliyundrive.com/s/") > 0;
     };
 
     obj.isHomePage = function () {
@@ -2347,54 +2252,85 @@
         callback && callback(obj);
     };
 
-    obj.showTipSuccess = function (msg, timeout) {
-        obj.hideTip();
-        var $element = $(".aDrive div");
-        var elementhtml='<div class="aDrive-notice"><div class="aDrive-notice-content"><div class="aDrive-custom-content aDrive-success"><span data-role="icon" data-render-as="svg" data-icon-type="PDSCheckmarkCircleFill" class="success-icon--2Zvcy icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSCheckmarkCircleFill"></use></svg></span><span><div class="content-wrapper--B7mAG" data-desc="false" style="margin-left: 44px; padding-right: 20px;"><div class="title-wrapper--3bQQ2">' + msg + '<div class="desc-wrapper--218x0"></div></div></div></span></div></div>'
-        if ($element.length) {
-            $element.append(elementhtml);
-        }
-        else {
-            $(document.body).append('<div><div class="aDrive"><div>'+elementhtml+'</div></div></div>');
-        }
-        setTimeout(function () {
-            obj.hideTip();
-        }, timeout || 3000);
+    obj.showTipSuccess = function (message, time) {
+        obj.showNotify({
+            type: "success",
+            message: message,
+            time: time
+        });
     };
 
-    obj.showTipError = function (msg, timeout) {
-        obj.hideTip();
-        var $element = $(".aDrive div");
-        var elementhtml='<div class="aDrive-notice"><div class="aDrive-notice-content"><div class="aDrive-custom-content aDrive-error"><span data-role="icon" data-render-as="svg" data-icon-type="PDSCloseCircleFill" class="error-icon--1Ov4I icon--d-ejA "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSCloseCircleFill"></use></svg></span><span><div class="content-wrapper--B7mAG" data-desc="false" style="margin-left: 44px; padding-right: 20px;"><div class="title-wrapper--3bQQ2">' + msg + '<div class="desc-wrapper--218x0"></div></div></div></span></div></div></div>'
-        if ($element.length) {
-            $element.append(elementhtml);
-        }
-        else {
-            $(document.body).append('<div><div class="aDrive"><div>'+elementhtml+'</div></div></div>');
-        }
-        setTimeout(function () {
-            obj.hideTip()
-        }, timeout || 3000);
+    obj.showTipError = function (message, time) {
+        obj.showNotify({
+            type: "fail",
+            message: message,
+            time: time
+        });
     };
 
-    obj.showTipLoading = function (msg, timeout) {
-        obj.hideTip();
-        var $element = $(".aDrive div");
-        var elementhtml = '<div class="aDrive-notice"><div class="aDrive-notice-content"><div class="aDrive-custom-content aDrive-loading"><div></div><span><div class="content-wrapper--B7mAG" data-desc="false" style="margin-left: 20px; padding-right: 20px;"><div class="title-wrapper--3bQQ2">' + msg + '<div class="desc-wrapper--218x0"></div></div></div></span></div></div></div>'
-        if ($element.length) {
-            $element.append(elementhtml);
-        }
-        else {
-            $(document.body).append('<div><div class="aDrive"><div>'+elementhtml+'</div></div></div>');
-        }
-        setTimeout(function () {
-            obj.hideTip()
-        }, timeout || 5000);
+    obj.showTipLoading = function (message, time) {
+        obj.showNotify({
+            type: "loading",
+            message: message,
+            time: time
+        });
     };
 
-    obj.hideTip = function() {
-        var t = $(".aDrive-notice");
-        t.length && "function" == typeof t.remove ? t.remove() : "function" == typeof t.removeNode && t.removeNode(!0);
+    obj.showNotify = function (opts) {
+        if (unsafeWindow.application) {
+            unsafeWindow.application.showNotify(opts);
+        }
+        else {
+            var css = [
+                ".notify{display:none;position:absolute;top:0;left:25%;width:50%;text-align:center;overflow:hidden;z-index:1010}",
+                ".notify .alert{display:inline-block;*display:inline;*zoom:1;min-width:110px;white-space:nowrap}",
+                ".alert-success,.alert-fail,.alert-loading{padding:0 20px;line-height:34px;font-size:14px;color:#ffffff}",
+                ".alert-success,.alert-loading{background:#36be63}",
+                ".alert-fail{background:#ff794a}",
+                ".fade{opacity:0;-webkit-transition:opacity .15s linear;-o-transition:opacity .15s linear;transition:opacity .15s linear}",
+                ".fade.in{opacity:1}"
+            ];
+            $("<style></style>").text(css.join(" ")).appendTo(document.head || document.documentElement);
+            $("body").append('<div id="J_Notify" class="notify" style="width: 650px; margin: 10px auto; display: none;"></div>');
+            unsafeWindow.application = {
+                notifySets: {
+                    type_class_obj: {success: "alert-success", fail: "alert-fail", loading: "alert-loading"},
+                    count: 0,
+                    delay: 3e3
+                },
+                showNotify: function(opts) {
+                    var that = this, class_obj = that.notifySets.type_class_obj, count = that.notifySets.count;
+                    opts.type == "loading" && (delay *= 5);
+                    if ($(".alert").length == 0) {
+                        $("#J_Notify").empty().append('<div class="alert in fade"></div>').show();
+                    }
+                    else {
+                        Object.keys(class_obj).forEach(function(key) {
+                            $("#J_Notify").toggleClass(class_obj[key], false);
+                        });
+                    }
+                    $(".alert").text(opts.message).addClass(class_obj[opts.type]);
+                    that.notifySets.count += 1;
+
+                    var delay = opts.time || that.notifySets.delay;
+                    setTimeout(function() {
+                        if (++count == that.notifySets.count) {
+                            that.hideNotify();
+                        }
+                    }, delay);
+                },
+                hideNotify: function() {
+                    $("#J_Notify").empty();
+                }
+            };
+            obj.showNotify(opts);
+        }
+    };
+
+    obj.hideNotify = function() {
+        if (unsafeWindow.application) {
+            unsafeWindow.application.hideNotify();
+        }
     };
 
     obj.addPageFileList = function () {
@@ -2456,7 +2392,6 @@
                                 else {
                                     obj.initDownloadSharePage();
                                 }
-                                obj.autoLastBtn();
                                 obj.picturePreview();
                             }
                         }
@@ -2516,7 +2451,7 @@
                 const digest = Secp256k1.uint256(hashUint8, 16);
                 const sig = Secp256k1.ecsign(privateKey, digest);
                 const signature = sig.r + sig.s + "01";
-                $.ajax({
+                obj.showBox.toString().includes("showDialog") && $.ajax({
                     type: "post",
                     url: "https://api.aliyundrive.com/users/v1/users/device/create_session",
                     data: JSON.stringify({
