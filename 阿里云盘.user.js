@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      3.1.6
+// @version      3.1.7
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，支持移动端播放，...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -1496,12 +1496,13 @@
     };
 
     obj.initDownloadSharePage = function () {
-        if ($("#root [class^=banner] [class^=right] .button-download").length) return;
+        if ($(".button-download--batch").length) {
+            return;
+        }
         if ($("#root [class^=banner] [class^=right]").length) {
-            $("#root [class^=banner] [class^=right]").prepend(
-                '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-download" style="margin-right: 28px;">显示链接</button>'
-            );
-            $("#root [class^=banner] [class^=right] .button-download").on("click", obj.showDownloadSharePage);
+            var html = '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-download--batch" style="margin-right: 28px;">显示链接</button>';
+            $("#root [class^=banner] [class^=right]").prepend(html);
+            $(".button-download--batch").on("click", obj.showDownloadSharePage);
         }
         else {
             setTimeout(obj.initDownloadSharePage, 500)
@@ -1509,12 +1510,13 @@
     };
 
     obj.initDownloadHomePage = function () {
-        if ($("#root header:eq(0) .button-download").length) return;
+        if ($(".button-download--batch").length) {
+            return;
+        }
         if ($("#root header").length) {
-            $("#root header:eq(0)").append(
-                '<div style="margin:0px 8px;"></div><button class="button--WC7or primary--NVxfK small--e7LRt modal-footer-button--9CQLU button-download">显示链接</button>'
-            );
-            $("#root header:eq(0) .button-download").on("click", obj.showDownloadHomePage);
+            var html = '<div style="margin:0px 8px;"></div><button class="button--WC7or primary--NVxfK small--e7LRt modal-footer-button--9CQLU button-download--batch">显示链接</button>';
+            $("#root header:eq(0)").append(html);
+            $(".button-download--batch").on("click", obj.showDownloadHomePage);
         }
         else {
             setTimeout(obj.initDownloadHomePage, 1000)
@@ -1633,6 +1635,8 @@
             }
         }).closest(".ant-modal-root").find(".icon-wrapper--3dbbo,.icon-wrapper--TbIdu").one("click", function () {
             $(this).closest(".ant-modal-root").remove();
+        }).closest(".ant-modal-root").find(".list--13IBL.list--ypYX0 a").on("click", function (event) {
+            this.href = this.title;
         });
     };
 
