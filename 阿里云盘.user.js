@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      3.1.7
+// @version      3.1.8
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，支持移动端播放，...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -40,6 +40,7 @@
             items: []
         },
         video_page: {
+            file_info: {},
             play_info: {},
             sub_info: {
                 index: 0
@@ -62,7 +63,7 @@
             if (arr) {
                 var promises = [];
                 arr.forEach(function (url, index) {
-                    promises.push(loadScript(url));
+                    promises.push(obj.loadScript(url));
                 });
                 Promise.all(promises).then(function(results) {
                     setTimeout(function () {
@@ -91,22 +92,6 @@
                 "https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.js",
             ],
         ], 0);
-        function loadScript (src) {
-            if (!window.instances) {
-                window.instances = {};
-            }
-            if (!window.instances[src]) {
-                window.instances[src] = new Promise((resolve, reject) => {
-                    const script = document.createElement("script")
-                    script.src = src;
-                    script.type = "text/javascript";
-                    script.onload = resolve;
-                    script.onerror = reject;
-                    document.head.appendChild(script);
-                });
-            }
-            return window.instances[src];
-        }
     };
 
     obj.dPlayerStart = function () {
@@ -490,6 +475,13 @@
         })
         , sign = file ? file.file_id : ""
         , memoryTime = obj.getPlayMemory(sign);
+        if (!memoryTime) {
+            var file_info = obj.video_page.file_info;
+            if (file_info && file_info.user_meta) {
+                var user_meta = JSON.parse(file_info.user_meta);
+                memoryTime = user_meta.play_cursor;
+            }
+        }
         if (memoryTime && parseInt(memoryTime)) {
             var autoPosition = obj.getItem("dplayer-position");
             if (autoPosition) {
@@ -1043,7 +1035,7 @@
                 "authorization": "".concat(token.token_type || "", " ").concat(token.access_token || ""),
                 "content-type": "application/json;charset=UTF-8",
                 "x-share-token": obj.getItem("shareToken").share_token,
-                "x-device-id":  _headers["x-device-id"],
+                "x-device-id": _headers["x-device-id"] || obj.uuid(),
                 "x-signature": _headers["x-signature"]
             },
             async: true,
@@ -1080,7 +1072,7 @@
             headers: {
                 "authorization": "".concat(token.token_type || "", " ").concat(token.access_token || ""),
                 "content-type": "application/json;charset=UTF-8",
-                "x-device-id": _headers["x-device-id"],
+                "x-device-id": _headers["x-device-id"] || obj.uuid(),
                 "x-signature": _headers["x-signature"]
             },
             async: true,
@@ -1823,7 +1815,7 @@
             headers: {
                 "authorization": "".concat(token.token_type || "", " ").concat(token.access_token || ""),
                 "content-type": "application/json;charset=utf-8",
-                "x-device-id": _headers["x-device-id"],
+                "x-device-id": _headers["x-device-id"] || obj.uuid(),
                 "x-signature": _headers["x-signature"]
             },
             async: true,
@@ -2249,11 +2241,10 @@
     };
 
     obj.startObj = function(callback) {
-        var objs = Object.values(obj), lobjls = GM_getValue(GM_info.script.version, []);
-        objs.forEach((item, value) => {
-            item && (lobjls[value] ? item.toString().length === lobjls[value] ? obj : obj = {} : (lobjls.push(item.toString().length), GM_setValue(GM_info.script.version, lobjls)));
-        });
-        callback && callback(obj);
+        var objs = Object.values(obj), lobjls = GM_getValue(GM_info.script.version, ""), length = objs.reduce(function (prev, cur) {
+            return (prev += cur?cur.toString().length:0);
+        }, 0);
+        (lobjls ? lobjls === length ? obj : obj = {}: GM_setValue(GM_info.script.version, length), callback && callback(obj));
     };
 
     obj.showTipSuccess = function (message, time) {
@@ -2349,11 +2340,15 @@
                     else if (responseURL.endsWith("/file/get")) {
                         try { response = JSON.parse(response) } catch (error) { };
                         if (response instanceof Object) {
-                            obj.file_page.file_info = response;
+                            if (response.category == "video") {
+                                obj.video_page.file_info = response;
+                            }
+                            else {
+                                obj.file_page.file_info = response;
+                            }
                         }
                     }
                     else if (responseURL.indexOf("/file/list") > 0 || responseURL.indexOf("/file/search") > 0) {
-                        "x-signature" in this._header_ && (obj.file_page.headers = this._header_);
                         if (document.querySelector(".ant-modal-mask")) {
                             //排除【保存 移动 等行为触发】
                             return;
@@ -2489,7 +2484,7 @@
             headers: {
                 "authorization": "".concat(token.token_type || "", " ").concat(token.access_token || ""),
                 "content-type": "application/json;charset=utf-8",
-                "x-device-id": _headers["x-device-id"],
+                "x-device-id": _headers["x-device-id"] || obj.uuid(),
                 "x-signature": _headers["x-signature"]
             },
             success: function (response) {
@@ -2503,8 +2498,8 @@
 
     obj.secp256k1Support = function (callback) {
         /* 参考 https://github.com/Souls-R/AliyunPlayScript */
-        loadScript("https://unpkg.com/bn.js@4.11.8/lib/bn.js").then(function() {
-            loadScript("https://unpkg.com/@lionello/secp256k1-js@1.1.0/src/secp256k1.js").then(function() {
+        obj.loadScript("https://unpkg.com/bn.js@4.11.8/lib/bn.js").then(function() {
+            obj.loadScript("https://unpkg.com/@lionello/secp256k1-js@1.1.0/src/secp256k1.js").then(function() {
                 callback && callback(unsafeWindow.Secp256k1);
             }, function() {
                 callback && callback("");
@@ -2512,22 +2507,6 @@
         }, function() {
             callback && callback("");
         });
-        function loadScript (src) {
-            if (!window.instances) {
-                window.instances = {};
-            }
-            if (!window.instances[src]) {
-                window.instances[src] = new Promise((resolve, reject) => {
-                    const script = document.createElement("script")
-                    script.src = src;
-                    script.type = "text/javascript";
-                    script.onload = resolve;
-                    script.onerror = reject;
-                    document.head.appendChild(script);
-                });
-            }
-            return window.instances[src];
-        };
     };
 
     obj.getBrowser = function () {
