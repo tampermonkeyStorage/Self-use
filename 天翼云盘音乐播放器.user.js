@@ -2,7 +2,7 @@
 // @name         天翼云盘音乐播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
 // @version      0.1.0
-// @description  try to take over the world!
+// @description  一曲肝肠断，天涯何处觅知音
 // @author       You
 // @match        https://cloud.189.cn/web/*
 // @connect      kugou.com
