@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      3.1.8
+// @version      3.1.9
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，支持移动端播放，...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -12,6 +12,7 @@
 // @icon         https://gw.alicdn.com/imgextra/i3/O1CN01aj9rdD1GS0E8io11t_!!6000000000620-73-tps-16-16.ico
 // @require      https://cdn.staticfile.org/localforage/1.10.0/localforage.min.js
 // @require      https://cdn.staticfile.org/jquery/3.6.0/jquery.min.js
+// @require      https://scriptcat.org/lib/950/1.0.0/Joysound.js
 // @antifeature  ads
 // @antifeature  membership
 // @antifeature  payment
@@ -178,7 +179,7 @@
             },
             autoplay: true,
             screenshot: true,
-            hotkey: false,
+            hotkey: true,
             airplay: true,
             volume: 1.0,
             playbackSpeed: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3, 4],
@@ -201,16 +202,17 @@
                 prevPlayer.destroy();
                 prevPlayer = null;
             }
-            obj.playerReady(player, function(player) {
-                player.options.hotkey || obj.dPlayerHotkey();
+            obj.dPlayerReady(player, function(player) {
+                obj.dPlayerSetting(player);
+                obj.dPlayerMemoryPlay(player);
+                obj.dPlayerAutoPlaynext(player);
+                obj.dPlayerSoundEnhancement(player);
+                obj.dPlayerImageEnhancement(player);
+                obj.dPlayerSelectEpisode();
                 obj.dPlayerInitAspectRatio();
-                obj.autoSkipPlayNext();
-                obj.memoryPlay();
-                obj.playSetting();
-                obj.selectEpisode();
                 unsafeWindow.requestAnimationFrame(function menushow () {
-                    const { video: { currentTime, duration }, contextmenu, container: { offsetWidth, offsetHeight } } = player;
-                    const t = Math.min(1000, duration) * 1000 / 2;
+                    const { video: { currentTime, duration, playbackRate }, contextmenu, container: { offsetWidth, offsetHeight } } = player;
+                    const t = Math.min(1000, duration) * 1000 / 2 / playbackRate;
                     (t / 1000 > duration - currentTime) || setTimeout(() => {
                         obj.isAppreciation(function (data) {
                             data || contextmenu.show(offsetWidth / 2.5, offsetHeight / 3);
@@ -218,15 +220,15 @@
                         });
                     }, t);
                 });
-                obj.addCueVideoSubtitle(function (textTracks) {
+                obj.addCueVideoSubtitle(player, function (textTracks) {
                     if (textTracks) {
-                        obj.selectSubtitles(textTracks);
+                        obj.dPlayerSelectSubtitles(textTracks);
                         obj.dPlayerSubtitleStyle();
                     }
                 });
                 player.on("quality_end", function () {
                     localStorage.setItem("dplayer-quality", player.quality.name);
-                    obj.addCueVideoSubtitle();
+                    obj.addCueVideoSubtitle(player);
                 });
                 player.speed(localStorage.getItem("dplayer-speed") || 1);
                 player.on("ratechange", function () {
@@ -249,6 +251,9 @@
                     try {
                         screen.orientation.unlock();
                     } catch (error) { };
+                });
+                $("[data-icon-type=PDSClose]").one("click", function () {
+                    player.destroy();
                 });
             });
         } catch (error) {
@@ -306,13 +311,16 @@
     };
 
     obj.dPlayerEvents = function (player) {
-        obj.playerReady(player, function(player) {
+        obj.dPlayerReady(player, function(player) {
             const { options: { contextmenu } } = player;
             JSON.stringify(contextmenu).includes(5254001) || player.destroy();
             obj.dPlayerAspectRatio();
-            obj.addCueVideoSubtitle(function (textTracks) {
+            obj.dPlayerMemoryPlay(player);
+            obj.dPlayerSoundEnhancement(player);
+            obj.dPlayerImageEnhancement(player);
+            obj.addCueVideoSubtitle(player, function (textTracks) {
                 if (textTracks) {
-                    obj.selectSubtitles(textTracks);
+                    obj.dPlayerSelectSubtitles(textTracks);
                     obj.dPlayerSubtitleStyle();
                     obj.offsetCache && obj.dPlayerSubtitleOffset();
                 }
@@ -320,7 +328,7 @@
         });
     };
 
-    obj.playerReady = function (player, callback) {
+    obj.dPlayerReady = function (player, callback) {
         if (player.isReady) {
             callback && callback(player);
         }
@@ -337,70 +345,485 @@
         }
     };
 
-    obj.dPlayerHotkey = function () {
-        if (window.dPlayerHotkey) return;
-        window.dPlayerHotkey = true;
-        document.addEventListener("keydown", (function(e) {
-            var t = obj.video_page.player;
-            if (t && document.getElementById("dplayer")) {
-                var a = document.activeElement.tagName.toUpperCase()
-                , n = document.activeElement.getAttribute("contenteditable");
-                if ("INPUT" !== a && "TEXTAREA" !== a && "" !== n && "true" !== n) {
-                    var o, r = e || window.event;
-                    switch (r.keyCode) {
-                        case 13:
-                            r.preventDefault();
-                            t.fullScreen.toggle();
-                            break;
-                        case 32:
-                            r.preventDefault();
-                            t.toggle();
-                            break;
-                        case 37:
-                            r.preventDefault();
-                            t.seek(t.video.currentTime - 5);
-                            break;
-                        case 39:
-                            r.preventDefault();
-                            t.seek(t.video.currentTime + 5);
-                            break;
-                        case 38:
-                            r.preventDefault();
-                            o = t.volume() + .01;
-                            t.volume(o);
-                            break;
-                        case 40:
-                            r.preventDefault();
-                            o = t.volume() - .01;
-                            t.volume(o);
-                            break;
-                        case 36:
-                            r.preventDefault();
-                            t.notice("上一项");
-                            o = document.querySelector("[data-icon-type=PDSChevronLeft]") || document.querySelector("[data-icon-type=PDSLeftNormal]");
-                            o && o.click();
-                            break;
-                        case 35:
-                            r.preventDefault();
-                            t.notice("下一项");
-                            o = document.querySelector("[data-icon-type=PDSChevronRight]") || document.querySelector("[data-icon-type=PDSRightNormal]");
-                            o && o.click();
-                            break;
+    obj.dPlayerSetting = function (player) {
+        if ($(".dplayer-setting-autoposition").length) return;
+        var html = '<div class="dplayer-setting-item dplayer-setting-autoposition"><span class="dplayer-label">自动记忆播放</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-autoposition" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
+        html += '<div class="dplayer-setting-item dplayer-setting-autoplaynext"><span class="dplayer-label">自动连续播放</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-autoplaynext" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
+        html += '<div class="dplayer-setting-item dplayer-setting-soundenhancement"><span class="dplayer-label">音质增强</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-soundenhancement" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
+        html += '<div class="dplayer-setting-item dplayer-setting-imageenhancement"><span class="dplayer-label">画质增强</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-imageenhancement" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
+        html += '<div class="dplayer-setting-item dplayer-setting-skipposition"><span class="dplayer-label">跳过片头片尾</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-skipposition" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
+        html += '<div class="dplayer-setting-item dplayer-setting-subtitle"><span class="dplayer-label">字幕设置</span><div class="dplayer-toggle"><svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 32 32"><path d="M22 16l-10.105-10.6-1.895 1.987 8.211 8.613-8.211 8.612 1.895 1.988 8.211-8.613z"></path></svg></div></div></div>';
+        $(".dplayer-setting-origin-panel").append(html);
+        const { user, template: { video } } = player;
+        Object.assign(user.storageName, { autoposition: "dplayer-autoposition", autoplaynext: "dplayer-autoplaynext", soundenhancement: "dplayer-soundenhancement", imageenhancement: "dplayer-imageenhancement", skipposition: "dplayer-skipposition", jumpstart: "dplayer-jumpstart", jumpend: "dplayer-jumpend" });
+        Object.assign(user.default, { autoposition: 0, autoplaynext: 0, soundenhancement: 0, imageenhancement: 0, skipposition: 0, jumpstart: 60, jumpend: 120 });
+        user.init();
+        user.get("autoposition") && ($(".dplayer-toggle-setting-input-autoposition").get(0).checked = true);
+        user.get("autoplaynext") && ($(".dplayer-toggle-setting-input-autoplaynext").get(0).checked = true);
+        user.get("soundenhancement") && ($(".dplayer-toggle-setting-input-soundenhancement").get(0).checked = true);
+        user.get("imageenhancement") && ($(".dplayer-toggle-setting-input-imageenhancement").get(0).checked = true);
+        user.get("skipposition") && ($(".dplayer-toggle-setting-input-skipposition").get(0).checked = true, obj.dPlayerSkippositionStart(player), obj.dPlayerSkippositionEnd(player));
+        $(".dplayer-setting-item").on("click", function(e) {
+            var checked = !$(this).find("input").get(0).checked;
+        });
+        $(".dplayer-setting-autoposition").on("click", function() {
+            var toggle = $(".dplayer-toggle-setting-input-autoposition"), checked = !toggle.is(":checked");
+            toggle.get(0).checked = checked;
+            player.notice("自动记忆播放：" + (checked ? "开启" : "关闭"));
+            user.set("autoposition", Number(checked));
+        });
+        $(".dplayer-setting-autoplaynext").on("click", function() {
+            var toggle = $(".dplayer-toggle-setting-input-autoplaynext"), checked = !toggle.is(":checked");
+            toggle.get(0).checked = checked;
+            player.notice("自动连续播放：" + (checked ? "开启" : "关闭"));
+            user.set("autoplaynext", Number(checked));
+        });
+        $(".dplayer-setting-soundenhancement").on("click", function() {
+            var toggle = $(".dplayer-toggle-setting-input-soundenhancement"), checked = !toggle.is(":checked");
+            toggle.get(0).checked = checked;
+            player.notice("音质增强：" + (checked ? "开启" : "关闭"));
+            user.set("soundenhancement", Number(checked));
+            obj.dPlayerSoundEnhancement(player);
+        });
+        $(".dplayer-setting-imageenhancement").on("click", function() {
+            var toggle = $(".dplayer-toggle-setting-input-imageenhancement"), checked = !toggle.is(":checked");
+            toggle.get(0).checked = checked;
+            player.notice("画质增强：" + (checked ? "开启" : "关闭"));
+            user.set("imageenhancement", Number(checked));
+            obj.dPlayerImageEnhancement(player);
+        });
+        $(".dplayer-setting-skipposition").on("click", function() {
+            var toggle = $(".dplayer-toggle-setting-input-skipposition"), checked = !toggle.is(":checked");
+            toggle.get(0).checked = checked;
+            player.notice("跳过片头片尾：" + (checked ? "开启" : "关闭"));
+            user.set("skipposition", Number(checked));
+            obj.dPlayerSkipposition(player);
+        });
+        $(".dplayer-setting-subtitle").on("click", function() {
+            obj.dPlayerSubtitleSetting(player);
+        });
+    };
+
+    obj.dPlayerMemoryPlay = function (player) {
+        if (this.hasMemoryDisplay) return;
+        this.hasMemoryDisplay = true;
+        const { user, video, video: { duration } } = player;
+        const file_id = obj.video_page.play_info?.file_id || ""
+        , play_cursor = getFilePosition(file_id);
+        if (play_cursor && parseInt(play_cursor)) {
+            var autoPosition = user.get("imageenhancement");
+            if (autoPosition) {
+                player.seek(play_cursor);
+            }
+            else {
+                var formatTime = formatVideoTime(play_cursor);
+                $(player.container).append('<div class="memory-play-wrap" style="display: block;position: absolute;left: 33px;bottom: 66px;font-size: 15px;padding: 7px;border-radius: 3px;color: #fff;z-index:100;background: rgba(0,0,0,.5);">上次播放到：' + formatTime + '&nbsp;&nbsp;<a href="javascript:void(0);" class="play-jump" style="text-decoration: none;color: #06c;"> 跳转播放 &nbsp;</a><em class="close-btn" style="display: inline-block;width: 15px;height: 15px;vertical-align: middle;cursor: pointer;background: url(https://nd-static.bdstatic.com/m-static/disk-share/widget/pageModule/share-file-main/fileType/video/img/video-flash-closebtn_15f0e97.png) no-repeat;"></em></div>');
+
+                var memoryTimeout = setTimeout(function () {
+                    $(".memory-play-wrap").remove();
+                }, 15000);
+                $(".memory-play-wrap .close-btn").click(function () {
+                    $(".memory-play-wrap").remove();
+                    clearTimeout(memoryTimeout);
+                });
+                $(".memory-play-wrap .play-jump").click(function () {
+                    player.seek(play_cursor);
+                    $(".memory-play-wrap").remove();
+                    clearTimeout(memoryTimeout);
+                });
+            }
+        }
+        document.onvisibilitychange = function () {
+            if (document.visibilityState === "hidden") {
+                const currentTime = player?.video?.currentTime
+                , file_id = obj.video_page.play_info?.file_id || "";
+                currentTime && file_id && setFilePosition(file_id, currentTime, duration);
+            }
+        };
+        window.onbeforeunload = function () {
+            const currentTime = player?.video?.currentTime
+            , file_id = obj.video_page.play_info?.file_id || "";
+            currentTime && file_id && setFilePosition(file_id, currentTime, duration);
+        };
+        $("[data-icon-type=PDSClose]").on("click", function () {
+            const currentTime = player?.video?.currentTime
+            , file_id = obj.video_page.play_info?.file_id || "";
+            currentTime && file_id && setFilePosition(file_id, currentTime, duration);
+        });
+
+        function getFilePosition (e) {
+            return localStorage.getItem("video_" + e) || 0;
+        }
+        function setFilePosition (e, t, o) {
+            e && t && (e = "video_" + e, t <= 60 || t + 120 >= o || 0 ? localStorage.removeItem(e) : localStorage.setItem(e, t));
+        }
+        function formatVideoTime (seconds) {
+            var secondTotal = Math.round(seconds)
+            , hour = Math.floor(secondTotal / 3600)
+            , minute = Math.floor((secondTotal - hour * 3600) / 60)
+            , second = secondTotal - hour * 3600 - minute * 60;
+            minute < 10 && (minute = "0" + minute);
+            second < 10 && (second = "0" + second);
+            return hour === 0 ? minute + ":" + second : hour + ":" + minute + ":" + second;
+        }
+    };
+
+    obj.dPlayerAutoPlaynext = function (player) {
+        player.on("ended", function () {
+            const { user } = player;
+            user.get("autoplaynext") && $(".next-icon").click();
+        });
+    };
+
+    obj.dPlayerSoundEnhancement = function (player) {
+        const { user, video } = player;
+        if (window.Joysound && window.Joysound.isSupport()) {
+            if (user.get("soundenhancement")) {
+                var joySound = player.joySound;
+                joySound || (joySound = player.joySound = new window.Joysound());
+                joySound._mediaElement || joySound.init(video);
+                joySound.setEnabled(!0);
+            }
+            else {
+                player.joySound && player.joySound._mediaElement && player.joySound.setEnabled(!1);
+            }
+        }
+    };
+
+    obj.dPlayerImageEnhancement = function (player) {
+        const { user, video } = player;
+        user.get("imageenhancement") ? $(video).css("filter", "contrast(1.01) brightness(1.05) saturate(1.1)") : $(video).css("filter", "");
+    };
+
+    obj.dPlayerSkipposition = function (player) {
+        //将片头片尾放在设置里 代码贡献：https://greasyfork.org/zh-CN/users/795227-星峰
+        var $skip, $setting = $(".dplayer .dplayer-setting");
+        const { user, video } = player;
+        if (user.get("skipposition")) {
+            if (($skip = $setting.find(".dplayer-setting-skipposition-item")).length == 0) {
+                $skip = $('<div class="dplayer-setting-skipposition-item" style="display: block;right: 155px;position: absolute;bottom: 50px;width: 150px;border-radius: 2px;background: rgba(28, 28, 28, 0.9);padding: 7px 0px;transition: all 0.3s ease-in-out 0s;overflow: hidden;z-index: 2;"><div class="dplayer-skipposition-item" style="padding: 5px 10px;box-sizing: border-box;cursor: pointer;position: relative;"><span class="dplayer-skipposition-label" title="双击设置当前时间为跳过片头时间" style="color: #eee;font-size: 13px;display: inline-block;vertical-align: middle;white-space: nowrap;">片头时间：</span><input type="number" style="width: 55px;height: 15px;top: 3px;font-size: 13px;border: 1px solid #fff;border-radius: 3px;text-align: center;" step="1" min="0"></div><div class="dplayer-skipposition-item" style="padding: 5px 10px;box-sizing: border-box;cursor: pointer;position: relative;"><span class="dplayer-skipposition-label" title="双击设置剩余时间为跳过片尾时间" style="color: #eee;font-size: 13px;display: inline-block;vertical-align: middle;white-space: nowrap;">片尾时间：</span><input type="number" style="width: 55px;height: 15px;top: 3px;font-size: 13px;border: 1px solid #fff;border-radius: 3px;text-align: center;" step="1" min="0"></div></div>').appendTo($setting);
+            }
+            $skip.find("input").each(function (index) {
+                $(this).val(user.get(["jumpstart", "jumpend"][index]));
+            }).change(function () {
+                user.set(["jumpstart", "jumpend"][$(this).parent().index()], $(this).val());
+            });
+            $skip.find("span").on("dblclick", function() {
+                var index = $(this).parent().index(), value = parseInt(index ? video.duration - video.currentTime : video.currentTime);
+                user.set(["jumpstart", "jumpend"][index], $(this).next().val(value).val());
+            });
+            $(".dplayer .dplayer-mask").on("click", function () {
+                $skip.remove();
+            });
+        }
+        else {
+            if (($skip = $setting.find(".dplayer-setting-skipposition-item")).length) {
+                $skip.remove();
+            }
+        }
+    };
+
+    obj.dPlayerSkippositionStart = function (player) {
+        const { user } = player;
+        if (user.get("skipposition")) {
+            var jumpstart = user.get("jumpstart");
+            if (jumpstart) {
+                player.seek(jumpstart);
+            }
+        }
+    };
+
+    obj.dPlayerSkippositionEnd = function (player) {
+        const { events, user } = player;
+        var raf = unsafeWindow.requestAnimationFrame(function rafrun () {
+            const { video: { currentTime, duration, playbackRate } } = player;
+            setTimeout(function () {
+                if (user.get("skipposition") && (duration - currentTime > 1)) {
+                    if (user.get("jumpend") * playbackRate > duration - currentTime) {
+                        player.seek(duration);
+                        events.trigger("ended");
                     }
                 }
+                unsafeWindow.requestAnimationFrame(rafrun);
+            }, 5e3);
+        });
+        player.on("destroy", function () {
+            unsafeWindow.cancelAnimationFrame(raf);
+        });
+    };
+
+    obj.dPlayerSubtitleSetting = function (player) {
+        var subSetBox = $(".subtitle-setting-box");
+        if (subSetBox.length) {
+            return subSetBox.toggle();
+        }
+        else {
+            var html = '<div class="dplayer-icons dplayer-comment-box subtitle-setting-box" style="display: block; z-index: 111; position: absolute; bottom: 10px;left:auto; right: 400px !important;"><div class="dplayer-comment-setting-box dplayer-comment-setting-open" >';
+            html += '<div class="dplayer-comment-setting-color"><div class="dplayer-comment-setting-title">字幕颜色<input type="text" class="color-value" style="height: 16px;width: 70px;font-size: 14px;border: 1px solid #fff;border-radius: 3px;margin-left: 70px;color: black;text-align: center;"></div><label><input type="radio" name="dplayer-danmaku-color-1" value="#fff" checked=""><span style="background: #fff;"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#e54256"><span style="background: #e54256"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#ffe133"><span style="background: #ffe133"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#64DD17"><span style="background: #64DD17"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#39ccff"><span style="background: #39ccff"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#D500F9"><span style="background: #D500F9"></span></label></div>';
+            html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">字幕位置</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>上移</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0" checked=""><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>下移</span></label></div>';
+            html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">字幕大小</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>加大</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>减小</span></label></div>';
+            html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">字幕偏移<span class="offset-text" style="border: 0px;width: 58px;"></span>偏移量 <input type="number" class="offset-value" style="height: 14px;width: 42px;font-size: 13px;border: 1px solid #fff;border-radius: 3px;color: black;line-height: normal;text-align: center;" step="1" min="1"></div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>前移</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>后移</span></label></div>';
+            html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">更多字幕功能</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>本地字幕</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>待定</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>网络字幕</span></label></div>';
+            html += '</div></div>';
+            $(".dplayer-controller").append(html);
+            subSetBox = $(".subtitle-setting-box");
+            var colortxt = $(".color-value");
+            colortxt.val(localStorage.getItem("dplayer-subtitle-color") || "#ffe133")
+            colortxt.on('input propertychange', function(e) {
+                var color = colortxt.val();
+                color = color.replace(/[^#0-9a-fA-F]/g, ""); //排除#和十六进制字符
+                color = color.replace(/^[0-9a-fA-F]/g, ""); //排除非#开头
+                color = color.replace("#", "$@$").replace(/\#/g, "").replace("$@$", "#"); //排除多个#
+                color = color.replace(/^#([0-9a-fA-F]{3,6}).*$/, '#$1'); //排除十六进制字符长度超过6位
+
+                colortxt.val(color);
+                if (localStorage.getItem("dplayer-subtitle-color") != color) {
+                    localStorage.setItem("dplayer-subtitle-color", color);
+                    $(".dplayer-subtitle").css("color", color);
+                }
+            });
+            var txt = $(".offset-value");
+            txt.val("5");
+            txt.on('input propertychange', function(e) {
+                var text = txt.val().replace(/[^\d]/g, "");
+                txt.val(text);
+            });
+            $(".dplayer .dplayer-mask").on("click", function () {
+                subSetBox.hide();
+            });
+        }
+        $(".subtitle-setting-box .dplayer-comment-setting-color input[type='radio']").on("click",function() {
+            var color = this.value;
+            if (localStorage.getItem("dplayer-subtitle-color") != color) {
+                localStorage.setItem("dplayer-subtitle-color", color);
+                $(".dplayer-subtitle").css("color", color);
             }
-        }));
-        document.addEventListener("wheel", function (event) {
-            event = event || window.event;
-            if ($(event.target).closest(".playlist-content").length) return;
-            var o, t = obj.video_page.player;
-            if (event.deltaY < 0) {
-                o = t.volume() + .01;
-                t.volume(o);
-            } else if (event.deltaY > 0) {
-                o = t.volume() - .01;
-                t.volume(o);
+            colortxt.val(color)
+        });
+        $(".subtitle-setting-box .dplayer-comment-setting-type input[type='radio']").on("click",function() {
+            var value = this.value;
+            var $this = $(this), $name = $this.parent().parent().children(":first").text();
+            if ($name == "字幕位置") {
+                var bottom = Number(localStorage.getItem("dplayer-subtitle-bottom") || 10);
+                value == "1" ? bottom += 1 : value == "2" ? bottom -= 1 : bottom = 10;
+                localStorage.setItem("dplayer-subtitle-bottom", bottom);
+                $(".dplayer-subtitle").css("bottom", bottom + "%");
             }
+            else if ($name == "字幕大小") {
+                var fontSize = Number(localStorage.getItem("dplayer-subtitle-fontSize") || 5);
+                value == "1" ? fontSize += .1 : value == "2" ? fontSize -= .1 : fontSize = 5;
+                localStorage.setItem("dplayer-subtitle-fontSize", fontSize);
+                $(".dplayer-subtitle").css("font-size", fontSize + "vh");
+            }
+            else if ($name.includes("字幕偏移")){
+                var offsettime = obj.offsetCache || 0;
+                var offsetvalue = Number($(".offset-value").val()) || 5;
+                value == "1" ? offsettime -= offsetvalue : value == "2" ? offsettime += offsetvalue : offsettime = 0;
+                offsettime == 0 ? $(".offset-text").text("") : $(".offset-text").text("["+ offsettime +"s]");
+                obj.offsetCache = offsettime;
+                obj.dPlayerSubtitleOffset(player);
+            }
+            else if ($name == "更多字幕功能") {
+                if (value == "0") {
+                    $this.next().text("暂无");
+                    setTimeout (function () {
+                        $this.next().text("待定")
+                    }, 5000);
+                }
+                else if (value == "1") {
+                    if ($("#addsubtitle").length == 0) {
+                        $("body").append('<input id="addsubtitle" type="file" accept=".srt,.ass,.ssa,.vtt" style="display: none;">');
+                    }
+                    $("#addsubtitle").click();
+                    $this.next().text("请等待...");
+                    setTimeout (function () {
+                        $this.next().text("本地字幕")
+                    }, 5000);
+                }
+                else if (value == "2") {
+                    $this.next().text("暂无");
+                    setTimeout (function () {
+                        $this.next().text("网络字幕")
+                    }, 5000);
+                }
+            }
+        });
+    };
+
+    obj.dPlayerSubtitleOffset = function (player) {
+        const { video, subtitle } = player;
+        if (video.textTracks && video.textTracks[0]) {
+            const track = video.textTracks[0];
+            const cues = Array.from(track.cues);
+            let fileId = obj.video_page.play_info.file_id
+            , sub_info = obj.video_page.sub_info
+            , subList = sub_info[fileId]
+            , index = sub_info.index || 0
+            , sarr = subList[index].sarr;
+            let offsetCache = obj.offsetCache || 0;
+            for (let index = 0; index < cues.length; index++) {
+                const cue = cues[index];
+                cue.startTime = clamp(sarr[index].startTime + offsetCache, 0, video.duration);
+                cue.endTime = clamp(sarr[index].endTime + offsetCache, 0, video.duration);
+            }
+            subtitle.init();
+            player.notice(`字幕偏移: ${offsetCache} 秒`);
+        }
+        else {
+            obj.offsetCache = 0;
+        }
+        function clamp(num, a, b) {
+            return Math.max(Math.min(num, Math.max(a, b)), Math.min(a, b));
+        }
+    };
+
+    obj.dPlayerSelectSubtitles = function (textTracks) {
+        if (textTracks.length <= 1) return;
+        if ($(".dplayer-subtitle-btn .dplayer-quality-mask").length) {
+            $(".dplayer-subtitle-btn .dplayer-quality-mask").remove();
+        }
+        var subbtn = $(".dplayer-subtitle-btn")
+        subbtn.addClass("dplayer-quality");
+        var fileId = obj.video_page.play_info.file_id
+        , sub_info = obj.video_page.sub_info;
+        var subList = sub_info[fileId];
+        var eleSub = '<div class="dplayer-quality-item subtitle-item" data-index="'+ 0 +'" style="opacity: 0.4;">默认字幕</div>';
+        for(var i = 1; i < subList.length; i++) {
+            eleSub += '<div class="dplayer-quality-item subtitle-item" data-index="'+ i +'">'+ subList[i].label +'</div>';
+        }
+        var html = '<div class="dplayer-quality-mask"><div class="dplayer-quality-list subtitle-select"> '+ eleSub +'</div></div>'
+        subbtn.append(html);
+        $(".subtitle-select .subtitle-item").off("click").on("click", function() {
+            var $this = $(this), index = $this.attr("data-index");
+            if ($this.css("opacity") != .4) {
+                $this.css("opacity", .4);
+                $this.siblings().css("opacity", "");
+                var subPicBtn = $(".dplayer-subtitle-btn .dplayer-icon");
+                subPicBtn.attr("data-balloon") == "显示字幕" && subPicBtn.click();
+                var subitem = subList[index];
+                if (subitem && subitem.sarr && subitem.sarr.length) {
+                    for(var i = textTracks[0].cues.length - 1; i >= 0; i--) {
+                        textTracks[0].removeCue(textTracks[0].cues[i]);
+                    }
+                    subitem.sarr.forEach(function (item) {
+                        /<b>.*<\/b>/.test(item.text) || (item.text = item.text.split(/\r?\n/).map((item) => `<b>${item}</b>`).join("\n"));
+                        var textTrackCue = new VTTCue(item.startTime, item.endTime, item.text);
+                        textTrackCue.id = item.index;
+                        textTracks[0] && textTracks[0].addCue(textTrackCue);
+                    });
+                    sub_info.index = index;
+                }
+            }
+        });
+        var index = sub_info.index;
+        index && $(".subtitle-select .subtitle-item").eq(index).click();
+    };
+
+    obj.dPlayerSubtitleStyle = function () {
+        const player = obj.video_page.player;
+        const { subtitle: { container: { style } } } = player;
+        const bottom = localStorage.getItem("dplayer-subtitle-bottom")
+        , color = localStorage.getItem("dplayer-subtitle-color")
+        , fontSize = localStorage.getItem("dplayer-subtitle-fontSize");
+        style.fontSize == fontSize + "vh" || (style.fontSize = fontSize + "vh");
+        style.bottom == bottom + "%" || (style.bottom = bottom + "%");
+        style.color == color || (style.color = color);
+        style.textShadow || (style.textShadow = "1px 0 1px #000, 0 1px 1px #000, -1px 0 1px #000, 0 -1px 1px #000, 1px 1px 1px #000, -1px -1px 1px #000, 1px -1px 1px #000, -1px 1px 1px #000");
+        if (!style.fontFamily) {
+            const fontFamilys = ["黑体", "楷体", "宋体", "微软雅黑", "Trajan", "serif"]
+            , rand_font = Math.floor(Math.random() * fontFamilys.length);
+            style.fontFamily = fontFamilys[rand_font];
+        }
+    };
+
+    obj.dPlayerSelectEpisode = function () {
+        //选集 代码贡献：https://greasyfork.org/zh-CN/users/795227-星峰
+        if ($(".dplayer-icons-right #btn-select-episode").length) return;
+        if (document.querySelectorAll(".dplayer-menu-item").length < 4) return;
+        var fileList = obj.file_page.items
+        , videoList = fileList.filter(function (item, index) {
+            return item.category == "video";
+        })
+        , play_info = obj.video_page.play_info
+        , fileIndex = videoList.findIndex(function (item, index) {
+            return item.file_id == play_info.file_id;
+        });
+        if (!(fileIndex > -1 && videoList.length > 1)) return;
+        var elevideo = "";
+        videoList.forEach(function (item, index) {
+            if (fileIndex == index) {
+                elevideo += '<div class="video-item active" title="' + item.name + '" style="background-color: rgba(0,0,0,.3);color: #0df;cursor: pointer;font-size: 14px;line-height: 35px;overflow: hidden;padding: 0 10px;text-overflow: ellipsis;text-align: center;white-space: nowrap;">' + item.name + '</div>';
+            }
+            else {
+                elevideo += '<div class="video-item" title="' + item.name + '" style="color: #fff;cursor: pointer;font-size: 14px;line-height: 35px;overflow: hidden;padding: 0 10px;text-overflow: ellipsis;text-align: center;white-space: nowrap;">' + item.name + '</div>';
+            }
+        });
+        var svg = '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 32 32"><path d="M22 16l-10.105-10.6-1.895 1.987 8.211 8.613-8.211 8.612 1.895 1.988 8.211-8.613z"></path></svg>'
+        var html = '<button class="dplayer-icon dplayer-play-icon prev-icon" style="transform: rotate(-180deg)" title="上一集">'+ svg +'</button>';
+        html += '<button id="btn-select-episode" class="dplayer-icon dplayer-quality-icon" title="选集">选集</button> <div class="playlist-content" style="max-width: 80%;max-height: 330px;width: auto;height: auto;box-sizing: border-box;overflow: hidden;position: absolute;left: 0;transition: all .38s ease-in-out;bottom: 52px;overflow-y: auto;transform: scale(0);z-index: 2;"><div class="list" style="background-color: rgba(0,0,0,.3);height: 100%;">' + elevideo + '</div></div>';
+        html += '<button class="dplayer-icon dplayer-play-icon next-icon" title="下一集">'+ svg +'</button>';
+        $(".dplayer-icons-right").prepend(html);
+        $("#btn-select-episode").on("click", function() {
+            var eleEpisode = $(".playlist-content");
+            if (eleEpisode.css("transform").match(/\d+/) > 0) {
+                eleEpisode.css("transform", "scale(0)");
+            }
+            else {
+                eleEpisode.css("transform", "scale(1)");
+                $(".dplayer-mask").addClass("dplayer-mask-show");
+                var singleheight = $(".dplayer-icons-right .video-item")[0].offsetHeight;
+                var totalheight = $(".dplayer-icons-right .playlist-content").height();
+                $(".dplayer-icons-right .playlist-content").scrollTop((fileIndex + 1) * singleheight - totalheight / 2);
+            }
+        });
+        $(".dplayer-mask").on("click",function() {
+            var eleEpisode = $(".playlist-content");
+            if (eleEpisode.css("transform").match(/\d+/) > 0) {
+                eleEpisode.css("transform", "scale(0)");
+                $(this).removeClass("dplayer-mask-show");
+            }
+        });
+        $(".playlist-content .video-item").on("click", function() {
+            var $this = $(this);
+            if ($this.hasClass("active")) return;
+            $(".dplayer-mask").removeClass("dplayer-mask-show");
+            var oldele = $(".video-item.active");
+            oldele.removeClass("active");
+            oldele.css({"background-color": "", "color": "#fff"});
+            $this.addClass("active");
+            $this.css({"background-color": "rgba(0,0,0,.3)", "color": "#0df"});
+            var file = videoList[$this.index()];
+            obj.dPlayerPlayByFile(file);
+        });
+        $(".prev-icon").on("click", function () {
+            var file = videoList[fileIndex - 1];
+            file ? obj.dPlayerPlayByFile(file) : obj.showTipError("没有上一集了");
+        });
+        $(".next-icon").on("click",function(){
+            var file = videoList[fileIndex + 1];
+            file ? obj.dPlayerPlayByFile(file) : obj.showTipError("没有下一集了");
+        });
+    };
+
+    obj.dPlayerPlayByFile = function(file) {
+        var player = obj.video_page.player;
+        if (player) {
+            try {
+                player.pause();
+                player.docClickFun && document.removeEventListener('click', player.docClickFun, true);
+                player.containerClickFun && player.container.removeEventListener('click', player.containerClickFun, true);
+                player.fullScreen && player.fullScreen.destroy && player.fullScreen.destroy();
+                player.hotkey && player.hotkey.destroy && player.hotkey.destroy();
+                player.contextmenu && player.contextmenu.destroy && player.contextmenu.destroy();
+                player.controller && player.controller.destroy && player.controller.destroy();
+                player.timer && player.timer.destroy && player.timer.destroy();
+                obj.video_page.player = null;
+                obj.offsetCache = 0;
+            } catch (error) { };
+        }
+        obj.video_page.play_info.file_id = file.file_id;
+        obj.getVideoPreviewPlayInfo(function () {
+            $(".header-file-name--CN_fq, .text--2KGvI").text(file.name);
         });
     };
 
@@ -461,538 +884,6 @@
         }
     };
 
-    obj.memoryPlay = function () {
-        if (obj.hasMemoryDisplay) return;
-        obj.hasMemoryDisplay = true;
-        var jumpstart = obj.getPlayMemory("jumpstart") || 60;
-        var jumpend = obj.getPlayMemory("jumpend") || 120;
-        var skipPosition = obj.getPlayMemory("skipposition");
-        var player = obj.video_page.player;
-        var playInfo = obj.video_page.play_info;
-        var fileList = obj.file_page.items
-        , file = fileList.find(function (item, index) {
-            return item.file_id == playInfo.file_id;
-        })
-        , sign = file ? file.file_id : ""
-        , memoryTime = obj.getPlayMemory(sign);
-        if (!memoryTime) {
-            var file_info = obj.video_page.file_info;
-            if (file_info && file_info.user_meta) {
-                var user_meta = JSON.parse(file_info.user_meta);
-                memoryTime = user_meta.play_cursor;
-            }
-        }
-        if (memoryTime && parseInt(memoryTime)) {
-            var autoPosition = obj.getItem("dplayer-position");
-            if (autoPosition) {
-                player.seek(memoryTime - 1);
-            }
-            else {
-                var formatTime = formatVideoTime(memoryTime);
-                $(player.container).append('<div class="memory-play-wrap" style="display: block;position: absolute;left: 33px;bottom: 66px;font-size: 15px;padding: 7px;border-radius: 3px;color: #fff;z-index:100;background: rgba(0,0,0,.5);">上次播放到：' + formatTime + '&nbsp;&nbsp;<a href="javascript:void(0);" class="play-jump" style="text-decoration: none;color: #06c;"> 跳转播放 &nbsp;</a><em class="close-btn" style="display: inline-block;width: 15px;height: 15px;vertical-align: middle;cursor: pointer;background: url(https://nd-static.bdstatic.com/m-static/disk-share/widget/pageModule/share-file-main/fileType/video/img/video-flash-closebtn_15f0e97.png) no-repeat;"></em></div>');
-                var memoryTimeout = setTimeout(function () {
-                    skipPosition && jumpstart && jumpstart > player.video.currentTime && player.seek(jumpstart);
-                    $(".memory-play-wrap").remove();
-                }, 15000);
-                $(".memory-play-wrap .close-btn").click(function () {
-                    skipPosition && jumpstart && jumpstart > player.video.currentTime && player.seek(jumpstart);
-                    $(".memory-play-wrap").remove();
-                    clearTimeout(memoryTimeout);
-                });
-                $(".memory-play-wrap .play-jump").click(function () {
-                    player.seek(memoryTime - 1);
-                    $(".memory-play-wrap").remove();
-                    clearTimeout(memoryTimeout);
-                });
-            }
-        }
-        else {
-            if (typeof skipPosition == "boolean") {
-                skipPosition && jumpstart && player.seek(jumpstart);
-            }
-        }
-        var duration = player.video.duration;
-        document.onvisibilitychange = function () {
-            if (document.visibilityState === "hidden") {
-                var currentTime = player.video.currentTime;
-                currentTime && obj.setPlayMemory(sign, currentTime, duration, jumpstart, jumpend);
-            }
-        };
-        window.onbeforeunload = function () {
-            var currentTime = player.video.currentTime;
-            currentTime && obj.setPlayMemory(sign, currentTime, duration, jumpstart, jumpend);
-        };
-        $(".modal--nw7G9 [data-icon-type=PDSClose]").one("click", function () {
-            var currentTime = player.video.currentTime;
-            currentTime && obj.setPlayMemory(sign, currentTime, duration, jumpstart, jumpend);
-        });
-        function formatVideoTime (seconds) {
-            var secondTotal = Math.round(seconds)
-            , hour = Math.floor(secondTotal / 3600)
-            , minute = Math.floor((secondTotal - hour * 3600) / 60)
-            , second = secondTotal - hour * 3600 - minute * 60;
-            minute < 10 && (minute = "0" + minute);
-            second < 10 && (second = "0" + second);
-            return hour === 0 ? minute + ":" + second : hour + ":" + minute + ":" + second;
-        }
-    };
-
-    obj.autoSkipPlayNext = function () {
-        var player = obj.video_page.player;
-        player.on("timeupdate", function () {
-            if (!this.autonext && obj.getPlayMemory("skipposition")) {
-                var { video } = player;
-                var { currentTime, duration } = video;
-                var jumpStart = obj.getPlayMemory("jumpstart") || 60;
-                var jumpEnd = obj.getPlayMemory("jumpend") || 120;
-                if (!isNaN(duration) && jumpEnd > 0 && duration - currentTime <= parseInt(jumpEnd) + 10 * video.playbackRate) {
-                    this.autonext = true;
-                    var playInfo = obj.video_page.play_info;
-                    var fileList = obj.file_page.items
-                    , videoList = fileList.filter(function (item, index) {
-                        return item.category == "video";
-                    })
-                    , fileIndex, file = videoList.find(function (item, index) {
-                        fileIndex = index;
-                        return item.file_id == playInfo.file_id;
-                    })
-                    , sign = file ? file.file_id : "";
-                    obj.setPlayMemory(sign, currentTime + 10 * video.playbackRate, duration, jumpStart, jumpEnd);
-                    var fileNext = videoList[ fileIndex + 1 ];
-                    if (fileNext) {
-                        $(player.container).append('<div class="memory-play-wrap" style="display: block;position: absolute;left: 33px;bottom: 66px;font-size: 15px;padding: 7px;border-radius: 3px;color: #fff;z-index:100;background: rgba(0,0,0,.5);">10秒后自动下一集&nbsp;&nbsp;<a href="javascript:void(0);" class="play-jump" style="text-decoration: none;color: #06c;"> 取消 &nbsp;</a><em class="close-btn" style="display: inline-block;width: 15px;height: 15px;vertical-align: middle;cursor: pointer;background: url(https://nd-static.bdstatic.com/m-static/disk-share/widget/pageModule/share-file-main/fileType/video/img/video-flash-closebtn_15f0e97.png) no-repeat;"></em></div>');
-                        var memoryTimeout = setTimeout(function () {
-                            obj.playByFile(fileNext);
-                            $(".memory-play-wrap").remove();
-                        }, 10000);
-                        $(".memory-play-wrap .close-btn").click(function () {
-                            clearTimeout(memoryTimeout);
-                            $(".memory-play-wrap").remove();
-                        });
-                        $(".memory-play-wrap .play-jump").click(function () {
-                            clearTimeout(memoryTimeout);
-                            $(".memory-play-wrap").remove();
-                        });
-                    }
-                    else {
-                        obj.showTipError("没有下一集了");
-                    }
-                }
-            }
-        });
-    };
-
-    obj.playByFile = function(file) {
-        var player = obj.video_page.player;
-        if (player) {
-            try {
-                player.pause();
-                player.docClickFun && document.removeEventListener('click', player.docClickFun, true);
-                player.containerClickFun && player.container.removeEventListener('click', player.containerClickFun, true);
-                player.fullScreen && player.fullScreen.destroy && player.fullScreen.destroy();
-                player.hotkey && player.hotkey.destroy && player.hotkey.destroy();
-                player.contextmenu && player.contextmenu.destroy && player.contextmenu.destroy();
-                player.controller && player.controller.destroy && player.controller.destroy();
-                player.timer && player.timer.destroy && player.timer.destroy();
-                obj.video_page.player = null;
-                obj.offsetCache = 0;
-            } catch (error) { };
-        }
-        obj.video_page.play_info.file_id = file.file_id;
-        obj.getVideoPreviewPlayInfo(function () {
-            $(".header-file-name--CN_fq, .text--2KGvI").text(file.name);
-        });
-    };
-
-    obj.playSetting = function () {
-        //将片头片尾放在设置里 代码贡献：https://greasyfork.org/zh-CN/users/795227-星峰
-        if ($(".dplayer-setting-skipposition").length) return;
-        var html = '<div class="dplayer-setting-item dplayer-setting-jumpend" style="display:none"><span class="dplayer-label" title="双击设置剩余时间为跳过片尾秒数">片尾(秒)</span><input type="text" name="dplayer-toggle" class="dplayer-toggle" style="height: 15px; font-size: 13px;border: 1px solid #fff;border-radius: 15px;"></div><div class="dplayer-setting-item dplayer-setting-jumpstart" style="display:none"><span class="dplayer-label" title="双击设置当前时间为跳过片头秒数">片头(秒)</span><input type="text" name="dplayer-toggle" class="dplayer-toggle" style="height: 15px; font-size: 13px;border: 1px solid #fff;border-radius: 15px;"></div><div class="dplayer-setting-item dplayer-setting-skipposition"><span class="dplayer-label">跳过片头片尾</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-skipposition" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
-        html += '<div class="dplayer-setting-item dplayer-setting-autoposition"><span class="dplayer-label">自动记忆播放</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-autoposition" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
-        $(".dplayer-setting-origin-panel").prepend(html);
-        html = '<div class="dplayer-setting-item dplayer-setting-subtitle"><span class="dplayer-label">字幕设置</span></div></div>';
-        $(".dplayer-setting-origin-panel").append(html);
-        $(".dplayer-setting-subtitle").on("click", function() {
-            obj.subtitleSetting();
-        });
-        $(".dplayer-mask").on("click",function() {
-            if ($(".subtitle-setting-box").css("display") != "none") {
-                $(".subtitle-setting-box").toggle();
-                $(this).removeClass("dplayer-mask-show");
-            }
-        });
-        var jumpstart = obj.getPlayMemory("jumpstart") || 60;
-        var jumpend = obj.getPlayMemory("jumpend") || 120;
-        var skipPosition = obj.getPlayMemory("skipposition");
-        if (skipPosition) {
-            $(".dplayer-toggle-setting-input-skipposition").get(0).checked = true;
-            $(".dplayer-setting-jumpstart").show();
-            $(".dplayer-setting-jumpend").show();
-        }
-        var txt = $(".dplayer-setting-jumpstart .dplayer-toggle");
-        txt.val(jumpstart);
-        txt.change(function() {
-            obj.setPlayMemory("jumpstart", txt.val());
-            jumpstart = txt.val();
-        });
-        txt.on('input propertychange', function(e) {
-            var text = txt.val().replace(/[^\d]/g, "");
-            txt.val(text);
-        });
-        var txt1 = $(".dplayer-setting-jumpend .dplayer-toggle");
-        txt1.val(jumpend);
-        txt1.change(function() {
-            obj.setPlayMemory("jumpend", txt1.val());
-            jumpend = txt1.val();
-        });
-        txt1.on('input propertychange', function(e) {
-            var text = txt.val().replace(/[^\d]/g, "");
-            txt.val(text);
-        });
-        $(".dplayer-setting-skipposition").on("click", function() {
-            var check = $(".dplayer-toggle-setting-input-skipposition");
-            var skipPosition = !check.is(":checked");
-            $(".dplayer-toggle-setting-input-skipposition").get(0).checked = skipPosition;
-            obj.setPlayMemory("skipposition", skipPosition);
-            if (skipPosition) {
-                $(".dplayer-setting-jumpstart").show()
-                $(".dplayer-setting-jumpend").show()
-                txt.val(jumpstart);
-                txt1.val(jumpend);
-                obj.setPlayMemory("jumpstart", jumpstart);
-                obj.setPlayMemory("jumpend", jumpend);
-                if($(".dplayer-setting-loop .dplayer-toggle-setting-input").is(":checked")) {
-                    $(".dplayer-setting-loop .dplayer-toggle-setting-input").click();
-                }
-            }
-            else{
-                $(".dplayer-setting-jumpstart").hide()
-                $(".dplayer-setting-jumpend").hide()
-            }
-        });
-        $(".dplayer-setting-jumpstart, .dplayer-setting-jumpend").on("dblclick", function() {
-            let currtime = 0, video = obj.video_page.player.video, duration = parseInt(video.duration), currentTime = parseInt(video.currentTime);
-            if($(this).hasClass("dplayer-setting-jumpstart")){
-                currtime = currentTime;
-                obj.setPlayMemory("jumpstart", currtime);
-            }
-            else{
-                currtime = duration - currentTime;
-                obj.setPlayMemory("jumpend", currtime);
-            }
-            $(this).children("input").val(currtime)
-        });
-        obj.getItem("dplayer-position") && ($(".dplayer-toggle-setting-input-autoposition").get(0).checked = true);
-        $(".dplayer-setting-autoposition").on("click", function() {
-            var check = $(".dplayer-toggle-setting-input-autoposition");
-            var autoPosition = !check.is(":checked");
-            $(".dplayer-toggle-setting-input-autoposition").get(0).checked = autoPosition;
-            obj.setItem("dplayer-position", autoPosition);
-        });
-        $(".dplayer-setting-loop").on("click", function() {
-            if ($(".dplayer-setting-loop .dplayer-toggle-setting-input").is(":checked") && skipPosition) {
-                $(".dplayer-setting-skipposition").click();
-            }
-            $(".dplayer-setting-icon").click();
-        });
-    };
-
-    obj.selectEpisode = function () {
-        //选集 代码贡献：https://greasyfork.org/zh-CN/users/795227-星峰
-        if ($(".dplayer-icons-right #btn-select-episode").length) return;
-        if (document.querySelectorAll(".dplayer-menu-item").length < 4) return;
-        var fileList = obj.file_page.items
-        , videoList = fileList.filter(function (item, index) {
-            return item.category == "video";
-        })
-        , play_info = obj.video_page.play_info
-        , fileIndex = videoList.findIndex(function (item, index) {
-            return item.file_id == play_info.file_id;
-        });
-        if (!(fileIndex > -1 && videoList.length > 1)) return;
-        var elevideo = "";
-        videoList.forEach(function (item, index) {
-            if (fileIndex == index) {
-                elevideo += '<div class="video-item active" title="' + item.name + '" style="background-color: rgba(0,0,0,.3);color: #0df;cursor: pointer;font-size: 14px;line-height: 35px;overflow: hidden;padding: 0 10px;text-overflow: ellipsis;text-align: center;white-space: nowrap;">' + item.name + '</div>';
-            }
-            else {
-                elevideo += '<div class="video-item" title="' + item.name + '" style="color: #fff;cursor: pointer;font-size: 14px;line-height: 35px;overflow: hidden;padding: 0 10px;text-overflow: ellipsis;text-align: center;white-space: nowrap;">' + item.name + '</div>';
-            }
-        });
-        var svg = '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 32 32"><path d="M22 16l-10.105-10.6-1.895 1.987 8.211 8.613-8.211 8.612 1.895 1.988 8.211-8.613z"></path></svg>'
-        var html = '<button class="dplayer-icon dplayer-play-icon prev-icon" style="transform: rotate(-180deg)" title="上一集">'+ svg +'</button>';
-        html += '<button id="btn-select-episode" class="dplayer-icon dplayer-quality-icon" title="选集">选集</button> <div class="playlist-content" style="max-width: 80%;max-height: 330px;width: auto;height: auto;box-sizing: border-box;overflow: hidden;position: absolute;left: 0;transition: all .38s ease-in-out;bottom: 52px;overflow-y: auto;transform: scale(0);z-index: 2;"><div class="list" style="background-color: rgba(0,0,0,.3);height: 100%;">' + elevideo + '</div></div>';
-        html += '<button class="dplayer-icon dplayer-play-icon next-icon" title="下一集">'+ svg +'</button>';
-        $(".dplayer-icons-right").prepend(html);
-        $("#btn-select-episode").on("click", function() {
-            var eleEpisode = $(".playlist-content");
-            if (eleEpisode.css("transform").match(/\d+/) > 0) {
-                eleEpisode.css("transform", "scale(0)");
-            }
-            else {
-                eleEpisode.css("transform", "scale(1)");
-                $(".dplayer-mask").addClass("dplayer-mask-show");
-                var singleheight = $(".dplayer-icons-right .video-item")[0].offsetHeight;
-                var totalheight = $(".dplayer-icons-right .playlist-content").height();
-                $(".dplayer-icons-right .playlist-content").scrollTop((fileIndex + 1) * singleheight - totalheight / 2);
-            }
-        });
-        $(".dplayer-mask").on("click",function() {
-            var eleEpisode = $(".playlist-content");
-            if (eleEpisode.css("transform").match(/\d+/) > 0) {
-                eleEpisode.css("transform", "scale(0)");
-                $(this).removeClass("dplayer-mask-show");
-            }
-        });
-        $(".playlist-content .video-item").on("click", function() {
-            var $this = $(this);
-            if ($this.hasClass("active")) return;
-            $(".dplayer-mask").removeClass("dplayer-mask-show");
-            var oldele = $(".video-item.active");
-            oldele.removeClass("active");
-            oldele.css({"background-color": "", "color": "#fff"});
-            $this.addClass("active");
-            $this.css({"background-color": "rgba(0,0,0,.3)", "color": "#0df"});
-            var file = videoList[$this.index()];
-            obj.playByFile(file);
-        });
-        $(".prev-icon").on("click", function () {
-            var file = videoList[fileIndex - 1];
-            file ? obj.playByFile(file) : obj.showTipError("没有上一集了");
-        });
-        $(".next-icon").on("click",function(){
-            var file = videoList[fileIndex + 1];
-            file ? obj.playByFile(file) : obj.showTipError("没有下一集了");
-        });
-    };
-
-    obj.selectSubtitles = function (textTracks) {
-        if (textTracks.length <= 1) return;
-        if ($(".dplayer-subtitle-btn .dplayer-quality-mask").length) {
-            $(".dplayer-subtitle-btn .dplayer-quality-mask").remove();
-        }
-        var subbtn = $(".dplayer-subtitle-btn")
-        subbtn.addClass("dplayer-quality");
-        var fileId = obj.video_page.play_info.file_id
-        , sub_info = obj.video_page.sub_info;
-        var subList = sub_info[fileId];
-        var eleSub = '<div class="dplayer-quality-item subtitle-item" data-index="'+ 0 +'" style="opacity: 0.4;">默认字幕</div>';
-        for(var i = 1; i < subList.length; i++) {
-            eleSub += '<div class="dplayer-quality-item subtitle-item" data-index="'+ i +'">'+ subList[i].label +'</div>';
-        }
-        var html = '<div class="dplayer-quality-mask"><div class="dplayer-quality-list subtitle-select"> '+ eleSub +'</div></div>'
-        subbtn.append(html);
-        $(".subtitle-select .subtitle-item").off("click").on("click", function() {
-            var $this = $(this), index = $this.attr("data-index");
-            if ($this.css("opacity") != .4) {
-                $this.css("opacity", .4);
-                $this.siblings().css("opacity", "");
-                var subPicBtn = $(".dplayer-subtitle-btn .dplayer-icon");
-                subPicBtn.attr("data-balloon") == "显示字幕" && subPicBtn.click();
-                var subitem = subList[index];
-                if (subitem && subitem.sarr && subitem.sarr.length) {
-                    for(var i = textTracks[0].cues.length - 1; i >= 0; i--) {
-                        textTracks[0].removeCue(textTracks[0].cues[i]);
-                    }
-                    subitem.sarr.forEach(function (item) {
-                        /<b>.*<\/b>/.test(item.text) || (item.text = item.text.split(/\r?\n/).map((item) => `<b>${item}</b>`).join("\n"));
-                        var textTrackCue = new VTTCue(item.startTime, item.endTime, item.text);
-                        textTrackCue.id = item.index;
-                        textTracks[0] && textTracks[0].addCue(textTrackCue);
-                    });
-                    sub_info.index = index;
-                }
-            }
-        });
-        var index = sub_info.index;
-        index && $(".subtitle-select .subtitle-item").eq(index).click();
-    };
-
-    obj.dPlayerSubtitleStyle = function () {
-        const player = obj.video_page.player;
-        const { subtitle: { container: { style } } } = player;
-        const bottom = localStorage.getItem("dplayer-subtitle-bottom")
-        , color = localStorage.getItem("dplayer-subtitle-color")
-        , fontSize = localStorage.getItem("dplayer-subtitle-fontSize");
-        style.fontSize == fontSize + "vh" || (style.fontSize = fontSize + "vh");
-        style.bottom == bottom + "%" || (style.bottom = bottom + "%");
-        style.color == color || (style.color = color);
-        style.textShadow || (style.textShadow = "1px 0 1px #000, 0 1px 1px #000, -1px 0 1px #000, 0 -1px 1px #000, 1px 1px 1px #000, -1px -1px 1px #000, 1px -1px 1px #000, -1px 1px 1px #000");
-        if (!style.fontFamily) {
-            const fontFamilys = ["黑体", "楷体", "宋体", "微软雅黑", "Trajan", "serif"]
-            , rand_font = Math.floor(Math.random() * fontFamilys.length);
-            style.fontFamily = fontFamilys[rand_font];
-        }
-    };
-
-    obj.subtitleSetting = function () {
-        var subSetBox = $(".subtitle-setting-box");
-        if (subSetBox.length) {
-            return subSetBox.toggle();
-        }
-        else {
-            var html = '<div class="dplayer-icons dplayer-comment-box subtitle-setting-box" style="display: block; z-index: 111; position: absolute; bottom: 10px;left:auto; right: 400px !important;"><div class="dplayer-comment-setting-box dplayer-comment-setting-open" >';
-            html += '<div class="dplayer-comment-setting-color"><div class="dplayer-comment-setting-title">字幕颜色<input type="text" class="color-value" style="height: 16px;width: 70px;font-size: 14px;border: 1px solid #fff;border-radius: 3px;margin-left: 70px;color: black;text-align: center;"></div><label><input type="radio" name="dplayer-danmaku-color-1" value="#fff" checked=""><span style="background: #fff;"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#e54256"><span style="background: #e54256"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#ffe133"><span style="background: #ffe133"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#64DD17"><span style="background: #64DD17"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#39ccff"><span style="background: #39ccff"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#D500F9"><span style="background: #D500F9"></span></label></div>';
-            html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">字幕位置</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>上移</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0" checked=""><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>下移</span></label></div>';
-            html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">字幕大小</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>加大</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>减小</span></label></div>';
-            html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">字幕偏移<span class="offset-text" style="border: 0px;width: 58px;"></span>偏移量 <input type="number" class="offset-value" style="height: 14px;width: 42px;font-size: 13px;border: 1px solid #fff;border-radius: 3px;color: black;line-height: normal;text-align: center;" step="1" min="1"></div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>前移</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>后移</span></label></div>';
-            html += '<div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">更多字幕功能</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>本地字幕</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>待定</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>网络字幕</span></label></div>';
-            html += '</div></div>';
-            $(".dplayer-controller").append(html);
-            subSetBox = $(".subtitle-setting-box");
-            var colortxt = $(".color-value");
-            colortxt.val(localStorage.getItem("dplayer-subtitle-color")||"#ffe133")
-            colortxt.on('input propertychange', function(e) {
-                var color = colortxt.val();
-                color = color.replace(/[^#0-9a-fA-F]/g, "");//排除#和十六进制字符
-                color = color.replace(/^[0-9a-fA-F]/g, "");//排除非#开头
-                color = color.replace("#", "$@$").replace(/\#/g, "").replace("$@$", "#");//排除多个#
-                color = color.replace(/^#([0-9a-fA-F]{3,6}).*$/, '#$1');//排除十六进制字符长度超过6位
-
-                colortxt.val(color);
-                if (localStorage.getItem("dplayer-subtitle-color") != color) {
-                    localStorage.setItem("dplayer-subtitle-color", color);
-                    $(".dplayer-subtitle").css("color", color);
-                }
-            });
-            var txt = $(".offset-value");
-            txt.val("5");
-            txt.on('input propertychange', function(e) {
-                var text = txt.val().replace(/[^\d]/g, "");
-                txt.val(text);
-            });
-        }
-        $(".subtitle-setting-box .dplayer-comment-setting-color input[type='radio']").on("click",function() {
-            var color = this.value;
-            if (localStorage.getItem("dplayer-subtitle-color") != color) {
-                localStorage.setItem("dplayer-subtitle-color", color);
-                $(".dplayer-subtitle").css("color", color);
-            }
-            colortxt.val(color)
-        });
-        $(".subtitle-setting-box .dplayer-comment-setting-type input[type='radio']").on("click",function() {
-            var value = this.value;
-            var $this = $(this), $name = $this.parent().parent().children(":first").text();
-            if ($name == "字幕位置") {
-                var bottom = Number(localStorage.getItem("dplayer-subtitle-bottom") || 10);
-                value == "1" ? bottom += 1 : value == "2" ? bottom -= 1 : bottom = 10;
-                localStorage.setItem("dplayer-subtitle-bottom", bottom);
-                $(".dplayer-subtitle").css("bottom", bottom + "%");
-            }
-            else if ($name == "字幕大小") {
-                var fontSize = Number(localStorage.getItem("dplayer-subtitle-fontSize") || 5);
-                value == "1" ? fontSize += .1 : value == "2" ? fontSize -= .1 : fontSize = 5;
-                localStorage.setItem("dplayer-subtitle-fontSize", fontSize);
-                $(".dplayer-subtitle").css("font-size", fontSize + "vh");
-            }
-            else if ($name.includes("字幕偏移")){
-                var offsettime = obj.offsetCache || 0;
-                var offsetvalue = Number($(".offset-value").val()) || 5;
-                value == "1" ? offsettime -= offsetvalue : value == "2" ? offsettime += offsetvalue : offsettime = 0;
-                offsettime == 0 ? $(".offset-text").text("") : $(".offset-text").text("["+ offsettime +"s]");
-                obj.offsetCache = offsettime;
-                obj.subtitleOffset();
-            }
-            else if ($name == "更多字幕功能") {
-                if (value == "0") {
-                    $this.next().text("暂无");
-                    setTimeout (function () {
-                        $this.next().text("待定")
-                    }, 5000);
-                }
-                else if (value == "1") {
-                    if ($("#addsubtitle").length == 0) {
-                        $("body").append('<input id="addsubtitle" type="file" accept=".srt,.ass,.ssa,.vtt" style="display: none;">');
-                    }
-                    $("#addsubtitle").click();
-                    $this.next().text("请等待...");
-                    setTimeout (function () {
-                        $this.next().text("本地字幕")
-                    }, 5000);
-                }
-                else if (value == "2") {
-                    $this.next().text("暂无");
-                    setTimeout (function () {
-                        $this.next().text("网络字幕")
-                    }, 5000);
-                }
-            }
-        });
-    };
-
-    obj.subtitleOffset = function () {
-        const player = obj.video_page.player;
-        const { video, subtitle } = player;
-        if (video.textTracks && video.textTracks[0]) {
-            const track = video.textTracks[0];
-            const cues = Array.from(track.cues);
-            let fileId = obj.video_page.play_info.file_id
-            , sub_info = obj.video_page.sub_info
-            , subList = sub_info[fileId]
-            , index = sub_info.index || 0
-            , sarr = subList[index].sarr;
-            let offsetCache = obj.offsetCache || 0;
-            for (let index = 0; index < cues.length; index++) {
-                const cue = cues[index];
-                cue.startTime = clamp(sarr[index].startTime + offsetCache, 0, video.duration);
-                cue.endTime = clamp(sarr[index].endTime + offsetCache, 0, video.duration);
-            }
-            subtitle.init();
-            player.notice(`字幕偏移: ${offsetCache} 秒`);
-        }
-        else {
-            obj.offsetCache = 0;
-        }
-        function clamp(num, a, b) {
-            return Math.max(Math.min(num, Math.max(a, b)), Math.min(a, b));
-        }
-    };
-
-    obj.getPlayMemory = function (e) {
-        var fileList = obj.file_page.items
-        , parent_file_id = Array.isArray(fileList) ? fileList[0]?.parent_file_id : obj.file_page.parent_file_id
-        , videoMemory = obj.getItem("video_memory");
-        if (videoMemory && videoMemory[parent_file_id]) {
-            return videoMemory[parent_file_id][e];
-        }
-        return "";
-    };
-
-    obj.setPlayMemory = function (e, t, o, start, end) {
-        if (e) {
-            var fileList = obj.file_page.items
-            , parent_file_id = Array.isArray(fileList) ? fileList[0].parent_file_id : obj.file_page.parent_file_id
-            , videoMemory = obj.getItem("video_memory") || {};
-            if (typeof t == "number" && o) {
-                if ((start && (t <= parseInt(start)) || end && (t + parseInt(end) >= o))) {
-                    if (videoMemory.hasOwnProperty(parent_file_id) && videoMemory[parent_file_id].hasOwnProperty(e)) {
-                        delete videoMemory[parent_file_id][e];
-                    }
-                }
-                else {
-                    videoMemory[parent_file_id] || (videoMemory[parent_file_id] = {});
-                    videoMemory[parent_file_id][e] = t;
-                }
-                obj.setItem("video_memory", videoMemory);
-            }
-            else {
-                Object.keys(videoMemory).forEach(function (key) {
-                    var time = videoMemory[key].time;
-                    if (time && (parseInt(Date.now() / 1000) - time >= 864000)) {
-                        delete videoMemory[key];
-                    }
-                });
-                if (!videoMemory[parent_file_id]) {
-                    videoMemory[parent_file_id] = {
-                        time: parseInt(Date.now() / 1000)
-                    };
-                }
-                videoMemory[parent_file_id][e] = t;
-                obj.setItem("video_memory", videoMemory);
-            }
-        }
-    };
-
     obj.getVideoPreviewPlayInfo = function (callback) {
         obj.refresh_token(function (result) {
             if (result) {
@@ -1003,7 +894,7 @@
                     obj.get_share_token(function (result) {
                         if (result) {
                             "x-signature" in obj.file_page.headers ? obj.get_share_link_video_preview_play_info(callback) : obj.create_session(function (result) {
-                                result && setTimeout(() => { obj.get_share_link_video_preview_play_info(callback) }, 500);
+                                setTimeout(() => { obj.get_share_link_video_preview_play_info(callback) }, 500);
                             });
                         }
                         else {
@@ -1100,10 +991,10 @@
         return !n || n && n[1] && +"".concat(n[1], "000") - t < Date.now();
     };
 
-    obj.addCueVideoSubtitle = function (callback) {
+    obj.addCueVideoSubtitle = function (player, callback) {
         obj.getSubList(function (sublist) {
             if (sublist && sublist.length && sublist[0]) {
-                const { video } = obj.video_page.player;
+                const { video } = player;
                 var textTracks = video.textTracks;
                 for (let i = 0; i < textTracks.length; i++) {
                     textTracks[i].mode = "hidden" || (textTracks[i].mode = "hidden");
@@ -1127,7 +1018,7 @@
                 var textTrack = textTracks[0];
                 if (textTrack && textTrack.cues && textTrack.cues.length && obj.isAppreciation.toString().length == 1367) {
                     textTrack.mode = "showing";
-                    obj.showTipSuccess("字幕添加成功");
+                    video.currentTime > 300 || obj.showTipSuccess("字幕添加成功");
                     callback && callback(textTracks);
                 }
             }
@@ -2079,13 +1970,13 @@
             if (text == "分享文件") {
                 if ($(".input-share-pwd").length == 0) {
                     var sharePwd = localStorage.getItem("share_pwd");
-                    var html = '<label class="label--3Ub6A">自定义提取码</label>';
+                    var html = '<label class="label--y1jrs">自定义提取码</label>';
                     html += '<input type="text" class="ant-input input-share-pwd" value="' + (sharePwd ? sharePwd : "") + '" placeholder="" style="margin-left: 12px;width: 100px;height: 25px;line-height: normal;border: 1px solid #D4D7DE;text-align: center;"></div>'
-                    if ($(".choose-expiration-wrapper--vo0z9").length) {
-                        $(".choose-expiration-wrapper--vo0z9").append(html);
+                    if ($("[class^=choose-expiration-wrapper]").length) {
+                        $("[class^=choose-expiration-wrapper]").append(html);
                     }
-                    else if ($(".share-by-url--1Gk0N").length) {
-                        $(".share-by-url--1Gk0N").append(html);
+                    else if ($("[class^=share-by-url]").length) {
+                        $("[class^=share-by-url]").append(html);
                     }
                     sendSharePwd();
                 }
@@ -2107,7 +1998,9 @@
                                 if (this.readyState == 4 && this.status == 200) {
                                     var url = this.responseURL;
                                     if (url.includes("/share_link/create") || url.includes("/share_link/update")) {
-                                        if (this.response.share_pwd == sharePwd) {
+                                        var response = this.response;
+                                        try { response = JSON.parse(this.response) } catch (error) { };
+                                        if (response.share_pwd == sharePwd) {
                                             obj.showTipSuccess("自定义分享密码 成功");
                                         }
                                         else {
@@ -2200,7 +2093,7 @@
 
     obj.getShareId = function () {
         var url = location.href;
-        var match = obj.dPlayerStart.toString().length == 7184 && url.match(/aliyundrive\.com\/s\/([a-zA-Z\d]+)/);
+        var match = obj.dPlayerStart.toString().length == 7448 && url.match(/aliyundrive\.com\/s\/([a-zA-Z\d]+)/);
         return match ? match[1] : null;
     };
 
