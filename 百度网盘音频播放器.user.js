@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘音频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.1.5
+// @version      0.1.6
 // @description  无视文件大小，无视文件格式，告别卡顿即点即播，连歌词都帮你找好了
 // @author       You
 // @match        https://pan.baidu.com/disk/main*
@@ -78,9 +78,9 @@
     };
 
     obj.aplayerStart = function () {
-        var aplayerNode, audio = [], fileList = obj.audio_page.fileList;
-        fileList.forEach(function (item) {
-            audio.push({
+        var aplayerNode, audio = obj.audio_page.fileList;
+        audio.forEach(function (item) {
+            Object.assign(item, {
                 name: item.server_filename,
                 url: "/rest/2.0/xpan/file?method=streaming&path=" + encodeURIComponent(item.path) + "&type=M3U8_HLS_MP3_128",
                 cover: item.categoryImageGrid || item.categoryImage,
@@ -104,7 +104,7 @@
             }
         }
         else {
-            console.error("未找到音频文件", fileList);
+            console.error("未找到音频文件", audio);
             return ;
         }
         try{
@@ -130,7 +130,6 @@
                                                 else {
                                                     const { list } = player;
                                                     list.remove(list.index);
-                                                    fileList.splice(list.index, 1);
                                                 }
                                             }
                                             else if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT || data.details === Hls.ErrorDetails.MANIFEST_PARSING_ERROR) {
@@ -173,7 +172,7 @@
             player.on("listswitch", function ({index}) {
                 player.hls && player.hls.destroy();
                 player.audio.oncanplay = function () {
-                    obj.reprocessing(player, fileList, index);
+                    obj.querySongInfo(player, index);
                 };
                 player.template.list.style.cssText += "background: url(" + imgs[Math.floor(Math.random() * imgs.length)] + ") center center / contain no-repeat;";
             });
@@ -187,25 +186,29 @@
             }
             else {
                 player.audio.oncanplay = function () {
-                    obj.reprocessing(player, fileList, list.index);
+                    obj.querySongInfo(player);
                 };
                 player.template.list.style.cssText += "background: url(" + imgs[Math.floor(Math.random() * imgs.length)] + ") center center / contain no-repeat;";
             }
             $(time).children().css("display", "inline-block");
-            $(body).prepend('<i data-v-33739aac="" class="iconfont icon-close" style="position: absolute;right: 9px;font-size: 12px;top: 5px;"></i><a href="https://afdian.net/a/vpannice" target="_blank" title="爱我你就点点我" style="position: absolute;right: 8px;font-size: 12px;top: 22px;"><img src="https://static.afdiancdn.com/favicon.ico" style="width: 14px;"></a>').children(".icon-close").one("click", function () {
+            $(body).prepend('<i class="iconfont icon-close" style="position: absolute;right: 9px;font-size: 12px;top: 5px;"></i><a href="https://afdian.net/a/vpannice" target="_blank" title="爱我你就点点我" style="position: absolute;right: 8px;font-size: 12px;top: 22px;"><img src="https://static.afdiancdn.com/favicon.ico" style="width: 14px;"></a>').children(".icon-close").one("click", function () {
                 player.destroy();
+            });
+            $('<a href="javascript:;" title="移除当前音乐" style="position: absolute;right: 26px;font-size: 12px;top: 3px;"><img src="https://pannss.bdstatic.com/m-static/service-widget-1/pageSet/recyclebin/img/emptypic_a07843d.png" style="width: 14px;"></a>').prependTo(body).on("click", function () {
+                const { list } = player;
+                list.remove(list.index);
             });
         } catch (error) {
             console.error("创建播放器错误", error);
         }
     };
 
-    obj.reprocessing = function(player, fileList, index) {
-        const { list, lrc, template: { author, pic } } = player;
-        if (lrc.parsed[index] && lrc.parsed[index][0][1] !== "Not available") return;
-        const { server_filename, md5, size } = fileList[index] || {};
-        // 酷狗好棒棒，听歌来帮忙
-        obj.songinfoKugou(server_filename, md5, size).then(function (result) {
+    obj.querySongInfo = function (player, index) {
+        const { list, lrc, template: { pic, author } } = player;
+        index || index === 0 || (index = list.index);
+        if (lrc.parsed[index] && lrc.parsed[index].length > 1) return;
+        const { server_filename, md5, size } = list.audios[index] || {};
+        obj.songinfoKugou(server_filename, md5, size).then(function (result) { // 酷狗好棒棒，听歌来帮忙 https://www.kugou.com/
             const { candidates, info, author_name, img } = result;
             const candidate = Array.isArray(candidates) ? candidates.find(function (item) {
                 return item.lyrics;
@@ -226,7 +229,7 @@
                     pic.style.cssText += "background-image: url(" + (list.audios[index].cover = img) + ")";
                 }
             }).catch(function () { });
-        }).catch(function () { });
+        }).catch(function (error) { });
     };
 
     obj.songinfoKugou = function (name, hash, size) {
