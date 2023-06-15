@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         夸克网盘
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.1.3
+// @version      0.1.4
 // @description  你手捏一片金黄，像一个归来的王
 // @author       You
 // @match        https://pan.quark.cn/s/*
@@ -164,18 +164,22 @@
         var html = '<div class="ant-modal-root show-link-list"><div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap ant-modal-centered" role="dialog" aria-labelledby="rcDialogTitle0"><div role="document" class="ant-modal move-to-modal" style="width: 720px; transform-origin: 582px 153.5px;"><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div><div class="ant-modal-content"><button type="button" aria-label="Close" class="ant-modal-close"><span class="ant-modal-close-x"><i aria-label="图标: close" class="anticon anticon-close ant-modal-close-icon"><svg viewBox="64 64 896 896" focusable="false" class="" data-icon="close" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M563.8 512l262.5-312.9c4.4-5.2.7-13.1-6.1-13.1h-79.8c-4.7 0-9.2 2.1-12.3 5.7L511.6 449.8 295.1 191.7c-3-3.6-7.5-5.7-12.3-5.7H203c-6.8 0-10.5 7.9-6.1 13.1L459.4 512 196.9 824.9A7.95 7.95 0 0 0 203 838h79.8c4.7 0 9.2-2.1 12.3-5.7l216.5-258.1 216.5 258.1c3 3.6 7.5 5.7 12.3 5.7h79.8c6.8 0 10.5-7.9 6.1-13.1L563.8 512z"></path></svg></i></span></button><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle0">下载文件</div></div><div class="ant-modal-body"><div class="move-to-container"><ul class="ant-tree ant-tree-directory" role="tree" unselectable="on"></ul></div></div><div class="ant-modal-footer"><div class="move-to-footer "><div class="buttons-wrap"></div></div></div></div><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div></div></div></div>';
         $("body").append(html);
         filelist.forEach(function (item, index) {
-            $(".show-link-list").find(".ant-tree.ant-tree-directory").append('<li class="ant-tree-treenode-switcher-open ant-tree-treenode-selected" role="treeitem"><span class="ant-tree-switcher ant-tree-switcher-noop"></span><a title="' + item.download_url + '" href="' + item.download_url + '" style="color: blue;">' + item.file_name + '</a></li>');
+            var bc = `bc://http/${btoa(unescape(encodeURIComponent(`AA/${encodeURIComponent(item.file_name)}/?url=${encodeURIComponent(item.download_url)}&cookie=${encodeURIComponent(document.cookie)}ZZ`)))}`;
+            $(".show-link-list").find(".ant-tree.ant-tree-directory").append('<li class="ant-tree-treenode-switcher-open ant-tree-treenode-selected" role="treeitem"><span class="ant-tree-switcher ant-tree-switcher-noop"></span><a title="' + item.download_url + '" href="' + item.download_url + '">' + item.file_name + '</a><span class="ant-tree-switcher ant-tree-switcher-noop"></span><a title="' + bc + '" href="' + bc + '">比特彗星下载</a></li>');
         });
         $(".show-link-list").find(".ant-modal-close").on("click", function () {
             $(".show-link-list").remove();
         });
-
+        $(".show-link-list .buttons-wrap").prepend('<button type="button" class="ant-btn btn-file"><span>👍点赞不如为爱发电👍</span></button>');
         $(".show-link-list .buttons-wrap").prepend('<button type="button" class="ant-btn btn-file"><span>👍一天不点赞浑身难受👍</span></button>');
-        $(".show-link-list .buttons-wrap button:eq(-1)").on("click", function () {
-            window.open("https://pc-index-skin.cdn.bcebos.com/6cb0bccb31e49dc0dba6336167be0a18.png", "_blank");
-        });
         $(".show-link-list .buttons-wrap").prepend('<button type="button" class="ant-btn btn-file"><span>Aria2 推送</span></button>');
+        $(".show-link-list .buttons-wrap button:eq(-1)").on("click", function () {
+            window.open("https://afdian.net/a/vpannice", "_blank");
+        });
         $(".show-link-list .buttons-wrap button:eq(-2)").on("click", function () {
+            window.open("https://cdn.jsdelivr.net/gh/tampermonkeyStorage/Self-use@main/appreciation.png", "_blank");
+        });
+        $(".show-link-list .buttons-wrap button:eq(-3)").on("click", function () {
             var $this = $(this), $text = $this.text();
             $this.text("正在推送");
             var downData = [];
@@ -226,7 +230,7 @@
             },
             error: function (error) {
                 var index = urls.indexOf(this.url);
-                if (url) {
+                if (index >= 0) {
                     if (index < urls.length - 1) {
                         sessionStorage.setItem("aria-url", urls[index + 1]);
                         setTimeout(function() { obj.aria2RPC(downData, callback) }, 500);
