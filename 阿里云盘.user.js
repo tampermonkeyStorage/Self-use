@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      3.1.9
+// @version      3.2.0
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，支持移动端播放，...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -1434,10 +1434,11 @@
 
     obj.showBox = function (fileList) {
         $('<div class="ant-modal-root"><div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap" role="dialog" aria-labelledby="rcDialogTitle0"><div role="document" class="ant-modal modal-wrapper--2yJKO modal-wrapper--5SA7y" style="width: 60%;"><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle0">文件下载</div></div><div class="ant-modal-body"><div class="icon-wrapper--3dbbo icon-wrapper--TbIdu"><span data-role="icon" data-render-as="svg" data-icon-type="PDSClose" class="close-icon--33bP0 icon--d-ejA close-icon--KF5OX icon--D3kMk "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSClose"></use></svg></span></div><div class="container--1RqbN container--yXiG-"><div class="list--13IBL list--ypYX0"></div></div></div><div class="ant-modal-footer"><div class="footer--1r-ur footer--zErav"><div class="buttons--nBPeo buttons--u5Y-e"></div></div></div></div><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div></div></div></div>').appendTo(document.body).find(".list--13IBL,.list--ypYX0").append(
-            fileList.map(
-                (item, index) => `<div class="item--18Z6t item--v0KyS" title=${ item.type == "folder" ? `请进入文件夹下载` : `` }><span style="width: 100%;">${++index}：${item.name}</span></div>` +
-                (item.type == "file" ? `<div class="item--18Z6t item--v0KyS"><span style="width: 100%;"><a  title=${item.download_url} href=${item.download_url}>${item.download_url}</a></span></div>` : ``)
-            ).join("\n")
+            fileList.map((item, index) => {
+                var isfile = item.type == "file", bc = isfile ? `bc://http/${btoa(unescape(encodeURIComponent(`AA/${encodeURIComponent(item.name)}/?url=${encodeURIComponent(item.download_url)}&refer=${encodeURIComponent('https://www.aliyundrive.com/')}ZZ`)))}` : ``;
+                return `<div class="item--18Z6t item--v0KyS" title="${ isfile ? `文件大小：${ obj.bytesToSize(item.size) }` : `请进入文件夹下载` }"><span style="width: 100%;">${++index}：${item.name}</span>${ isfile ? `<a title="${bc}" href="${bc}">BitComet</a>` : ``}</div>`
+                         + (isfile ? `<div class="item--18Z6t item--v0KyS"><span style="width: 100%;"><a title=${item.download_url} href=${item.download_url}>${item.download_url}</a></span></div>` : ``);
+            }).join("\n")
         ).closest(".ant-modal-root").find(".buttons--nBPeo,.buttons--u5Y-e").append(
             '<button class="button--2Aa4u primary--3AJe5 small---B8mi button--WC7or primary--NVxfK small--e7LRt">IDM 导出文件</button>' +
             '<button class="button--2Aa4u primary--3AJe5 small---B8mi button--WC7or primary--NVxfK small--e7LRt">M3U 导出文件</button>' +
@@ -1518,7 +1519,7 @@
             }
         }).closest(".ant-modal-root").find(".icon-wrapper--3dbbo,.icon-wrapper--TbIdu").one("click", function () {
             $(this).closest(".ant-modal-root").remove();
-        }).closest(".ant-modal-root").find(".list--13IBL.list--ypYX0 a").on("click", function (event) {
+        }).closest(".ant-modal-root").find(".list--13IBL.list--ypYX0 a").on("mousedown mouseup", function (event) {
             this.href = this.title;
         });
     };
@@ -2099,6 +2100,30 @@
 
     obj.getRandomColor = function() {
         return "#" + ("00000" + (Math.random() * 0x1000000 << 0).toString(16)).substr(- 6);
+    };
+
+    obj.bytesToSize = function (e) {
+        return (function () {
+            var t = 1024;
+            return e <= 0 ? "0 B" : e >= Math.pow(t, 4) ? "".concat(
+                r(e / Math.pow(t, 4), 2), " TB") : e >= Math.pow(t, 3) ? "".concat(
+                r(e / Math.pow(t, 3), 2), " GB") : e >= Math.pow(t, 2) ? "".concat(
+                r(e / Math.pow(t, 2), 2), " MB") : e >= t ? "".concat(
+                r(e / t, 2), " KB") : "".concat(
+                r(e, 2), " B");
+        })();
+        function r(e) {
+            var t = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : 2
+            , n = !(arguments.length > 2 && void 0 !== arguments[2]) || arguments[2];
+            if (0 === e) {
+                return "0";
+            }
+            var r = n ? e.toFixed(t) : i(e, t);
+            return t ? r.replace(/0+$/, "").replace(/\.$/, "") : r;
+        }
+        function i(e, t) {
+            return (Math.floor(e * Math.pow(10, t)) / Math.pow(10, t)).toFixed(t);
+        }
     };
 
     obj.isSharePage = function () {
