@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘音频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.1.6
+// @version      0.1.7
 // @description  无视文件大小，无视文件格式，告别卡顿即点即播，连歌词都帮你找好了
 // @author       You
 // @match        https://pan.baidu.com/disk/main*
@@ -191,12 +191,74 @@
                 player.template.list.style.cssText += "background: url(" + imgs[Math.floor(Math.random() * imgs.length)] + ") center center / contain no-repeat;";
             }
             $(time).children().css("display", "inline-block");
-            $(body).prepend('<i class="iconfont icon-close" style="position: absolute;right: 9px;font-size: 12px;top: 5px;"></i><a href="https://afdian.net/a/vpannice" target="_blank" title="爱我你就点点我" style="position: absolute;right: 8px;font-size: 12px;top: 22px;"><img src="https://static.afdiancdn.com/favicon.ico" style="width: 14px;"></a>').children(".icon-close").one("click", function () {
+            $(body).prepend('<button class="u-dialog__headerbtn" title="关闭播放器" style="top: 0;right: 7px;"><i class="u-dialog__close u-icon u-icon-close"></i></button><a href="https://afdian.net/a/vpannice" target="_blank" title="爱我你就点点我" style="position: absolute;right: 8px;font-size: 12px;top: 22px;"><img src="https://static.afdiancdn.com/favicon.ico" style="width: 14px;"></a>').children(".u-dialog__headerbtn").one("click", function () {
                 player.destroy();
             });
-            $('<a href="javascript:;" title="移除当前音乐" style="position: absolute;right: 26px;font-size: 12px;top: 3px;"><img src="https://pannss.bdstatic.com/m-static/service-widget-1/pageSet/recyclebin/img/emptypic_a07843d.png" style="width: 14px;"></a>').prependTo(body).on("click", function () {
-                const { list } = player;
-                list.remove(list.index);
+            $('<a href="javascript:;" title="菜单" style="position: absolute;right: 26px;font-size: 12px;top: 0;"><img src="https://nd-static.bdstatic.com/m-static/v20-main/home/img/icon-util-active.d799bb4e.png" style="width: 22px;"></a>').prependTo(body).on("mouseenter mouseleave", function (event) {
+                var $menu = $(body).find(".u-popover");
+                switch(event.type) {
+                    case "mouseenter":
+                    case "mouseover":
+                        $menu.show(500);
+                        break;
+                    case "mouseleave":
+                    case "mouseout":
+                        obj.audio_page.menuHideTimer = setTimeout(function () {
+                            $menu.hide(500);
+                        }, 1e3);
+                        break;
+                    default:
+                }
+            });
+            $('<div class="u-popover u-popper wp-s-header-user__moreVertical-popover" style="top: 22px;right: 8px;width: 160px;display: none;"> <div class="moreVerticalContent" style="width: 160px;"><div class="moreVerticalContentLine"> <a href="javascript:;">删除当前音乐(列表)</a></div><div class="moreVerticalContentLine"> <a href="javascript:;">删除当前音乐(网盘)</a></div> </div></div>').prependTo(body).on("mouseenter mouseleave", function (event) {
+                var $this = $(this);
+                switch(event.type) {
+                    case "mouseenter":
+                    case "mouseover":
+                        clearTimeout(obj.audio_page.menuHideTimer);
+                        break;
+                    case "mouseleave":
+                    case "mouseout":
+                        $this.hide(500);
+                        break;
+                    default:
+                }
+            }).find(".moreVerticalContentLine").on("mouseenter mouseleave click", function (event) {
+                var $this = $(this);
+                switch(event.type) {
+                    case "mouseenter":
+                    case "mouseover":
+                        $this.addClass("hoverBg");
+                        break;
+                    case "mouseleave":
+                    case "mouseout":
+                        $this.removeClass("hoverBg");
+                        break;
+                    case "click":
+                        var { list } = player;
+                        var { path, server_filename } = list.audios[list.index];
+                        var index = $this.index();
+                        switch(index) {
+                            case 0:
+                                list.remove(list.index);
+                                break;
+                            case 1:
+                                obj.deleteFile(path).then(function (result) {
+                                    if (result) {
+                                        unsafeWindow.globalVue.$svipMessage({
+                                            type: "success",
+                                            message: server_filename + " 已从网盘删除，请自行刷新页面查看",
+                                            duration: 5e3
+                                        });
+                                    }
+                                });
+                                list.remove(list.index);
+                                break;
+                            default:
+                        }
+                        break;
+                    default:
+                }
             });
         } catch (error) {
             console.error("创建播放器错误", error);
@@ -426,8 +488,18 @@
         GM_xmlhttpRequest(details);
     };
 
-    obj.getRandomColor = function() {
+    obj.getRandomColor = function () {
         return "#" + ("00000" + (Math.random() * 0x1000000 << 0).toString(16)).substr(-6);
+    };
+
+    obj.deleteFile = function (filelist) {
+        typeof filelist === "string" && (filelist = [filelist]);
+        Array.isArray(filelist) && (filelist = JSON.stringify(filelist));
+        return unsafeWindow.globalVue.$http.request.post("/api/filemanager?async=2&onnest=fail&opera=delete&newVerify=1&clienttype=0&app_id=250528&web=1".concat("&bdstoken=", unsafeWindow.locals.userInfo.bdstoken), {
+            filelist: filelist
+        }).then(function (t) {
+            return t && 0 == t.errno ? t : "";
+        });
     };
 
     obj.run = function () {
