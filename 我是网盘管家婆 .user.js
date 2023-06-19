@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.5.9
+// @version      0.6.0
 // @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云.夸克.123盘】 功能概述：【网盘页面增加资源搜索快捷方式，访问过的分享链接和密码自动记忆，本地缓存数据库搜索】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -411,7 +411,7 @@
         if ($(".dialog-dialog .web-items .item").length == 0) {
             var searchList = obj.searchList();
             Object.keys(searchList).forEach(function(shareSource) {
-                var sourceName = {baidu: "百度", lanzous: "蓝奏", ty189: "天翼", xunlei: "迅雷", aliyundrive: "阿里", caiyun: "彩云", weiyun: "微云", "": "更多"}[shareSource] + "资源搜索引擎";
+                var sourceName = {baidu: "百度", lanzous: "蓝奏", ty189: "天翼", xunlei: "迅雷", aliyundrive: "阿里", caiyun: "彩云", weiyun: "微云", quark: "夸克网盘", "123pan": "123盘", "": "更多"}[shareSource] + "资源搜索引擎";
                 $(".dialog-dialog .web-items").append('<span><em>[ ' + sourceName + ' ]</em></span><br/>');
 
                 searchList[shareSource].forEach(function(item, index) {
@@ -429,6 +429,11 @@
         return {
             "baidu": [
                 {
+                    name: "在线之家",
+                    link: "https://www.zxzjhd.com/vodsearch/-------------.html?wd=%s",
+                    type: 0,
+                },
+                {
                     name: "新剧场",
                     link: "https://www.xinjuc.com/?s=%s",
                     type: 0,
@@ -444,18 +449,8 @@
                     type: 1,
                 },
                 {
-                    name: "NEW字幕组",
-                    link: "http://newzmz.com/tvslist.html?keyword=%s",
-                    type: 1,
-                },
-                {
                     name: "冰冰字幕组",
                     link: "http://www.icezmz.com/search?keywords=%s",
-                    type: 1,
-                },
-                {
-                    name: "诸神字幕组",
-                    link: "https://subs.kamigami.org/?s=%s",
                     type: 1,
                 },
                 {
@@ -466,16 +461,6 @@
                 {
                     name: "幻月字幕组",
                     link: "https://www.huanyuezmz.site/?s=%s",
-                    type: 1,
-                },
-                {
-                    name: "心动日剧",
-                    link: "http://www.doki8.com/?s=%s",
-                    type: 1,
-                },
-                {
-                    name: "深影译站",
-                    link: "https://sub.shinybbs.vip/?s=%s",
                     type: 1,
                 },
                 {
@@ -519,11 +504,6 @@
                     type: 5,
                 },
                 {
-                    name: "乌鸦搜",
-                    link: "https://www.wuyasou.com/search?keyword=%s",
-                    type: 5,
-                },
-                {
                     name: "知识库",
                     link: "https://book.zhishikoo.com/?s=%s",
                     type: 5,
@@ -544,43 +524,20 @@
                     type: 6,
                 },
                 {
-                    name: "盘古侠",
-                    link: "https://panguxia.com/search?q=%s",
+                    name: "学搜搜",
+                    link: "http://www.xuesousou.com/search?q=%s",
                     type: 6,
                 },
-
                 {
                     name: "Java分享网",
                     link: "http://yun.java1234.com/search?q=%s",
                     type: 6,
                 },
-                // 《7》点击直达百度盘
                 {
                     name: "学霸盘",
                     link: "https://www.xuebapan.com/s/%s-1.html",
                     type: 1,
                 },
-                {
-                    name: "UPanSo",
-                    link: "https://disk.upanso.com/main/leftSearch?time=ALL&kw=%s&diskType=ALL",
-                    type: 7,
-                },
-                {
-                    name: "优聚搜",
-                    link: "https://jujuso.com/#/main/common?q=%s",
-                    type: 7,
-                },
-                {
-                    name: "橘子盘搜",
-                    link: "https://www.nmme.cc/s/1/%s",
-                    type: 7,
-                },
-                {
-                    name: "搜云盘",
-                    link: "https://www.iyunpan.net/search/%s-0-全部-0.html",
-                    type: 7,
-                },
-                // 《8》不用扫码
                 {
                     name: "51网盘搜索",
                     link: "https://m.51caichang.com/so?keyword=%s&page=1&url_path=so",
@@ -589,11 +546,6 @@
                 {
                     name: "熊猫搜盘",
                     link: "http://www.sopandas.com/s/%s",
-                    type: 8,
-                },
-                {
-                    name: "网盘搜索",
-                    link: "http://www.kaclub.cn/search?q=%s",
                     type: 8,
                 },
                 {
@@ -606,25 +558,20 @@
                     link: "https://www.bdsoba.com/search/type_0_1_%s",
                     type: 8,
                 },
-                {
-                    name: "小贝子",
-                    link: "http://xiaobeizi.2kongjiang.com/s/%s",
-                    type: 8,
-                },
                 // 《9》需要扫码
-                {
-                    name: "飞飞盘",
-                    link: "http://www.feifeipan.com/#/main/search?kw=%s",
-                    type: 9,
-                },
                 {
                     name: "毕方铺",
                     link: "https://www.iizhi.cn/resource/search/%s",
                     type: 9,
                 },
                 {
+                    name: "大圣盘",
+                    link: "https://www.dashengpan.com/#/main/search?keyword=%s",
+                    type: 9,
+                },
+                {
                     name: "盘他一下",
-                    link: "https://www.panother.com/search?query=%s",
+                    link: "https://www.panothers.com/search?keyword=%s",
                     type: 9,
                 },
                 {
@@ -694,12 +641,27 @@
             "aliyundrive": [
                 {
                     name: "找资源",
-                    link: "https://zhaoziyuan.me/so?filename=%s",
+                    link: "https://zhaoziyuan.la/so?filename=%s",
                     type: 1,
                 },
                 {
-                    name: "咔帕搜索",
-                    link: "https://www.cuppaso.fun/search?type=all&keyword=%s",
+                    name: "资源共享站",
+                    link: "https://yyurl.cc/?q=%s",
+                    type: 1,
+                },
+                {
+                    name: "网盘资源社",
+                    link: "https://www.wpzyk.cn/search.htm?keyword=%s",
+                    type: 1,
+                },
+                {
+                    name: "美剧迷",
+                    link: "https://www.meijumi.net/?s=%s",
+                    type: 1,
+                },
+                {
+                    name: "奇妙搜索",
+                    link: "https://www.magicalsearch.top/search?word=%s",
                     type: 1,
                 },
                 {
@@ -723,11 +685,6 @@
                     type: 1,
                 },
                 {
-                    name: "网盘资源社",
-                    link: "https://www.wpzys.com/search.htm?keyword=%s",
-                    type: 1,
-                },
-                {
                     name: "易搜",
                     link: "https://yiso.fun/info?searchKey=%s",
                     type: 1,
@@ -740,11 +697,6 @@
                 {
                     name: "网盘小站",
                     link: "https://wpxz.org/?q=%s",
-                    type: 1,
-                },
-                {
-                    name: "盘盘资源",
-                    link: "https://www.panpanr.com/",
                     type: 1,
                 },
                 {
@@ -765,11 +717,6 @@
                     type: 1,
                 },
                 {
-                    name: "分享者",
-                    link: "https://www.sharerw.com/search.php?q=%s",
-                    type: 1,
-                },
-                {
                     name: "果核剥壳",
                     link: "https://www.ghxi.com/?s=%s",
                     type: 1,
@@ -781,7 +728,7 @@
                 },
                 {
                     name: "发烧友绿软",
-                    link: "https://fsylr.com/?s=%s",
+                    link: "https://www.fsylr.com/search/check.php?q=%s",
                     type: 1,
                 },
             ],
@@ -792,8 +739,32 @@
                     type: 1,
                 },
                 {
+                    name: "雷鲸小站",
+                    link: "http://www.leijing.xyz/search?keyword=%s",
+                    type: 1,
+                },
+                {
                     name: "奇它博客",
                     link: "https://www.qitabbs.com/?type=circle&s=%s",
+                    type: 1,
+                },
+            ],
+            "quark": [
+                {
+                    name: "BT之家",
+                    link: "https://btbtt19.com/search-index-keyword-%s.htm",
+                    type: 1,
+                },
+                {
+                    name: "初音社",
+                    link: "https://www.mikuclub.win/search/%s",
+                    type: 1,
+                },
+            ],
+            "123pan": [
+                {
+                    name: "123社区",
+                    link: "https://www.123panfx.com/search.php?mod=forum&searchid=3&orderby=lastpost&ascdesc=desc&searchsubmit=yes&kw=%s",
                     type: 1,
                 },
             ],
@@ -1287,19 +1258,21 @@
                     if (typeof shareData == "object" && shareData.share_name) {
                         return;
                     }
-                    shareData = Object.assign(shareData || {}, {
-                        share_source: "ty189",
-                        share_id: shareId,
-                        share_url: decodeURIComponent(location.href),
-                        share_name: document.title.split("|")[0].replace(" 免费高速下载", "")
-                    });
-                    shareData.origin_url || !document.referrer || document.referrer.includes(location.host) || (shareData.origin_url = decodeURIComponent(document.referrer));
-                    sharePwd && (shareData.share_pwd = sharePwd);
-                    obj.share_pwd == sharePwd || obj.storeSharePwd(shareData);
-                    var getCookie = unsafeWindow._ux21cn.cookie.get;
-                    sharePwd = getCookie("share_" + shareId) || getCookie("shareId_" + shareId);
-                    sharePwd && (shareData.share_pwd = sharePwd);
-                    obj.setSharePwdLocal(shareData);
+                    setTimeout(() => {
+                        shareData = Object.assign(shareData || {}, {
+                            share_source: "ty189",
+                            share_id: shareId,
+                            share_url: decodeURIComponent(location.href),
+                            share_name: document.title.split("|")[0].replace(" 免费高速下载", "")
+                        });
+                        shareData.origin_url || !document.referrer || document.referrer.includes(location.host) || (shareData.origin_url = decodeURIComponent(document.referrer));
+                        sharePwd && (shareData.share_pwd = sharePwd);
+                        obj.share_pwd == sharePwd || obj.storeSharePwd(shareData);
+                        var getCookie = unsafeWindow._ux21cn.cookie.get;
+                        sharePwd = getCookie("share_" + shareId) || getCookie("shareId_" + shareId);
+                        sharePwd && (shareData.share_pwd = sharePwd);
+                        obj.setSharePwdLocal(shareData);
+                    }, 3e3);
                 }
             });
             open.apply(this, arguments);
