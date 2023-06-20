@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.7.0
+// @version      0.7.1
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画质增强，画面模式调节，画中画，支持音质增强，支持自动、手动添加字幕，支持快捷操作（鼠标长按3倍速，左侧区域双击快退30秒，右侧区域双击快进30秒），。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -350,6 +350,7 @@
             obj.dPlayerSetting(player);
             obj.dPlayerCustomSpeed(player);
             obj.dPlayerMemoryPlay(player);
+            obj.dPlayerSoundEnhancement(player);
             obj.dPlayerImageEnhancement(player);
             obj.appreciation(player);
             obj.videoFit(player);
@@ -432,9 +433,6 @@
             obj.isAppreciation(function (data) {
                 data ? user.get("autoplaynext") && obj.getJquery()(".next-icon").click() : (obj.msg("\u7231\u53d1\u7535\u0020\u81ea\u52a8\u8df3\u8f6c\u4e0b\u4e00\u96c6"), contextmenu.show(offsetWidth / 2.5, offsetHeight / 3));
             });
-        });
-        player.on("play", function () {
-            setTimeout(() => { obj.dPlayerSoundEnhancement(player) });
         });
         player.on("quality_end", function () {
             localStorage.setItem("dplayer-quality", player.quality.name);
