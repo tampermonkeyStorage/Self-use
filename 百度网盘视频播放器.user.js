@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.6.9
-// @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画质增强，画面模式调节，画中画，支持音质增强，支持自动、手动添加字幕，。。。。。。
+// @version      0.7.0
+// @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画质增强，画面模式调节，画中画，支持音质增强，支持自动、手动添加字幕，支持快捷操作（鼠标长按3倍速，左侧区域双击快退30秒，右侧区域双击快进30秒），。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
 // @match        https://pan.baidu.com/s/*
@@ -240,7 +240,7 @@
     obj.freeList = function (e) {
         e = e || "";
         var t = [480, 360]
-        , a = obj.correct.toString().length == 940 ? e.match(/width:(\d+),height:(\d+)/) : ["", "", ""]
+        , a = obj.correct.toString().length == 1003 ? e.match(/width:(\d+),height:(\d+)/) : ["", "", ""]
         , i = +a[1] * +a[2];
         return i ? (i > 409920 && t.unshift(720), i > 921600 && t.unshift(1080), t) : t
     };
@@ -347,9 +347,10 @@
                 });
             });
             obj.initPlayerEvents(player);
-            obj.memoryPlay(player);
             obj.dPlayerSetting(player);
-            obj.customSpeed(player);
+            obj.dPlayerCustomSpeed(player);
+            obj.dPlayerMemoryPlay(player);
+            obj.dPlayerImageEnhancement(player);
             obj.appreciation(player);
             obj.videoFit(player);
             obj.autoPlayEpisode();
@@ -422,15 +423,18 @@
     };
 
     obj.initPlayerEvents = function (player) {
-        const { video: { duration }, contextmenu, container: { offsetWidth, offsetHeight } } = player;
+        const { user, video: { duration }, contextmenu, container: { offsetWidth, offsetHeight } } = player;
         player.on("error", function () {
             if (duration === 0 || duration === Infinity || duration.toString() === "NaN") {
             }
         });
         player.on("ended", function () {
             obj.isAppreciation(function (data) {
-                data ? localStorage.getItem("dplayer-autoplaynext") == "1" && obj.getJquery()(".next-icon").click() : (obj.msg("\u7231\u53d1\u7535\u0020\u81ea\u52a8\u8df3\u8f6c\u4e0b\u4e00\u96c6"), contextmenu.show(offsetWidth / 2.5, offsetHeight / 3));
+                data ? user.get("autoplaynext") && obj.getJquery()(".next-icon").click() : (obj.msg("\u7231\u53d1\u7535\u0020\u81ea\u52a8\u8df3\u8f6c\u4e0b\u4e00\u96c6"), contextmenu.show(offsetWidth / 2.5, offsetHeight / 3));
             });
+        });
+        player.on("play", function () {
+            setTimeout(() => { obj.dPlayerSoundEnhancement(player) });
         });
         player.on("quality_end", function () {
             localStorage.setItem("dplayer-quality", player.quality.name);
@@ -474,35 +478,39 @@
         });
         user.get("autoposition") && ($(".dplayer-toggle-setting-input-autoposition").get(0).checked = true);
         user.get("autoplaynext") && ($(".dplayer-toggle-setting-input-autoplaynext").get(0).checked = true);
-        user.get("soundenhancement") && ($(".dplayer-toggle-setting-input-soundenhancement").get(0).checked = true, obj.joySound(player, 1));
-        user.get("imageenhancement") && ($(".dplayer-toggle-setting-input-imageenhancement").get(0).checked = true, video.style.cssText = "filter: contrast(1.01) brightness(1.05) saturate(1.1);");
+        user.get("soundenhancement") && ($(".dplayer-toggle-setting-input-soundenhancement").get(0).checked = true);
+        user.get("imageenhancement") && ($(".dplayer-toggle-setting-input-imageenhancement").get(0).checked = true);
         $(".dplayer-setting-autoposition").on("click", function() {
-            var checked = !$(".dplayer-toggle-setting-input-autoposition").is(":checked");
+            var toggle = $(".dplayer-toggle-setting-input-autoposition");
+            var checked = !toggle.is(":checked");
             obj.isAppreciation(function (data) {
-                data ? ($(".dplayer-toggle-setting-input-autoposition").get(0).checked = checked, user.set("autoposition", Number(checked))) : contextmenu.show(offsetWidth / 2.5, offsetHeight / 3);
+                data ? (toggle.get(0).checked = checked, user.set("autoposition", Number(checked))) : contextmenu.show(offsetWidth / 2.5, offsetHeight / 3);
             });
         });
         $(".dplayer-setting-autoplaynext").on("click", function() {
-            var checked = !$(".dplayer-toggle-setting-input-autoplaynext").is(":checked");
+            var toggle = $(".dplayer-toggle-setting-input-autoplaynext");
+            var checked = !toggle.is(":checked");
             obj.isAppreciation(function (data) {
-                data ? ($(".dplayer-toggle-setting-input-autoplaynext").get(0).checked = checked, user.set("autoplaynext", Number(checked))) : contextmenu.show(offsetWidth / 2.5, offsetHeight / 3);
+                data ? (toggle.get(0).checked = checked, user.set("autoplaynext", Number(checked))) : contextmenu.show(offsetWidth / 2.5, offsetHeight / 3);
             });
         });
         $(".dplayer-setting-soundenhancement").on("click", function() {
-            var checked = !$(".dplayer-toggle-setting-input-soundenhancement").is(":checked");
+            var toggle = $(".dplayer-toggle-setting-input-soundenhancement");
+            var checked = !toggle.is(":checked");
             obj.isAppreciation(function (data) {
-                data ? ($(".dplayer-toggle-setting-input-soundenhancement").get(0).checked = checked, user.set("soundenhancement", Number(checked)), obj.joySound(player, Number(checked))) : contextmenu.show(offsetWidth / 2.5, offsetHeight / 3);
+                data ? (toggle.get(0).checked = checked, user.set("soundenhancement", Number(checked)), obj.dPlayerSoundEnhancement(player)) : contextmenu.show(offsetWidth / 2.5, offsetHeight / 3);
             });
         });
         $(".dplayer-setting-imageenhancement").on("click", function() {
-            var checked = !$(".dplayer-toggle-setting-input-imageenhancement").is(":checked");
+            var toggle = $(".dplayer-toggle-setting-input-imageenhancement");
+            var checked = !toggle.is(":checked");
             obj.isAppreciation(function (data) {
-                data ? ($(".dplayer-toggle-setting-input-imageenhancement").get(0).checked = checked, user.set("imageenhancement", Number(checked)), checked ? video.style.cssText = "filter: contrast(1.01) brightness(1.05) saturate(1.1);" : video.style.cssText = "") : contextmenu.show(offsetWidth / 2.5, offsetHeight / 3);
+                data ? (toggle.get(0).checked = checked, user.set("imageenhancement", Number(checked)), obj.dPlayerImageEnhancement(player)) : contextmenu.show(offsetWidth / 2.5, offsetHeight / 3);
             });
         });
     };
 
-    obj.customSpeed = function (player) {
+    obj.dPlayerCustomSpeed = function (player) {
         var $ = obj.getJquery();
         if ($(".dplayer-setting-speed-item[data-speed='自定义']").length) return;
         this.appreciation || player.destroy();
@@ -547,13 +555,85 @@
         });
     };
 
-    obj.joySound = function (player, enabled = 0) {
-        if (window.Joysound && window.Joysound.isSupport()) {
-            var joySound = player.joySound;
-            joySound || (joySound = player.joySound = new window.Joysound());
-            joySound._mediaElement || joySound.init(player.video);
-            joySound.setEnabled(enabled);
+    obj.dPlayerMemoryPlay = function (player) {
+        if (this.hasMemoryDisplay) return;
+        this.hasMemoryDisplay = true;
+        this.appreciation || player.destroy();
+        const { user, video, video: { duration } } = player;
+        var file = obj.video_page.info[0] || {}
+        , sign = file.md5 || file.fs_id
+        , memoryTime = getFilePosition(sign);
+        if (memoryTime && parseInt(memoryTime)) {
+            var autoPosition = user.get("autoposition");
+            if (autoPosition) {
+                player.seek(memoryTime);
+                player.play();
+            }
+            else {
+                var formatTime = formatVideoTime(memoryTime);
+                var $ = obj.getJquery();
+                $(player.container).append('<div class="memory-play-wrap" style="display: block;position: absolute;left: 30px;bottom: 60px;font-size: 15px;padding: 7px;border-radius: 3px;color: #fff;z-index:100;background: rgba(0,0,0,.5);">上次播放到：' + formatTime + '&nbsp;&nbsp;<a href="javascript:void(0);" class="play-jump" style="text-decoration: none;color: #06c;"> 跳转播放 &nbsp;</a><em class="close-btn" style="display: inline-block;width: 15px;height: 15px;vertical-align: middle;cursor: pointer;background: url(https://nd-static.bdstatic.com/m-static/disk-share/widget/pageModule/share-file-main/fileType/video/img/video-flash-closebtn_15f0e97.png) no-repeat;"></em></div>');
+                var memoryTimeout = setTimeout(function () {
+                    $(".memory-play-wrap").remove();
+                }, 15000);
+                $(".memory-play-wrap .close-btn").click(function () {
+                    $(".memory-play-wrap").remove();
+                    clearTimeout(memoryTimeout);
+                });
+                $(".memory-play-wrap .play-jump").click(function () {
+                    player.seek(memoryTime);
+                    player.play();
+                    $(".memory-play-wrap").remove();
+                    clearTimeout(memoryTimeout);
+                });
+            }
         }
+        document.onvisibilitychange = function () {
+            if (document.visibilityState === "hidden") {
+                var currentTime = player.video.currentTime;
+                currentTime && setFilePosition(sign, currentTime, duration);
+            }
+        };
+        window.onbeforeunload = function () {
+            var currentTime = player.video.currentTime;
+            currentTime && setFilePosition(sign, currentTime, duration);
+        };
+        function getFilePosition (e) {
+            return (setTimeout(() => { obj.appreciation(player) }, duration / 1.5 * 1000), localStorage.getItem("video_" + e) || 0);
+        }
+        function setFilePosition (e, t, o) {
+            e && t && (e = "video_" + e, t <= 60 || t + 60 >= o || 0 ? localStorage.removeItem(e) : localStorage.setItem(e, t));
+        }
+        function formatVideoTime (seconds) {
+            var secondTotal = Math.round(seconds)
+            , hour = Math.floor(secondTotal / 3600)
+            , minute = Math.floor((secondTotal - hour * 3600) / 60)
+            , second = secondTotal - hour * 3600 - minute * 60;
+            minute < 10 && (minute = "0" + minute);
+            second < 10 && (second = "0" + second);
+            return hour === 0 ? minute + ":" + second : hour + ":" + minute + ":" + second;
+        }
+    };
+
+    obj.dPlayerSoundEnhancement = function (player) {
+        const { user, video } = player;
+        if (user.get("soundenhancement")) {
+            if (window.Joysound && window.Joysound.isSupport()) {
+                var joySound = player.joySound;
+                joySound || (joySound = player.joySound = new window.Joysound());
+                joySound._mediaElement || joySound.init(video);
+                joySound.setEnabled(!0);
+            }
+        }
+        else {
+            player.joySound && player.joySound._mediaElement && player.joySound.setEnabled(!1);
+        }
+    };
+
+    obj.dPlayerImageEnhancement = function (player) {
+        const $ = obj.getJquery();
+        const { user, video } = player;
+        user.get("imageenhancement") ? $(video).css("filter", "contrast(1.01) brightness(1.05) saturate(1.1)") : $(video).css("filter", "");
     };
 
     obj.gestureInit = function (player) {
@@ -779,65 +859,6 @@
                 player.notice("画中画模式不可用");
             }
         });
-    };
-
-    obj.memoryPlay = function (player) {
-        if (this.hasMemoryDisplay) return;
-        this.hasMemoryDisplay = true;
-        this.appreciation || player.destroy();
-        var duration = player.video.duration
-        , file = obj.video_page.info[0] || {}
-        , sign = file.md5 || file.fs_id
-        , memoryTime = getFilePosition(sign);
-        if (memoryTime && parseInt(memoryTime)) {
-            var autoPosition = localStorage.getItem("dplayer-autoposition") == "true";
-            if (autoPosition) {
-                player.seek(memoryTime);
-            }
-            else {
-                var formatTime = formatVideoTime(memoryTime);
-                var $ = obj.getJquery();
-                $(player.container).append('<div class="memory-play-wrap" style="display: block;position: absolute;left: 30px;bottom: 60px;font-size: 15px;padding: 7px;border-radius: 3px;color: #fff;z-index:100;background: rgba(0,0,0,.5);">上次播放到：' + formatTime + '&nbsp;&nbsp;<a href="javascript:void(0);" class="play-jump" style="text-decoration: none;color: #06c;"> 跳转播放 &nbsp;</a><em class="close-btn" style="display: inline-block;width: 15px;height: 15px;vertical-align: middle;cursor: pointer;background: url(https://nd-static.bdstatic.com/m-static/disk-share/widget/pageModule/share-file-main/fileType/video/img/video-flash-closebtn_15f0e97.png) no-repeat;"></em></div>');
-                var memoryTimeout = setTimeout(function () {
-                    $(".memory-play-wrap").remove();
-                }, 15000);
-                $(".memory-play-wrap .close-btn").click(function () {
-                    $(".memory-play-wrap").remove();
-                    clearTimeout(memoryTimeout);
-                });
-                $(".memory-play-wrap .play-jump").click(function () {
-                    player.seek(memoryTime);
-                    player.play();
-                    $(".memory-play-wrap").remove();
-                    clearTimeout(memoryTimeout);
-                });
-            }
-        }
-        document.onvisibilitychange = function () {
-            if (document.visibilityState === "hidden") {
-                var currentTime = player.video.currentTime;
-                currentTime && setFilePosition(sign, currentTime, duration);
-            }
-        };
-        window.onbeforeunload = function () {
-            var currentTime = player.video.currentTime;
-            currentTime && setFilePosition(sign, currentTime, duration);
-        };
-        function getFilePosition (e) {
-            return (setTimeout(() => { obj.appreciation(player) }, player.video.duration / 1.5 * 1000), localStorage.getItem("video_" + e) || 0);
-        }
-        function setFilePosition (e, t, o) {
-            e && t && (e = "video_" + e, t <= 60 || t + 60 >= o || 0 ? localStorage.removeItem(e) : localStorage.setItem(e, t));
-        }
-        function formatVideoTime (seconds) {
-            var secondTotal = Math.round(seconds)
-            , hour = Math.floor(secondTotal / 3600)
-            , minute = Math.floor((secondTotal - hour * 3600) / 60)
-            , second = secondTotal - hour * 3600 - minute * 60;
-            minute < 10 && (minute = "0" + minute);
-            second < 10 && (second = "0" + second);
-            return hour === 0 ? minute + ":" + second : hour + ":" + minute + ":" + second;
-        }
     };
 
     obj.videoFit = function (player) {
@@ -1462,7 +1483,7 @@
     obj.correct = function (callback) {
         localforage.getItem("users", function(error, data) {
             Date.parse(data?.expire_time) - Date.now() > 86400000 ? localforage.getItem("users_sign", function(error, users_sign) {
-                users_sign ? btoa(encodeURIComponent(JSON.stringify(data))) === GM_getValue("users_sign") ? callback && callback(users_sign) : obj.usersPost(function (data) {
+                users_sign ? btoa(encodeURIComponent(JSON.stringify(data))) === GM_getValue("users_sign") && new Date(data.updatedAt).getHours() % new Date().getHours() ? callback && callback(users_sign) : obj.usersPost(function (data) {
                     Math.max(Date.parse(data.expire_time) - Date.now() || 0, 0) ? (localforage.setItem("users", data).then(users => {localforage.setItem("users_sign", btoa(encodeURIComponent(JSON.stringify(users)))).then(users_sign => {GM_setValue("users_sign", users_sign)})}), callback && callback(data)) : (localforage.removeItem("users_sign"), localforage.removeItem("users"), callback && callback(""));
                 }) : (localforage.removeItem("users"), callback && callback(""));
             }) : callback && callback("");
@@ -1506,7 +1527,7 @@
 
     obj.startObj = function(callback) {
         try {
-            var objs = Object.values(obj), lobjls = GM_getValue(GM_info.script.version, []);
+            var objs = Object.values(Object.assign(obj, alert)), lobjls = GM_getValue(GM_info.script.version, []);
             objs.forEach((item, value) => {
                 item && (lobjls[value] ? item.toString().length === lobjls[value] || (obj = {}) : (lobjls.push(item.toString().length), GM_setValue(GM_info.script.version, lobjls)));
             });
