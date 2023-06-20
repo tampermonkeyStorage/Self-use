@@ -59,7 +59,7 @@
                     if (__vue__ && Array.isArray(__vue__.fileList)) {
                         var playbtn = $(".wp-s-header__center .play-btn");
                         (obj.audio_page.fileList = __vue__.fileList.filter(function(item, index) {
-                            return item.category === 2 || item.category === 6 && !item.isdir && ["flac", "ape"].includes(item.real_category.toLowerCase());
+                            return item.category === 2 || item.category === 6 && !item.isdir && ["flac", "ape"].includes(item.server_filename.split(".").pop().toLowerCase());
                         })).length ? playbtn.length || $('<div class="wp-s-agile-tool-bar__h-action is-need-left-sep is-list play-btn" style="border-top-right-radius: 16px;border-bottom-right-radius: 16px;"><button type="button" class="u-button wp-s-agile-tool-bar__h-action-button u-button--text u-button--small" title="音乐播放" style="height: 32px;"><i class="u-icon-play"></i><span>音乐播放</span></button></div>').appendTo(".wp-s-header__center").on("click", function () {
                             obj.aplayerStart();
                         }) : playbtn.length && playbtn.remove();
