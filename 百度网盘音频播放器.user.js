@@ -65,7 +65,7 @@
                         }) : playbtn.length && playbtn.remove();
                         if (__vue__.selectLength && obj.audio_page.fileList.length) {
                             var audiofile = __vue__.selectedList.find(function (item) {
-                                return item.category === 2 || item.category === 6 && !item.isdir && ["flac", "ape"].includes(item.real_category.toLowerCase());
+                                return item.category === 2 || item.category === 6 && !item.isdir && ["flac", "ape"].includes(item.server_filename.split(".").pop().toLowerCase());
                             });
                             audiofile && (obj.audio_page.fileIndex = obj.audio_page.fileList.findIndex(function(item, index) {
                                 return item.fs_id == audiofile.fs_id;
