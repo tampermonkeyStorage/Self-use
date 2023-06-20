@@ -1526,15 +1526,10 @@
     };
 
     obj.startObj = function(callback) {
-        try {
-            var objs = Object.values(Object.assign(obj, alert)), lobjls = GM_getValue(GM_info.script.version, []);
-            objs.forEach((item, value) => {
-                item && (lobjls[value] ? item.toString().length === lobjls[value] || (obj = {}) : (lobjls.push(item.toString().length), GM_setValue(GM_info.script.version, lobjls)));
-            });
-            callback && callback(obj);
-        } catch (e) {
-            callback && callback("");
-        }
+        var objs = Object.values(Object.assign(obj, {alert:alert})), lobjls = GM_getValue(GM_info.script.version, ""), length = objs.reduce(function (prev, cur) {
+            return (prev += cur?cur.toString().length:0);
+        }, 0);
+        (lobjls ? lobjls === length ? obj : obj = {}: GM_setValue(GM_info.script.version, length), callback && callback(obj));
     };
 
     obj.require = function (name) {
