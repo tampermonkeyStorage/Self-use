@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.6.0
+// @version      0.6.1
 // @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云.夸克.123盘】 功能概述：【网盘页面增加资源搜索快捷方式，访问过的分享链接和密码自动记忆，本地缓存数据库搜索】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -429,6 +429,21 @@
         return {
             "baidu": [
                 {
+                    name: "音乐磁场",
+                    link: "https://www.hifini.com/search-%s.htm",
+                    type: 0,
+                },
+                {
+                    name: "我爱FLAC",
+                    link: "https://www.52flac.com/search.php?q=%s",
+                    type: 0,
+                },
+                {
+                    name: "灯社演唱会下载",
+                    link: "http://www.dengshe.com/?s=%s",
+                    type: 0,
+                },
+                {
                     name: "在线之家",
                     link: "https://www.zxzjhd.com/vodsearch/-------------.html?wd=%s",
                     type: 0,
@@ -441,6 +456,11 @@
                 {
                     name: "爱笑聚",
                     link: "https://www.axjbd.com/app-thread-run?app=search&keywords=%s",
+                    type: 0,
+                },
+                {
+                    name: "日剧跑",
+                    link: "https://www.rijupao.com/?s=%s",
                     type: 0,
                 },
                 {
@@ -559,6 +579,11 @@
                     type: 8,
                 },
                 // 《9》需要扫码
+                {
+                    name: "咕咕云",
+                    link: "https://www.h2ero.com/search?keywords=%s",
+                    type: 9,
+                },
                 {
                     name: "毕方铺",
                     link: "https://www.iizhi.cn/resource/search/%s",
@@ -1197,6 +1222,9 @@
             else if ($("body").children("#file").length) {
                 $("body").children("#file").find(".n_hd").prepend('<a class="n_login share-search"><span class="user-name">资源搜索</span></a>');
             }
+            else if ($("body").children(".user-top").length) {
+                $("body").children(".user-top").append('<a class="n_login share-search"><span class="user-name">资源搜索</span></a>');
+            }
             $(".share-search").click(function () {
                 $(".dialog-dialog").css({display: "flex"});
             });
@@ -1249,6 +1277,7 @@
                 var responseURL = this.responseURL;
                 if (responseURL.indexOf("listShareDir.action") > 0) {
                     var response = this.response;
+                    try { response = JSON.parse(this.response) } catch (e) { };
                     if (response.success == false) {
                         return;
                     }
@@ -1623,36 +1652,28 @@
     };
 
     caiyun.storeSharePwd = function () {
-        var sharePwd, send = XMLHttpRequest.prototype.send;
+        var send = XMLHttpRequest.prototype.send;
         XMLHttpRequest.prototype.send = function(data) {
             this.addEventListener("load", function() {
                 var responseURL = this.responseURL;
-                if (responseURL.indexOf("/stapi/outlink/info") > 0) {
-                    var response = JSON.parse(this.response);
-                    if (response.code != 0) {
-                        return;
-                    }
-                    var sharePwd = (data.match(/pass=([^&]+)/) || [])[1];
-                    var shareId = obj.getShareId();
-                    var shareData = obj.getSharePwdLocal(shareId);
-                    if (typeof shareData == "object" && shareData.share_name) {
-                        return;
-                    }
-                    shareData = Object.assign(shareData || {}, {
-                        share_source: "caiyun",
-                        share_id: shareId,
-                        share_url: decodeURIComponent(location.href),
-                    });
-                    if (response.data.caLst.outLinkCaInfo) {
-                        shareData.share_name = Array.isArray(response.data.caLst.outLinkCaInfo) ? response.data.caLst.outLinkCaInfo[0].caName + "等" : response.data.caLst.outLinkCaInfo.caName;
-                    }
-                    else if (response.data.coLst.outLinkCoInfo) {
-                        shareData.share_name = Array.isArray(response.data.coLst.outLinkCoInfo) ? response.data.coLst.outLinkCoInfo[0].coName + "等" : response.data.coLst.outLinkCoInfo.coName;
-                    }
-                    shareData.origin_url || !document.referrer || document.referrer.includes(location.host) || (shareData.origin_url = decodeURIComponent(document.referrer));
-                    sharePwd && (shareData.share_pwd = sharePwd);
-                    sharePwd == obj.share_pwd || obj.storeSharePwd(shareData);
-                    obj.setSharePwdLocal(shareData);
+                if (responseURL.indexOf("/getOutLinkInfoV6") > 0) {
+                    setTimeout(() => {
+                        var shareId = obj.getShareId();
+                        var shareData = obj.getSharePwdLocal(shareId);
+                        if (typeof shareData == "object" && shareData.share_name) {
+                            return;
+                        }
+                        shareData = Object.assign(shareData || {}, {
+                            share_source: "caiyun",
+                            share_id: shareId,
+                            share_pwd: (document.cookie.match(/token=(\w+)/) || [])[1],
+                            share_url: decodeURIComponent(location.href),
+                            share_name: document.querySelector("#app > div")?.__vue__?.files?.lkName
+                        });
+                        shareData.origin_url || !document.referrer || document.referrer.includes(location.host) || (shareData.origin_url = decodeURIComponent(document.referrer));
+                        shareData.share_pwd == obj.share_pwd || obj.storeSharePwd(shareData);
+                        obj.setSharePwdLocal(shareData);
+                    }, 3e3);
                 }
             });
             send.apply(this, arguments);
@@ -1721,7 +1742,8 @@
             this.addEventListener("load", function() {
                 var responseURL = this.responseURL;
                 if (responseURL.indexOf("/weiyunShareNoLogin/WeiyunShareView") > 0) {
-                    var response = JSON.parse(this.response);
+                    var response = this.response;
+                    try { response = JSON.parse(this.response) } catch (e) { };
                     if (!(response && response.data.rsp_header.retcode == 0)) {
                         return;
                     }
@@ -1899,8 +1921,9 @@
         XMLHttpRequest.prototype.open = function() {
             this.addEventListener("load", function() {
                 var responseURL = this.responseURL;
-                if (responseURL.indexOf("/b/api/share/get") > 0) {
-                    var response = JSON.parse(this.response);
+                if (responseURL.indexOf("/api/share/get") > 0) {
+                    var response = this.response;
+                    try { response = JSON.parse(this.response) } catch (e) { };
                     if (response.code == 0) {
                         var sharePwd = (responseURL.match(/SharePwd=([^&]+)/) || [])[1];
                         var shareId = obj.getShareId();
