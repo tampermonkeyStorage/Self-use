@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         天翼云盘-下载不求人
 // @namespace    http://tampermonkey.net/
-// @version      0.8.0
+// @version      0.8.1
 // @description  让下载成为一件愉快的事情
 // @author       You
 // @match        https://cloud.189.cn/web/*
@@ -21,24 +21,21 @@
     obj.showTipSuccess = function (text, time) {
         obj.showNotify({
             type: "success",
-            text: text,
-            time: time || 3000
+            text: text
         });
     };
 
     obj.showTipError = function (text, time) {
         obj.showNotify({
             type: "error",
-            text: text,
-            time: time || 3000
+            text: text
         });
     };
 
     obj.showTipLoading = function (text, time) {
         obj.showNotify({
             type: "loading",
-            text: text,
-            time: time || 3000
+            text: text
         });
     };
 
@@ -211,7 +208,7 @@
     };
 
     obj.showDownload = function () {
-        var $Vue = document.querySelector(".p-main").__vue__;
+        var $Vue = document.querySelector(".main-box").__vue__;
         var accessToken = localStorage.getItem("accessToken");
         if (!$Vue.isLogin && !accessToken) {
             return obj.showTipError("无法显示链接，请登录后重试");
