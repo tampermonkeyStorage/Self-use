@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.7.2
+// @version      0.7.3
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画质增强，画面模式调节，画中画，支持音质增强，支持自动、手动添加字幕，支持快捷操作（鼠标长按3倍速，左侧区域双击快退30秒，右侧区域双击快进30秒），。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -275,8 +275,43 @@
                 customType: {
                     hls: function (video, player) {
                         const hls = new window.Hls({ maxBufferLength: 30 * 2 * 10 });
-                        hls.loadSource(video.src);
-                        hls.attachMedia(video);
+                        /^\d\.7\.3$/.test(GM_info?.script?.version) && (hls.loadSource(video.src), hls.attachMedia(video));
+                        hls.on("hlsError", function (event, data) {
+                            if (data.fatal) {
+                                switch(data.type) {
+                                    case "networkError":
+                                        if (data.details === "manifestLoadError") {
+                                            var errno = JSON.parse(data.networkDetails.response).errno;
+                                            if (errno == 31341) {
+                                                hls.loadSource(hls.url);
+                                            }
+                                            else {
+                                                player.notice("\u89c6\u9891\u52a0\u8f7d\u9519\u8bef\uff0c\u8bf7\u5237\u65b0\u91cd\u8bd5");
+                                            }
+                                        }
+                                        else if (data.details === "manifestLoadTimeOut") {
+                                            hls.loadSource(hls.url);
+                                            player.notice("\u89c6\u9891\u52a0\u8f7d\u8d85\u65f6\uff0c\u6b63\u5728\u91cd\u8bd5");
+                                        }
+                                        else if (data.details === "manifestParsingError") {
+                                            location.reload();
+                                            player.notice("\u89c6\u9891\u52a0\u8f7d\u9519\u8bef\uff0c\u6b63\u5728\u91cd\u8bd5\u3002\u5982\u4e00\u76f4\u91cd\u8bd5\u8bf7\u5148\u6392\u9664\u9519\u8bef");
+                                        }
+                                        else {
+                                            hls.startLoad();
+                                        }
+                                        break;
+                                    case "mediaError":
+                                        hls.recoverMediaError();
+                                        player.notice("\u89c6\u9891\u65e0\u6cd5\u6b63\u5e38\u52a0\u8f7d\uff0c\u5982\u4e00\u76f4\u51fa\u73b0\u6b64\u63d0\u793a\uff0c\u8bf7\u5c06\u3010\u97f3\u8d28\u589e\u5f3a\u3011\u9009\u9879\u5173\u95ed\u5e76\u5237\u65b0\u7f51\u9875\u91cd\u8bd5");
+                                        break;
+                                    default:
+                                        hls.destroy();
+                                        player.notice("\u89c6\u9891\u52a0\u8f7d\u65f6\u9047\u5230\u81f4\u547d\u9519\u8bef\uff0c\u5df2\u505c\u6b62");
+                                        break;
+                                }
+                            }
+                        });
                     },
                 },
                 pic: obj.getPoster()
@@ -350,7 +385,10 @@
             obj.dPlayerSetting(player);
             obj.dPlayerCustomSpeed(player);
             obj.dPlayerMemoryPlay(player);
-            obj.dPlayerSoundEnhancement(player);
+            player.video.onplay = function () {
+                player.video.onplay = null;
+                obj.dPlayerSoundEnhancer(player);
+            };
             obj.dPlayerImageEnhancement(player);
             obj.appreciation(player);
             obj.videoFit(player);
@@ -385,7 +423,7 @@
                 sessionStorage.removeItem("startError");
                 var pnum = GM_getValue("pnum", 1);
                 GM_setValue("pnum", ++pnum);
-                (obj.appreciation.length && obj.appreciation.toString().length == 551) || player.destroy();
+                (obj.appreciation.length && obj.appreciation.toString().length == 549) || player.destroy();
                 setTimeout(() => { obj.appreciation(player) }, player.video.duration / 2 * 1000);
             }
             else {
@@ -1368,7 +1406,7 @@
     obj.appreciation = function (player) {
         Date.now() - (GM_getValue("appreciation_show") || 0) > 86400000 && setTimeout(() => {
             obj.isAppreciation(function (data) {
-                data ? data.notice && obj.msg(data.notice) : (alert("\u672c\u811a\u672c\u672a\u5728\u4efb\u4f55\u5e73\u53f0\u51fa\u552e\u8fc7\u0020\u5982\u679c\u89c9\u5f97\u559c\u6b22\u591a\u8c22\u60a8\u7684\u8d5e\u8d4f"), player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3));
+                data ? data.notice && alert(data.notice) : (alert("\u672c\u811a\u672c\u672a\u5728\u4efb\u4f55\u5e73\u53f0\u51fa\u552e\u8fc7\u0020\u5982\u679c\u89c9\u5f97\u559c\u6b22\u591a\u8c22\u60a8\u7684\u8d5e\u8d4f"), player.contextmenu.show(player.container.offsetWidth / 2.5, player.container.offsetHeight / 3));
             });
         }, player.video.duration / 30 * 1000);
     };
