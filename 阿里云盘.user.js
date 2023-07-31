@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      3.2.1
+// @version      3.2.2
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，支持移动端播放，...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -273,6 +273,7 @@
         player.video = videoEle;
         player.initVideo(player.video, player.quality.type || player.options.video.type);
         player.video.currentTime = player.prevVideo.currentTime + 1;
+        obj.dPlayerSubtitleStyle();
         player.on('canplaythrough', () => {
             if (player.prevVideo) {
                 if (player.video.currentTime !== player.prevVideo.currentTime) {
@@ -321,7 +322,6 @@
             obj.addCueVideoSubtitle(player, function (textTracks) {
                 if (textTracks) {
                     obj.dPlayerSelectSubtitles(textTracks);
-                    obj.dPlayerSubtitleStyle();
                     obj.offsetCache && obj.dPlayerSubtitleOffset();
                 }
             });
@@ -358,13 +358,19 @@
         Object.assign(user.storageName, { autoposition: "dplayer-autoposition", autoplaynext: "dplayer-autoplaynext", soundenhancement: "dplayer-soundenhancement", imageenhancement: "dplayer-imageenhancement", skipposition: "dplayer-skipposition", jumpstart: "dplayer-jumpstart", jumpend: "dplayer-jumpend" });
         Object.assign(user.default, { autoposition: 0, autoplaynext: 0, soundenhancement: 0, imageenhancement: 0, skipposition: 0, jumpstart: 60, jumpend: 120 });
         user.init();
+        obj.isAppreciation(function (data) {
+            data || (user.set("autoposition", 0), user.set("autoplaynext", 0), user.set("soundenhancement", 0), user.set("imageenhancement", 0), user.set("skipposition", 0));
+        });
         user.get("autoposition") && ($(".dplayer-toggle-setting-input-autoposition").get(0).checked = true);
         user.get("autoplaynext") && ($(".dplayer-toggle-setting-input-autoplaynext").get(0).checked = true);
         user.get("soundenhancement") && ($(".dplayer-toggle-setting-input-soundenhancement").get(0).checked = true);
         user.get("imageenhancement") && ($(".dplayer-toggle-setting-input-imageenhancement").get(0).checked = true);
         user.get("skipposition") && ($(".dplayer-toggle-setting-input-skipposition").get(0).checked = true, obj.dPlayerSkippositionStart(player), obj.dPlayerSkippositionEnd(player));
         $(".dplayer-setting-item").on("click", function(e) {
-            //var checked = !$(this).find("input").get(0).checked;
+            const { contextmenu, container: { offsetWidth, offsetHeight } } = player;
+            obj.isAppreciation(function (data) {
+                data || contextmenu.show(offsetWidth / 2.5, offsetHeight / 3);
+            });
         });
         $(".dplayer-setting-autoposition").on("click", function() {
             var toggle = $(".dplayer-toggle-setting-input-autoposition"), checked = !toggle.is(":checked");
@@ -397,6 +403,8 @@
             toggle.get(0).checked = checked;
             player.notice("跳过片头片尾：" + (checked ? "开启" : "关闭"));
             user.set("skipposition", Number(checked));
+            obj.dPlayerSkipposition(player);
+        }).on("mouseenter mouseleave", function (event) {
             obj.dPlayerSkipposition(player);
         });
         $(".dplayer-setting-subtitle").on("click", function() {
@@ -823,7 +831,7 @@
         }
         obj.video_page.play_info.file_id = file.file_id;
         obj.getVideoPreviewPlayInfo(function () {
-            $(".header-file-name--CN_fq, .text--2KGvI").text(file.name);
+            $("[class^=header-file-name], [class^=header-center] div span").text(file.name);
         });
     };
 
