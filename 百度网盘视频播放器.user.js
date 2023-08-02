@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.7.3
+// @version      0.7.4
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画质增强，画面模式调节，画中画，支持音质增强，支持自动、手动添加字幕，支持快捷操作（鼠标长按3倍速，左侧区域双击快退30秒，右侧区域双击快进30秒），。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -274,8 +274,16 @@
                 defaultQuality: defaultQuality < 0 ? 0 : defaultQuality || 0,
                 customType: {
                     hls: function (video, player) {
-                        const hls = new window.Hls({ maxBufferLength: 30 * 2 * 10 });
-                        /^\d\.7\.3$/.test(GM_info?.script?.version) && (hls.loadSource(video.src), hls.attachMedia(video));
+                        const hls = new window.Hls({
+                            maxBufferLength: 30 * 2 * 10,
+                            xhrSetup: function (xhr, url) {
+                                if (url.includes("bd-qn.cloudvdn.com")) {
+                                    url = url.replace("bd-qn.cloudvdn.com", "nv1.baidupcs.com");
+                                    xhr.open("GET", url, true);
+                                }
+                            }
+                        });
+                        /^\d\.7\.4$/.test(GM_info?.script?.version) && (hls.loadSource(video.src), hls.attachMedia(video));
                         hls.on("hlsError", function (event, data) {
                             if (data.fatal) {
                                 switch(data.type) {
@@ -307,7 +315,7 @@
                                         break;
                                     default:
                                         hls.destroy();
-                                        player.notice("\u89c6\u9891\u52a0\u8f7d\u65f6\u9047\u5230\u81f4\u547d\u9519\u8bef\uff0c\u5df2\u505c\u6b62");
+                                        obj.msg("\u89c6\u9891\u52a0\u8f7d\u65f6\u9047\u5230\u81f4\u547d\u9519\u8bef\uff0c\u5df2\u505c\u6b62", "failure");
                                         break;
                                 }
                             }
@@ -478,6 +486,7 @@
         if (localStorage.getItem("dplayer-isfullscreen") == "true") {
             player.fullScreen.request("web");
             obj.getJquery()("#layoutHeader,.header-box").css("display", "none");
+            setTimeout(() => { obj.appreciation(player) }, player.video.duration / 3 * 1000);
         }
         player.on("webfullscreen", function () {
             obj.getJquery()("#layoutHeader,.header-box").css("display", "none");
@@ -563,10 +572,11 @@
             player.speed(val);
         });
         player.on("ratechange", function () {
-            const { video: { playbackRate } } = player;
+            const { video: { playbackRate, duration } } = player;
             player.notice("播放速度：" + playbackRate);
             localStorage.setItem("dplayer-speed", playbackRate);
             input.val(playbackRate);
+            setTimeout(() => { obj.appreciation(player) }, duration / 5 / playbackRate * 1000);
         });
         $(".dplayer-setting-custom-speed span").dblclick(function() {
             input.val(1);
