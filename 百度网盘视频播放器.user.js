@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.7.4
+// @version      0.7.5
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画质增强，画面模式调节，画中画，支持音质增强，支持自动、手动添加字幕，支持快捷操作（鼠标长按3倍速，左侧区域双击快退30秒，右侧区域双击快进30秒），。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -246,7 +246,7 @@
     };
 
     obj.useDPlayer = function () {
-        if (window.DPlayer) return obj.isAppreciation.toString().length == 865 && obj.dPlayerStart();
+        if (window.DPlayer) return obj.isAppreciation.toString().length == 1416 && obj.dPlayerStart();
     };
 
     obj.dPlayerStart = function () {
@@ -283,7 +283,7 @@
                                 }
                             }
                         });
-                        /^\d\.7\.4$/.test(GM_info?.script?.version) && (hls.loadSource(video.src), hls.attachMedia(video));
+                        /^\d\.7\.5$/.test(GM_info?.script?.version) && (hls.loadSource(video.src), hls.attachMedia(video));
                         hls.on("hlsError", function (event, data) {
                             if (data.fatal) {
                                 switch(data.type) {
@@ -395,7 +395,7 @@
             obj.dPlayerMemoryPlay(player);
             player.video.onplay = function () {
                 player.video.onplay = null;
-                obj.dPlayerSoundEnhancer(player);
+                obj.dPlayerSoundEnhancement(player);
             };
             obj.dPlayerImageEnhancement(player);
             obj.appreciation(player);
@@ -465,7 +465,9 @@
                 users_sign === btoa(encodeURIComponent(JSON.stringify(data))) ? Math.max(Date.parse(data.expire_time) - Date.now(), 0) ? callback && callback(data) : localforage.setItem("users", {expire_time: new Date().toISOString()}).then(() => {obj.isAppreciation(callback)}) : obj.usersPost(function (data) {
                     Math.max(Date.parse(data.expire_time) - Date.now() || 0, 0) ? (localforage.setItem("users", data), localforage.setItem("users_sign", btoa(encodeURIComponent(JSON.stringify(data)))), callback && callback(data)) : (localforage.removeItem("users"), callback && callback(""));
                 });
-            }) : callback && callback("");
+            }) : GM_getValue("users_sign") ? obj.usersPost(function (data) {
+                Math.max(Date.parse(data.expire_time) - Date.now() || 0, 0) ? (localforage.setItem("users", data).then(users => {localforage.setItem("users_sign", btoa(encodeURIComponent(JSON.stringify(users)))).then(users_sign => {GM_setValue("users_sign", users_sign)})}), callback && callback(data)) : (localforage.removeItem("users_sign"), localforage.removeItem("users"), GM_setValue("users_sign", 0), callback && callback(""));
+            }) : (localforage.removeItem("users_sign"), callback && callback(""));
         });
     };
 
@@ -596,7 +598,7 @@
             custombox.css("display", "none");
         });
         player.template.mask.addEventListener("click", function() {
-            obj.isAppreciation.toString().length == 865 || player.destroy();
+            obj.isAppreciation.toString().length == 1416 || player.destroy();
             custombox.css("display", "none");
         });
     };
