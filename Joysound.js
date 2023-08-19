@@ -745,7 +745,7 @@
                     }, n.setEnabled = function(t) {
                         h.Log.i(S, "setEnabled", t), this._enabled = t, this._ctx && this._jsNode.setEnabled(t)
                     }, n.setVolume = function(t, e) {
-                        if (this._jsNode) this._jsNode._input.gain.value = 1 + t * (e || 10);
+                        if (this._jsNode) this._jsNode._output.gain.value = 1 + t * (e || 10);
                     }, n.setDestination = function(t) {
                         this._destination = t
                     }, n.hasSource = function() {
