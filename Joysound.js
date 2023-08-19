@@ -745,7 +745,7 @@
                     }, n.setEnabled = function(t) {
                         h.Log.i(S, "setEnabled", t), this._enabled = t, this._ctx && this._jsNode.setEnabled(t)
                     }, n.setVolume = function(t, e) {
-                        if (this._gainNode) this._gainNode.gain.value = 1 + t * (e || 10);
+                        if (this._jsNode) this._jsNode._input.gain.value = 1 + t * (e || 10);
                     }, n.setDestination = function(t) {
                         this._destination = t
                     }, n.hasSource = function() {
@@ -764,7 +764,6 @@
                         if (this._ctx && this._mediaElement) {
                             if (!this._source) try {
                                 this._source = this._ctx.createMediaElementSource(this._mediaElement)
-                                this._gainNode = this._ctx.createGain()
                             } catch (t) {
                                 return void this._onError({
                                     type: r.MAIN_ERROR,
@@ -780,7 +779,6 @@
                     }, n._connect = function() {
                         if (this._disconnect(), this._source && this._destination) {
                             var t = this._source;
-                            this._gainNode && (t.connect(this._gainNode).connect(this._destination))
                             this._jsNode.source ? (t.connect(this._jsNode.source), this._jsNode.connect(this._destination)) : t.connect(this._destination)
                         }
                     }, o()(e, null, [{
