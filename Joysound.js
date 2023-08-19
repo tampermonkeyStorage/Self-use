@@ -1,7 +1,7 @@
 "undefined" != typeof window && (window.Joysound = window.Joysound || function() {
     return function(t) {
         var e = {};
- 
+
         function n(i) {
             if (e[i]) return e[i].exports;
             var r = e[i] = {
@@ -27,9 +27,9 @@
             if (4 & e && "object" == typeof t && t && t.__esModule) return t;
             var i = Object.create(null);
             if (n.r(i), Object.defineProperty(i, "default", {
-                    enumerable: !0,
-                    value: t
-                }), 2 & e && "string" != typeof t)
+                enumerable: !0,
+                value: t
+            }), 2 & e && "string" != typeof t)
                 for (var r in t) n.d(i, r, function(e) {
                     return t[e]
                 }.bind(null, r));
@@ -48,7 +48,7 @@
         "./node_modules/@babel/runtime/helpers/construct.js": function(t, e, n) {
             var i = n("./node_modules/@babel/runtime/helpers/setPrototypeOf.js"),
                 r = n("./node_modules/@babel/runtime/helpers/isNativeReflectConstruct.js");
- 
+
             function a(e, n, o) {
                 return r() ? (t.exports = a = Reflect.construct, t.exports.default = t.exports, t.exports.__esModule = !0) : (t.exports = a = function(t, e, n) {
                     var r = [null];
@@ -126,7 +126,7 @@
                 r = n("./node_modules/@babel/runtime/helpers/setPrototypeOf.js"),
                 a = n("./node_modules/@babel/runtime/helpers/isNativeFunction.js"),
                 o = n("./node_modules/@babel/runtime/helpers/construct.js");
- 
+
             function s(e) {
                 var n = "function" == typeof Map ? new Map : void 0;
                 return t.exports = s = function(t) {
@@ -136,7 +136,7 @@
                         if (n.has(t)) return n.get(t);
                         n.set(t, e)
                     }
- 
+
                     function e() {
                         return o(t, arguments, i(this).constructor)
                     }
@@ -166,7 +166,7 @@
             var o = Number.isNaN || function(t) {
                 return t != t
             };
- 
+
             function s() {
                 s.init.call(this)
             }
@@ -175,7 +175,7 @@
                     function r(n) {
                         t.removeListener(e, a), i(n)
                     }
- 
+
                     function a() {
                         "function" == typeof t.removeListener && t.removeListener("error", r), n([].slice.call(arguments))
                     }
@@ -189,15 +189,15 @@
                 }))
             }, s.EventEmitter = s, s.prototype._events = void 0, s.prototype._eventsCount = 0, s.prototype._maxListeners = void 0;
             var l = 10;
- 
+
             function c(t) {
                 if ("function" != typeof t) throw new TypeError('The "listener" argument must be of type Function. Received type ' + typeof t)
             }
- 
+
             function u(t) {
                 return void 0 === t._maxListeners ? s.defaultMaxListeners : t._maxListeners
             }
- 
+
             function p(t, e, n, i) {
                 var r, a, o, s;
                 if (c(n), void 0 === (a = t._events) ? (a = t._events = Object.create(null), t._eventsCount = 0) : (void 0 !== a.newListener && (t.emit("newListener", e, n.listener ? n.listener : n), a = t._events), o = a[e]), void 0 === o) o = a[e] = n, ++t._eventsCount;
@@ -208,23 +208,23 @@
                 }
                 return t
             }
- 
+
             function h() {
                 if (!this.fired) return this.target.removeListener(this.type, this.wrapFn), this.fired = !0, 0 === arguments.length ? this.listener.call(this.target) : this.listener.apply(this.target, arguments)
             }
- 
+
             function d(t, e, n) {
                 var i = {
-                        fired: !1,
-                        wrapFn: void 0,
-                        target: t,
-                        type: e,
-                        listener: n
-                    },
+                    fired: !1,
+                    wrapFn: void 0,
+                    target: t,
+                    type: e,
+                    listener: n
+                },
                     r = h.bind(i);
                 return r.listener = n, i.wrapFn = r, r
             }
- 
+
             function f(t, e, n) {
                 var i = t._events;
                 if (void 0 === i) return [];
@@ -234,7 +234,7 @@
                     return e
                 }(r) : A(r, r.length)
             }
- 
+
             function g(t) {
                 var e = this._events;
                 if (void 0 !== e) {
@@ -244,12 +244,12 @@
                 }
                 return 0
             }
- 
+
             function A(t, e) {
                 for (var n = new Array(e), i = 0; i < e; ++i) n[i] = t[i];
                 return n
             }
- 
+
             function m(t, e, n, i) {
                 if ("function" == typeof t.on) i.once ? t.once(e, n) : t.on(e, n);
                 else {
@@ -438,29 +438,29 @@
                             }(C(t))
                         };
                     if (e.Uint8Array && (m = function(t) {
-                            return Uint8Array.from(x(C(t)), (function(t) {
-                                return t.charCodeAt(0)
-                            }))
-                        }), e.Base64 = {
-                            VERSION: "2.6.4",
-                            atob: x,
-                            btoa: d,
-                            fromBase64: w,
-                            toBase64: A,
-                            utob: p,
-                            encode: A,
-                            encodeURI: function(t) {
-                                return A(t, !0)
-                            },
-                            btou: I,
-                            decode: w,
-                            noConflict: function() {
-                                var t = e.Base64;
-                                return e.Base64 = a, t
-                            },
-                            fromUint8Array: i,
-                            toUint8Array: m
-                        }, "function" == typeof Object.defineProperty) {
+                        return Uint8Array.from(x(C(t)), (function(t) {
+                            return t.charCodeAt(0)
+                        }))
+                    }), e.Base64 = {
+                        VERSION: "2.6.4",
+                        atob: x,
+                        btoa: d,
+                        fromBase64: w,
+                        toBase64: A,
+                        utob: p,
+                        encode: A,
+                        encodeURI: function(t) {
+                            return A(t, !0)
+                        },
+                        btou: I,
+                        decode: w,
+                        noConflict: function() {
+                            var t = e.Base64;
+                            return e.Base64 = a, t
+                        },
+                        fromUint8Array: i,
+                        toUint8Array: m
+                    }, "function" == typeof Object.defineProperty) {
                         var D = function(t) {
                             return {
                                 value: t,
@@ -492,8 +492,8 @@
             var i;
             n.r(e),
                 function(t) {
-                    t.ERROR = "error", t.STATU_CHANGE = "statuChange", t.JSWW_INIT_COMPLETE = "jswwInitComplete"
-                }(i || (i = {})), e.default = i
+                t.ERROR = "error", t.STATU_CHANGE = "statuChange", t.JSWW_INIT_COMPLETE = "jswwInitComplete"
+            }(i || (i = {})), e.default = i
         },
         "./src/index.ts": function(t, e, n) {
             "use strict";
@@ -519,13 +519,13 @@
             ! function(t) {
                 t[t.LIB_LOAD_ERROR = 10] = "LIB_LOAD_ERROR", t[t.INIT_ERROR = 100] = "INIT_ERROR", t[t.CREATE_SOURCE_ERROR = 101] = "CREATE_SOURCE_ERROR"
             }(i || (i = {})),
-            function(t) {
+                function(t) {
                 t.NETWORK_ERROR = "networkError", t.MAIN_ERROR = "mainError"
             }(r || (r = {}));
             var g = n("./src/events.ts"),
                 A = n("./src/lib/libjs-wrapper.ts"),
                 m = n("./node_modules/js-base64/base64.js");
- 
+
             function y() {
                 return m.Base64.toUint8Array(v)
             }
@@ -563,11 +563,11 @@
                         var n = this;
                         this._eventEmitter = void 0, this._config = void 0, this._jsww = void 0, this._ctx = void 0, this._script = void 0, this._input = void 0, this._output = void 0, this._bufferSize = 1024, this._pendingData = void 0, this._workletBlob = "", this._worklet = void 0, this._scriptProcess = function(t) {
                             for (var e = [], i = n._pendingData, r = function(n) {
-                                    var r = t.inputBuffer.getChannelData(n);
-                                    i && r.forEach((function(e, r) {
-                                        i[r * t.inputBuffer.numberOfChannels + n] = e
-                                    })), e.push(t.outputBuffer.getChannelData(n))
-                                }, a = 0; a < t.inputBuffer.numberOfChannels; a++) r(a);
+                                var r = t.inputBuffer.getChannelData(n);
+                                i && r.forEach((function(e, r) {
+                                    i[r * t.inputBuffer.numberOfChannels + n] = e
+                                })), e.push(t.outputBuffer.getChannelData(n))
+                            }, a = 0; a < t.inputBuffer.numberOfChannels; a++) r(a);
                             n._pendingData && n._jsww && n._jsww.process(n._pendingData).forEach((function(t, n) {
                                 e[n % 2][Math.floor(n / 2)] = t
                             }))
@@ -633,22 +633,22 @@
                         }
                     }]), t
                 }();
- 
+
             function E() {
                 return window.AudioContext || window.webkitAudioContext
             }
             var k = {
-                    400: "01",
-                    401: "02",
-                    403: "03",
-                    404: "04",
-                    other4xx: "05",
-                    serverError: "06",
-                    timeoutOpen: "07",
-                    timeoutIO: "08",
-                    200: "09",
-                    206: "09"
-                },
+                400: "01",
+                401: "02",
+                403: "03",
+                404: "04",
+                other4xx: "05",
+                serverError: "06",
+                timeoutOpen: "07",
+                timeoutIO: "08",
+                200: "09",
+                206: "09"
+            },
                 T = function() {
                     function t() {
                         this.timeout = 6048e5
@@ -744,6 +744,8 @@
                         h.Log.i(S, "destroy"), this._disconnect(), this._jsNode.destroy(), this._ctx && (this._ctx.close(), this._ctx = void 0), this._eventEmitter.removeAllListeners(), this._mediaElement = void 0, this._source = void 0, this._destination = void 0, this.removeAllListeners()
                     }, n.setEnabled = function(t) {
                         h.Log.i(S, "setEnabled", t), this._enabled = t, this._ctx && this._jsNode.setEnabled(t)
+                    }, n.setVolume = function(t, e) {
+                        this._gainNode.gain.value = 1 + t * (e || 10)
                     }, n.setDestination = function(t) {
                         this._destination = t
                     }, n.hasSource = function() {
@@ -762,6 +764,7 @@
                         if (this._ctx && this._mediaElement) {
                             if (!this._source) try {
                                 this._source = this._ctx.createMediaElementSource(this._mediaElement)
+                                this._gainNode = this._ctx.createGain()
                             } catch (t) {
                                 return void this._onError({
                                     type: r.MAIN_ERROR,
@@ -777,6 +780,7 @@
                     }, n._connect = function() {
                         if (this._disconnect(), this._source && this._destination) {
                             var t = this._source;
+                            this._gainNode && (t.connect(this._gainNode).connect(this._destination))
                             this._jsNode.source ? (t.connect(this._jsNode.source), this._jsNode.connect(this._destination)) : t.connect(this._destination)
                         }
                     }, o()(e, null, [{
@@ -887,54 +891,54 @@
                 var u, p, h = [];
                 e.wasmBinary && (p = e.wasmBinary), e.noExitRuntime, "object" != typeof WebAssembly && Q("no native wasm support detected");
                 var d, f = !1;
- 
+
                 function g(t) {
                     var n = e["_" + t];
                     return n || Q("Assertion failed: Cannot call unknown function " + t + ", make sure it is exported"), n
                 }
- 
+
                 function A(t, e, n, i) {
                     var r, a = {
-                            string: function(t) {
-                                var e = 0;
-                                if (null != t && 0 !== t) {
-                                    var n = 1 + (t.length << 2),
-                                        i = e = J(n),
-                                        r = v;
-                                    if (0 < n) {
-                                        n = i + n - 1;
-                                        for (var a = 0; a < t.length; ++a) {
-                                            var o = t.charCodeAt(a);
-                                            if (55296 <= o && 57343 >= o && (o = 65536 + ((1023 & o) << 10) | 1023 & t.charCodeAt(++a)), 127 >= o) {
-                                                if (i >= n) break;
-                                                r[i++] = o
+                        string: function(t) {
+                            var e = 0;
+                            if (null != t && 0 !== t) {
+                                var n = 1 + (t.length << 2),
+                                    i = e = J(n),
+                                    r = v;
+                                if (0 < n) {
+                                    n = i + n - 1;
+                                    for (var a = 0; a < t.length; ++a) {
+                                        var o = t.charCodeAt(a);
+                                        if (55296 <= o && 57343 >= o && (o = 65536 + ((1023 & o) << 10) | 1023 & t.charCodeAt(++a)), 127 >= o) {
+                                            if (i >= n) break;
+                                            r[i++] = o
+                                        } else {
+                                            if (2047 >= o) {
+                                                if (i + 1 >= n) break;
+                                                r[i++] = 192 | o >> 6
                                             } else {
-                                                if (2047 >= o) {
-                                                    if (i + 1 >= n) break;
-                                                    r[i++] = 192 | o >> 6
+                                                if (65535 >= o) {
+                                                    if (i + 2 >= n) break;
+                                                    r[i++] = 224 | o >> 12
                                                 } else {
-                                                    if (65535 >= o) {
-                                                        if (i + 2 >= n) break;
-                                                        r[i++] = 224 | o >> 12
-                                                    } else {
-                                                        if (i + 3 >= n) break;
-                                                        r[i++] = 240 | o >> 18, r[i++] = 128 | o >> 12 & 63
-                                                    }
-                                                    r[i++] = 128 | o >> 6 & 63
+                                                    if (i + 3 >= n) break;
+                                                    r[i++] = 240 | o >> 18, r[i++] = 128 | o >> 12 & 63
                                                 }
-                                                r[i++] = 128 | 63 & o
+                                                r[i++] = 128 | o >> 6 & 63
                                             }
+                                            r[i++] = 128 | 63 & o
                                         }
-                                        r[i] = 0
                                     }
+                                    r[i] = 0
                                 }
-                                return e
-                            },
-                            array: function(t) {
-                                var e = J(t.length);
-                                return y.set(t, e), e
                             }
+                            return e
                         },
+                        array: function(t) {
+                            var e = J(t.length);
+                            return y.set(t, e), e
+                        }
+                    },
                         o = g(t),
                         s = [];
                     if (t = 0, i)
@@ -945,7 +949,7 @@
                     return n = o.apply(null, s), r = n, n = "string" === e ? r ? w(v, r, void 0) : "" : "boolean" === e ? !!r : r, 0 !== t && W(t), n
                 }
                 var m, y, v, I, b, M, x, C = "undefined" != typeof TextDecoder ? new TextDecoder("utf8") : void 0;
- 
+
                 function w(t, e, n) {
                     var i = e + n;
                     for (n = e; t[n] && !(n >= i);) ++n;
@@ -963,7 +967,7 @@
                     }
                     return i
                 }
- 
+
                 function D() {
                     var t = d.buffer;
                     m = t, e.HEAP8 = y = new Int8Array(t), e.HEAP16 = I = new Int16Array(t), e.HEAP32 = b = new Int32Array(t), e.HEAPU8 = v = new Uint8Array(t), e.HEAPU16 = new Uint16Array(t), e.HEAPU32 = new Uint32Array(t), e.HEAPF32 = M = new Float32Array(t), e.HEAPF64 = x = new Float64Array(t)
@@ -971,7 +975,7 @@
                 var E, k = [],
                     T = [],
                     N = [];
- 
+
                 function S() {
                     var t = e.preRun.shift();
                     k.unshift(t)
@@ -979,11 +983,11 @@
                 var j, B, L, z = 0,
                     P = null,
                     O = null;
- 
+
                 function Q(t) {
                     throw e.onAbort && e.onAbort(t), c(t), f = !0, t = new WebAssembly.RuntimeError("abort(" + t + "). Build with -s ASSERTIONS=1 for more info."), r(t), t
                 }
- 
+
                 function R() {
                     return j.startsWith("data:application/octet-stream;base64,")
                 }
@@ -991,7 +995,7 @@
                     var F = j;
                     j = e.locateFile ? e.locateFile(F, s) : s + F
                 }
- 
+
                 function G() {
                     var t = j;
                     try {
@@ -1001,7 +1005,7 @@
                         Q(t)
                     }
                 }
- 
+
                 function U(t) {
                     for (; 0 < t.length;) {
                         var n = t.shift();
@@ -1012,7 +1016,7 @@
                         }
                     }
                 }
- 
+
                 function Y(t) {
                     this.u = t - 16, this.G = function(t) {
                         b[this.u + 8 >> 2] = t
@@ -1029,8 +1033,8 @@
                     }
                 }
                 var _ = [null, [],
-                        []
-                    ],
+                         []
+                        ],
                     V = {
                         f: function(t) {
                             return q(t + 16) + 16
@@ -1078,11 +1082,11 @@
                     function t(t) {
                         e.asm = t.exports, d = e.asm.g, D(), E = e.asm.o, T.unshift(e.asm.h), z--, e.monitorRunDependencies && e.monitorRunDependencies(z), 0 == z && (null !== P && (clearInterval(P), P = null), O && (t = O, O = null, t()))
                     }
- 
+
                     function n(e) {
                         t(e.instance)
                     }
- 
+
                     function i(t) {
                         return (p || "function" != typeof fetch ? Promise.resolve().then((function() {
                             return G()
@@ -1129,8 +1133,8 @@
                     return (e._AudioJoySoundProcessor_Get_Switch_Status = e.asm.n).apply(null, arguments)
                 };
                 var H, Z = e.stackSave = function() {
-                        return (Z = e.stackSave = e.asm.p).apply(null, arguments)
-                    },
+                    return (Z = e.stackSave = e.asm.p).apply(null, arguments)
+                },
                     W = e.stackRestore = function() {
                         return (W = e.stackRestore = e.asm.q).apply(null, arguments)
                     },
@@ -1140,7 +1144,7 @@
                     q = e._malloc = function() {
                         return (q = e._malloc = e.asm.s).apply(null, arguments)
                     };
- 
+
                 function K() {
                     function t() {
                         if (!H && (H = !0, e.calledRun = !0, !f)) {
@@ -1163,116 +1167,116 @@
                     }
                 }
                 if (e._free = function() {
-                        return (e._free = e.asm.t).apply(null, arguments)
-                    }, e.cwrap = function(t, e, n, i) {
-                        var r = (n = n || []).every((function(t) {
-                            return "number" === t
-                        }));
-                        return "string" !== e && r && !i ? g(t) : function() {
-                            return A(t, e, n, arguments)
+                    return (e._free = e.asm.t).apply(null, arguments)
+                }, e.cwrap = function(t, e, n, i) {
+                    var r = (n = n || []).every((function(t) {
+                        return "number" === t
+                    }));
+                    return "string" !== e && r && !i ? g(t) : function() {
+                        return A(t, e, n, arguments)
+                    }
+                }, e.setValue = function(t, e, n) {
+                    switch ("*" === (n = n || "i8").charAt(n.length - 1) && (n = "i32"), n) {
+                        case "i1":
+                        case "i8":
+                            y[t >> 0] = e;
+                            break;
+                        case "i16":
+                            I[t >> 1] = e;
+                            break;
+                        case "i32":
+                            b[t >> 2] = e;
+                            break;
+                        case "i64":
+                            L = [e >>> 0, (B = e, 1 <= +Math.abs(B) ? 0 < B ? (0 | Math.min(+Math.floor(B / 4294967296), 4294967295)) >>> 0 : ~~+Math.ceil((B - +(~~B >>> 0)) / 4294967296) >>> 0 : 0)], b[t >> 2] = L[0], b[t + 4 >> 2] = L[1];
+                            break;
+                        case "float":
+                            M[t >> 2] = e;
+                            break;
+                        case "double":
+                            x[t >> 3] = e;
+                            break;
+                        default:
+                            Q("invalid type for setValue: " + n)
+                    }
+                }, e.getValue = function(t, e) {
+                    switch ("*" === (e = e || "i8").charAt(e.length - 1) && (e = "i32"), e) {
+                        case "i1":
+                        case "i8":
+                            return y[t >> 0];
+                        case "i16":
+                            return I[t >> 1];
+                        case "i32":
+                        case "i64":
+                            return b[t >> 2];
+                        case "float":
+                            return M[t >> 2];
+                        case "double":
+                            return x[t >> 3];
+                        default:
+                            Q("invalid type for getValue: " + e)
+                    }
+                    return null
+                }, e.addFunction = function(t, e) {
+                    if (!u) {
+                        u = new WeakMap;
+                        for (var n = 0; n < E.length; n++) {
+                            var i = E.get(n);
+                            i && u.set(i, n)
                         }
-                    }, e.setValue = function(t, e, n) {
-                        switch ("*" === (n = n || "i8").charAt(n.length - 1) && (n = "i32"), n) {
-                            case "i1":
-                            case "i8":
-                                y[t >> 0] = e;
-                                break;
-                            case "i16":
-                                I[t >> 1] = e;
-                                break;
-                            case "i32":
-                                b[t >> 2] = e;
-                                break;
-                            case "i64":
-                                L = [e >>> 0, (B = e, 1 <= +Math.abs(B) ? 0 < B ? (0 | Math.min(+Math.floor(B / 4294967296), 4294967295)) >>> 0 : ~~+Math.ceil((B - +(~~B >>> 0)) / 4294967296) >>> 0 : 0)], b[t >> 2] = L[0], b[t + 4 >> 2] = L[1];
-                                break;
-                            case "float":
-                                M[t >> 2] = e;
-                                break;
-                            case "double":
-                                x[t >> 3] = e;
-                                break;
-                            default:
-                                Q("invalid type for setValue: " + n)
-                        }
-                    }, e.getValue = function(t, e) {
-                        switch ("*" === (e = e || "i8").charAt(e.length - 1) && (e = "i32"), e) {
-                            case "i1":
-                            case "i8":
-                                return y[t >> 0];
-                            case "i16":
-                                return I[t >> 1];
-                            case "i32":
-                            case "i64":
-                                return b[t >> 2];
-                            case "float":
-                                return M[t >> 2];
-                            case "double":
-                                return x[t >> 3];
-                            default:
-                                Q("invalid type for getValue: " + e)
-                        }
-                        return null
-                    }, e.addFunction = function(t, e) {
-                        if (!u) {
-                            u = new WeakMap;
-                            for (var n = 0; n < E.length; n++) {
-                                var i = E.get(n);
-                                i && u.set(i, n)
-                            }
-                        }
-                        if (u.has(t)) t = u.get(t);
+                    }
+                    if (u.has(t)) t = u.get(t);
+                    else {
+                        if (h.length) n = h.pop();
                         else {
-                            if (h.length) n = h.pop();
-                            else {
-                                try {
-                                    E.grow(1)
-                                } catch (t) {
-                                    if (!(t instanceof RangeError)) throw t;
-                                    throw "Unable to grow wasm table. Set ALLOW_TABLE_GROWTH."
-                                }
-                                n = E.length - 1
-                            }
                             try {
-                                E.set(n, t)
-                            } catch (s) {
-                                if (!(s instanceof TypeError)) throw s;
-                                if ("function" == typeof WebAssembly.Function) {
-                                    var r = {
-                                            i: "i32",
-                                            j: "i64",
-                                            f: "f32",
-                                            d: "f64"
-                                        },
-                                        a = {
-                                            parameters: [],
-                                            results: "v" == e[0] ? [] : [r[e[0]]]
-                                        };
-                                    for (i = 1; i < e.length; ++i) a.parameters.push(r[e[i]]);
-                                    e = new WebAssembly.Function(a, t)
-                                } else {
-                                    r = [1, 0, 1, 96], a = e.slice(0, 1), e = e.slice(1);
-                                    var o = {
-                                        i: 127,
-                                        j: 126,
-                                        f: 125,
-                                        d: 124
-                                    };
-                                    for (r.push(e.length), i = 0; i < e.length; ++i) r.push(o[e[i]]);
-                                    "v" == a ? r.push(0) : r = r.concat([1, o[a]]), r[1] = r.length - 2, e = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0].concat(r, [2, 7, 1, 1, 101, 1, 102, 0, 0, 7, 5, 1, 1, 102, 0, 0])), e = new WebAssembly.Module(e), e = new WebAssembly.Instance(e, {
-                                        e: {
-                                            f: t
-                                        }
-                                    }).exports.f
-                                }
-                                E.set(n, e)
+                                E.grow(1)
+                            } catch (t) {
+                                if (!(t instanceof RangeError)) throw t;
+                                throw "Unable to grow wasm table. Set ALLOW_TABLE_GROWTH."
                             }
-                            u.set(t, n), t = n
+                            n = E.length - 1
                         }
-                        return t
-                    }, O = function t() {
-                        H || K(), H || (O = t)
-                    }, e.run = K, e.preInit)
+                        try {
+                            E.set(n, t)
+                        } catch (s) {
+                            if (!(s instanceof TypeError)) throw s;
+                            if ("function" == typeof WebAssembly.Function) {
+                                var r = {
+                                    i: "i32",
+                                    j: "i64",
+                                    f: "f32",
+                                    d: "f64"
+                                },
+                                    a = {
+                                        parameters: [],
+                                        results: "v" == e[0] ? [] : [r[e[0]]]
+                                    };
+                                for (i = 1; i < e.length; ++i) a.parameters.push(r[e[i]]);
+                                e = new WebAssembly.Function(a, t)
+                            } else {
+                                r = [1, 0, 1, 96], a = e.slice(0, 1), e = e.slice(1);
+                                var o = {
+                                    i: 127,
+                                    j: 126,
+                                    f: 125,
+                                    d: 124
+                                };
+                                for (r.push(e.length), i = 0; i < e.length; ++i) r.push(o[e[i]]);
+                                "v" == a ? r.push(0) : r = r.concat([1, o[a]]), r[1] = r.length - 2, e = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0].concat(r, [2, 7, 1, 1, 101, 1, 102, 0, 0, 7, 5, 1, 1, 102, 0, 0])), e = new WebAssembly.Module(e), e = new WebAssembly.Instance(e, {
+                                    e: {
+                                        f: t
+                                    }
+                                }).exports.f
+                            }
+                            E.set(n, e)
+                        }
+                        u.set(t, n), t = n
+                    }
+                    return t
+                }, O = function t() {
+                    H || K(), H || (O = t)
+                }, e.run = K, e.preInit)
                     for ("function" == typeof e.preInit && (e.preInit = [e.preInit]); 0 < e.preInit.length;) e.preInit.pop()();
                 return K(), t.ready
             });
@@ -1321,10 +1325,10 @@
                         return this._inputBuf ? function() {
                             i._channelCount !== r.length && (p.Log.i(h, "channel count change. " + i._channelCount + " -> " + r.length), i._updateInfo(i._sampleRate, r.length, i._bufferSize));
                             for (var t = r.length, e = function(e) {
-                                    r[e].forEach((function(n, r) {
-                                        i._inputBuf[i._inputBufIndex + r * t + e] = n
-                                    }))
-                                }, n = 0; n < t; n++) e(n);
+                                r[e].forEach((function(n, r) {
+                                    i._inputBuf[i._inputBufIndex + r * t + e] = n
+                                }))
+                            }, n = 0; n < t; n++) e(n);
                             if (i._inputBufIndex += 128 * t, i._inputBufIndex >= i._inputBuf.length && (i._outputBuf = i._jsww.process(i._inputBuf), i._inputBufIndex = 0, i._outputBufIndex = 0), i._outputBufIndex < i._outputBuf.length)
                                 if (a.length === t)
                                     for (var o = 0; o < 128 * a.length; o++) a[i._outputBufIndex % t][Math.floor(o / t)] = i._outputBuf[i._outputBufIndex], i._outputBufIndex++;
@@ -1349,11 +1353,11 @@
             "use strict";
             var i;
             n.r(e), n.d(e, "WorkerCmd", (function() {
-                    return i
-                })),
+                return i
+            })),
                 function(t) {
-                    t.INIT = "init", t.FLUSH = "flush", t.ERROR = "error", t.SET_ENABLED = "setEnabled", t.STATU_CHANGE = "statuChange", t.DESTROY = "destroy", t.JSWW_INIT_COMPLETE = "jswwInitComplete"
-                }(i || (i = {}))
+                t.INIT = "init", t.FLUSH = "flush", t.ERROR = "error", t.SET_ENABLED = "setEnabled", t.STATU_CHANGE = "statuChange", t.DESTROY = "destroy", t.JSWW_INIT_COMPLETE = "jswwInitComplete"
+            }(i || (i = {}))
         },
         "./src/utils/log.ts": function(t, e, n) {
             "use strict";
@@ -1364,7 +1368,7 @@
             }));
             var i, r = "kwai-joysound",
                 a = !0;
- 
+
             function o(t, e) {
                 return e && 0 !== e.length || (e = [t], t = ""), t = a ? r + (t ? "::" + t : "") : t || r, e.unshift("[" + t + "] > "), e
             }! function(t) {
@@ -1426,7 +1430,7 @@
         "./src/utils/webworkify-webpack.js": function(t, e, n) {
             function i(t) {
                 var e = {};
- 
+
                 function n(i) {
                     if (e[i]) return e[i].exports;
                     var r = e[i] = {
@@ -1465,11 +1469,11 @@
             }
             var r = "[\\.|\\-|\\+|\\w|/|@]+",
                 a = "\\(\\s*(/\\*.*?\\*/)?\\s*.*?(" + r + ").*?\\)";
- 
+
             function o(t) {
                 return (t + "").replace(/[.?*+^$[\]\\(){}|-]/g, "\\$&")
             }
- 
+
             function s(t, e, i) {
                 var s = {};
                 s[i] = [];
@@ -1482,7 +1486,7 @@
                     for (var A = 0; A < s[f[g]].length; A++) d = s[f[g]][A], isNaN(1 * d) || (s[f[g]][A] = 1 * s[f[g]][A]);
                 return s
             }
- 
+
             function l(t) {
                 return Object.keys(t).reduce((function(e, n) {
                     return e || t[n].length > 0
@@ -1491,18 +1495,18 @@
             t.exports = function(t, e) {
                 e = e || {};
                 var r = {
-                        main: n.m
-                    },
+                    main: n.m
+                },
                     a = e.all ? {
                         main: Object.keys(r.main)
                     } : function(t, e) {
                         for (var n = {
-                                main: [e]
-                            }, i = {
-                                main: []
-                            }, r = {
-                                main: {}
-                            }; l(n);)
+                            main: [e]
+                        }, i = {
+                            main: []
+                        }, r = {
+                            main: {}
+                        }; l(n);)
                             for (var a = Object.keys(n), o = 0; o < a.length; o++) {
                                 var c = a[o],
                                     u = n[c].pop();
