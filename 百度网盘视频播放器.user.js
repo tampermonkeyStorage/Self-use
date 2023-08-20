@@ -736,7 +736,7 @@
                 const rect = element.getBoundingClientRect();
                 return rect.left + offset;
             } else {
-                return this.getElementViewLeft(element);
+                return getElementViewLeft(element);
             }
         }
         function getElementViewLeft (element) {
