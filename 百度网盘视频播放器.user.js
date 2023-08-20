@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.7.5
-// @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画质增强，画面模式调节，画中画，支持音质增强，支持自动、手动添加字幕，支持快捷操作（鼠标长按3倍速，左侧区域双击快退30秒，右侧区域双击快进30秒），。。。。。。
+// @version      0.7.6
+// @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画质增强，画面模式调节，画中画，支持音质增强、音量无极调节，支持自动、手动添加字幕，支持快捷操作（鼠标长按3倍速，左侧区域双击快退30秒，右侧区域双击快进30秒），。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
 // @match        https://pan.baidu.com/s/*
@@ -13,7 +13,7 @@
 // @connect      baidupcs.com
 // @connect      lc-cn-n1-shared.com
 // @require      https://code.jquery.com/jquery-3.6.0.min.js
-// @require      https://scriptcat.org/lib/950/1.0.0/Joysound.js
+// @require      https://scriptcat.org/lib/950/^1.0.0/Joysound.js
 // @require      https://cdn.staticfile.org/hls.js/1.3.5/hls.min.js
 // @require      https://cdn.staticfile.org/dplayer/1.26.0/DPlayer.min.js
 // @require      https://cdn.staticfile.org/localforage/1.10.0/localforage.min.js
@@ -283,7 +283,7 @@
                                 }
                             }
                         });
-                        /^\d\.7\.5$/.test(GM_info?.script?.version) && (hls.loadSource(video.src), hls.attachMedia(video));
+                        /^\d\.7\.6$/.test(GM_info?.script?.version) && (hls.loadSource(video.src), hls.attachMedia(video));
                         hls.on("hlsError", function (event, data) {
                             if (data.fatal) {
                                 switch(data.type) {
@@ -393,11 +393,7 @@
             obj.dPlayerSetting(player);
             obj.dPlayerCustomSpeed(player);
             obj.dPlayerMemoryPlay(player);
-            player.video.onplay = function () {
-                player.video.onplay = null;
-                obj.dPlayerSoundEnhancement(player);
-            };
-            obj.dPlayerImageEnhancement(player);
+            obj.dPlayerVolumeEnhancer(player);
             obj.appreciation(player);
             obj.videoFit(player);
             obj.autoPlayEpisode();
@@ -516,7 +512,7 @@
         html += '<div class="dplayer-setting-item dplayer-setting-soundenhancement"><span class="dplayer-label">音质增强</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-soundenhancement" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
         html += '<div class="dplayer-setting-item dplayer-setting-imageenhancement"><span class="dplayer-label">画质增强</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input-imageenhancement" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>';
         $(".dplayer-setting-origin-panel").append(html);
-        const { user, template: { video }, contextmenu, container: { offsetWidth, offsetHeight } } = player;
+        const { user, events, template: { video }, contextmenu, container: { offsetWidth, offsetHeight } } = player;
         Object.assign(user.storageName, { autoposition: "dplayer-autoposition", autoplaynext: "dplayer-autoplaynext", imageenhancement: "dplayer-imageenhancement", soundenhancement: "dplayer-soundenhancement" });
         Object.assign(user.default, { autoposition: 0, autoplaynext: 0, imageenhancement: 0, soundenhancement: 0 });
         user.init();
@@ -545,15 +541,29 @@
             var toggle = $(".dplayer-toggle-setting-input-soundenhancement");
             var checked = !toggle.is(":checked");
             obj.isAppreciation(function (data) {
-                data ? (toggle.get(0).checked = checked, user.set("soundenhancement", Number(checked)), obj.dPlayerSoundEnhancement(player)) : contextmenu.show(offsetWidth / 2.5, offsetHeight / 3);
+                data ? (toggle.get(0).checked = checked, user.set("soundenhancement", Number(checked)), obj.dPlayerSoundEnhancer(player)) : contextmenu.show(offsetWidth / 2.5, offsetHeight / 3);
             });
         });
         $(".dplayer-setting-imageenhancement").on("click", function() {
             var toggle = $(".dplayer-toggle-setting-input-imageenhancement");
             var checked = !toggle.is(":checked");
             obj.isAppreciation(function (data) {
-                data ? (toggle.get(0).checked = checked, user.set("imageenhancement", Number(checked)), obj.dPlayerImageEnhancement(player)) : contextmenu.show(offsetWidth / 2.5, offsetHeight / 3);
+                data ? (toggle.get(0).checked = checked, user.set("imageenhancement", Number(checked)), obj.dPlayerImageEnhancer(player)) : contextmenu.show(offsetWidth / 2.5, offsetHeight / 3);
             });
+        });
+        player.on("playing", () => {
+            if (!player.joySound) {
+                let value = user.get("gain");
+                value && events.trigger("gain_value", value);
+                setTimeout(() => {
+                    obj.dPlayerSoundEnhancer(player);
+                    obj.dPlayerImageEnhancer(player);
+                }, 1e3);
+            }
+        });
+        player.on("quality_end", () => {
+            player.joySound.destroy();
+            player.joySound = null;
         });
     };
 
@@ -663,22 +673,124 @@
         }
     };
 
-    obj.dPlayerSoundEnhancement = function (player) {
-        const { user, video } = player;
-        if (user.get("soundenhancement")) {
-            if (window.Joysound && window.Joysound.isSupport()) {
-                var joySound = player.joySound;
-                joySound || (joySound = player.joySound = new window.Joysound());
-                joySound._mediaElement || joySound.init(video);
-                joySound.setEnabled(!0);
+    obj.dPlayerVolumeEnhancer = function (player) {
+        var $ = obj.getJquery();
+        if ($(".dplayer-setting .dplayer-setting-gain").length) return;
+        var html = '<div class="dplayer-setting-item dplayer-setting-danmaku dplayer-setting-gain" style="display: block;"><span class="dplayer-label">音量增强</span><div class="dplayer-danmaku-bar-wrap dplayer-gain-bar-wrap"><div class="dplayer-danmaku-bar dplayer-gain-bar"><div class="dplayer-danmaku-bar-inner dplayer-gain-bar-inner" style="width: 0%;"><span class="dplayer-thumb"></span></div></div></div></div>';
+        $(".dplayer-setting .dplayer-setting-origin-panel").prepend(html);
+        const { user, bar, template, events, video } = player;
+        Object.assign(user.storageName, { gain: "dplayer-gain"});
+        Object.assign(user.default, { gain: 0 });
+        user.init();
+        bar.elements.gain = $(".dplayer-setting .dplayer-setting-gain").find(".dplayer-gain-bar-inner").get(0);
+        template.gainBox = $(".dplayer-setting .dplayer-setting-gain").get(0);
+        template.gainBarWrap = $(".dplayer-setting .dplayer-setting-gain").find(".dplayer-gain-bar-wrap").get(0);
+        events.playerEvents.push("gain_value");
+        player.on("gain_value", (percentage) => {
+            percentage = Math.min(Math.max(percentage, 0), 1);
+            bar.set("gain", percentage, "width");
+            user.set("gain", percentage);
+            obj.setVolume(percentage, player);
+        });
+        const gainMove = (event) => {
+            const e = event || window.event;
+            let percentage = ((e.clientX || e.changedTouches[0].clientX) - getBoundingClientRectViewLeft(template.gainBarWrap)) / 130;
+            events.trigger("gain_value", percentage);
+        };
+        const gainUp = () => {
+            document.removeEventListener("touchend", gainUp);
+            document.removeEventListener("touchmove", gainMove);
+            document.removeEventListener("mouseup", gainUp);
+            document.removeEventListener("mousemove", gainMove);
+            template.gainBox.classList.remove('dplayer-setting-danmaku-active');
+        };
+        template.gainBarWrap.addEventListener("click", (event) => {
+            const e = event || window.event;
+            let percentage = ((e.clientX || e.changedTouches[0].clientX) - getBoundingClientRectViewLeft(template.gainBarWrap)) / 130;
+            events.trigger("gain_value", percentage);
+        });
+        template.gainBarWrap.addEventListener("touchstart", () => {
+            document.addEventListener("touchmove", gainMove);
+            document.addEventListener("touchend", gainUp);
+            template.gainBox.classList.add('dplayer-setting-danmaku-active');
+        });
+        template.gainBarWrap.addEventListener("mousedown", () => {
+            document.addEventListener("mousemove", gainMove);
+            document.addEventListener("mouseup", gainUp);
+            template.gainBox.classList.add('dplayer-setting-danmaku-active');
+        });
+
+        var offset;
+        function getBoundingClientRectViewLeft (element) {
+            const scrollTop = window.scrollY || window.pageYOffset || document.body.scrollTop + ((document.documentElement && document.documentElement.scrollTop) || 0);
+            if (element.getBoundingClientRect) {
+                if (typeof offset !== 'number') {
+                    let temp = document.createElement('div');
+                    temp.style.cssText = 'position:absolute;top:0;left:0;';
+                    document.body.appendChild(temp);
+                    offset = -temp.getBoundingClientRect().top - scrollTop;
+                    document.body.removeChild(temp);
+                    temp = null;
+                }
+                const rect = element.getBoundingClientRect();
+                return rect.left + offset;
+            } else {
+                return this.getElementViewLeft(element);
             }
         }
-        else {
-            player.joySound && player.joySound._mediaElement && player.joySound.setEnabled(!1);
+        function getElementViewLeft (element) {
+            let actualLeft = element.offsetLeft;
+            let current = element.offsetParent;
+            const elementScrollLeft = document.body.scrollLeft + document.documentElement.scrollLeft;
+            if (!document.fullscreenElement && !document.mozFullScreenElement && !document.webkitFullscreenElement) {
+                while (current !== null) {
+                    actualLeft += current.offsetLeft;
+                    current = current.offsetParent;
+                }
+            } else {
+                while (current !== null && current !== element) {
+                    actualLeft += current.offsetLeft;
+                    current = current.offsetParent;
+                }
+            }
+            return actualLeft - elementScrollLeft;
         }
     };
 
-    obj.dPlayerImageEnhancement = function (player) {
+    obj.setVolume = function (percentage, player) {
+        const { video, joySound } = player;
+        if (joySound) {
+            joySound.setVolume(percentage);
+        }
+        else {
+            if (window.Joysound && window.Joysound.isSupport()) {
+                let joySound = player.joySound = new window.Joysound();
+                joySound.hasSource() || joySound.init(video);
+                joySound.setVolume(percentage);
+            }
+        }
+    };
+
+    obj.dPlayerSoundEnhancer = function (player) {
+        const { user, video, joySound } = player;
+        if (user.get("soundenhancement")) {
+            if (joySound) {
+                joySound.setEnabled(!0);
+            }
+            else {
+                if (window.Joysound && window.Joysound.isSupport()) {
+                    let joySound = player.joySound = new window.Joysound();
+                    joySound.hasSource() || joySound.init(video);
+                    joySound.setEnabled(!0);
+                }
+            }
+        }
+        else {
+            joySound && joySound.hasSource() && joySound.setEnabled(!1);
+        }
+    };
+
+    obj.dPlayerImageEnhancer = function (player) {
         const $ = obj.getJquery();
         const { user, video } = player;
         user.get("imageenhancement") ? $(video).css("filter", "contrast(1.01) brightness(1.05) saturate(1.1)") : $(video).css("filter", "");
