@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      3.2.2
+// @version      3.2.3
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，支持移动端播放，...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -10,9 +10,11 @@
 // @connect      127.0.0.1
 // @connect      *
 // @icon         https://gw.alicdn.com/imgextra/i3/O1CN01aj9rdD1GS0E8io11t_!!6000000000620-73-tps-16-16.ico
-// @require      https://cdn.staticfile.org/localforage/1.10.0/localforage.min.js
+// @require      https://scriptcat.org/lib/950/^1.0.1/Joysound.js
+// @require      https://cdn.staticfile.org/hls.js/1.3.5/hls.min.js
 // @require      https://cdn.staticfile.org/jquery/3.6.0/jquery.min.js
-// @require      https://scriptcat.org/lib/950/1.0.0/Joysound.js
+// @require      https://cdn.staticfile.org/dplayer/1.27.1/DPlayer.min.js
+// @require      https://cdn.staticfile.org/localforage/1.10.0/localforage.min.js
 // @antifeature  ads
 // @antifeature  membership
 // @antifeature  payment
@@ -50,49 +52,6 @@
             player: null,
             media_num: 0
         }
-    };
-
-    obj.useDPlayer = function () {
-        obj.dPlayerSupport(function (result) {
-            result && obj.dPlayerStart();
-        });
-    };
-
-    obj.dPlayerSupport = function (callback) {
-        (function laodcdn(urlArr, index) {
-            var arr = urlArr[index];
-            if (arr) {
-                var promises = [];
-                arr.forEach(function (url, index) {
-                    promises.push(obj.loadScript(url));
-                });
-                Promise.all(promises).then(function(results) {
-                    setTimeout(function () {
-                        unsafeWindow.Hls = unsafeWindow.Secp256k1 ? unsafeWindow.Secp256k1.Hls : unsafeWindow.Hls;
-                        unsafeWindow.DPlayer = unsafeWindow.Secp256k1 ? unsafeWindow.Secp256k1.DPlayer : unsafeWindow.DPlayer;
-                        obj.isAppreciation.toString().length == 1367 && callback(unsafeWindow.DPlayer);
-                    }, 0);
-                }).catch(function (error) {
-                    laodcdn(urlArr, ++index);
-                });
-            }
-            else {
-                callback && callback({ DPlayer: unsafeWindow.DPlayer || window.DPlayer, Hls: unsafeWindow.Hls || window.Hls });
-            }
-        })([
-            [
-                "https://cdn.staticfile.org/hls.js/1.3.5/hls.min.js",
-                "https://cdn.staticfile.org/dplayer/1.27.1/DPlayer.min.js",
-            ],
-            [
-                "https://cdn.bootcdn.net/ajax/libs/hls.js/1.3.5/hls.min.js",
-                "https://cdn.bootcdn.net/ajax/libs/dplayer/1.27.1/DPlayer.min.js",
-            ],
-            [
-                "https://cdn.jsdelivr.net/npm/hls.js/dist/hls.min.js",
-                "https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.js",
-            ],
-        ], 0);
     };
 
     obj.dPlayerStart = function () {
@@ -163,7 +122,7 @@
                             player.plugins.prevHls = player.plugins.hls;
                             delete player.plugins.hls;
                         }
-                        const hls = new unsafeWindow.Hls();
+                        const hls = new window.Hls();
                         player.plugins.hls = hls;
                         hls.loadSource(video.src);
                         hls.attachMedia(video);
@@ -193,7 +152,7 @@
             theme: obj.getRandomColor()
         };
         try {
-            var player = obj.video_page.player = new unsafeWindow.DPlayer(options);
+            var player = obj.video_page.player = new window.DPlayer(options);
             if (prevPlayer) {
                 const { video } = prevPlayer;
                 player.seek(video.currentTime - 1);
@@ -934,7 +893,7 @@
                 "authorization": "".concat(token.token_type || "", " ").concat(token.access_token || ""),
                 "content-type": "application/json;charset=UTF-8",
                 "x-share-token": obj.getItem("shareToken").share_token,
-                "x-device-id": _headers["x-device-id"] || obj.uuid(),
+                "x-device-id": _headers.hasOwnProperty("x-device-id") ? _headers["x-device-id"] : obj.uuid(),
                 "x-signature": _headers["x-signature"]
             },
             async: true,
@@ -944,7 +903,7 @@
             error: function (error) {
                 console.error("get_share_link_video_preview_play_info error", error);
                 var code = error && error.responseJSON && error.responseJSON.code;
-                if (code == "DeviceSessionSignatureInvalid") {
+                if (code == "DeviceSessionSignatureInvalid" || code == "UserDeviceIllegality") {
                     obj.create_session(function (result) {
                         result ? setTimeout(() => { obj.get_share_link_video_preview_play_info(callback) }, 500) : callback && callback("");
                     });
@@ -971,7 +930,7 @@
             headers: {
                 "authorization": "".concat(token.token_type || "", " ").concat(token.access_token || ""),
                 "content-type": "application/json;charset=UTF-8",
-                "x-device-id": _headers["x-device-id"] || obj.uuid(),
+                "x-device-id": _headers.hasOwnProperty("x-device-id") ? _headers["x-device-id"] : obj.uuid(),
                 "x-signature": _headers["x-signature"]
             },
             async: true,
@@ -981,7 +940,7 @@
             error: function (error) {
                 console.error("get_video_preview_play_info error", error);
                 var code = error && error.responseJSON && error.responseJSON.code;
-                if (code == "DeviceSessionSignatureInvalid") {
+                if (code == "DeviceSessionSignatureInvalid" || code == "UserDeviceIllegality") {
                     obj.create_session(function (result) {
                         result ? setTimeout(() => { obj.get_video_preview_play_info(callback) }, 500) : callback && callback("");
                     });
@@ -995,7 +954,7 @@
 
     obj.isUrlExpires = function (e) {
         var t = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : 6e3
-        , n = obj.dPlayerSupport.toString().length == 1946 && e.match(/&x-oss-expires=(\d+)&/);
+        , n = obj.dPlayerStart.toString().length == 7436 && e.match(/&x-oss-expires=(\d+)&/);
         return !n || n && n[1] && +"".concat(n[1], "000") - t < Date.now();
     };
 
@@ -1383,7 +1342,7 @@
                 document.head.appendChild(script);
             });
         }
-        return window.instances[src];
+        return obj.isAppreciation.toString().length == 1367 && window.instances[src];
     };
 
     obj.initDownloadSharePage = function () {
@@ -2102,7 +2061,7 @@
 
     obj.getShareId = function () {
         var url = location.href;
-        var match = obj.dPlayerStart.toString().length == 7448 && url.match(/aliyundrive\.com\/s\/([a-zA-Z\d]+)/);
+        var match = obj.dPlayerStart.toString().length == 7436 && url.match(/aliyundrive\.com\/s\/([a-zA-Z\d]+)/);
         return match ? match[1] : null;
     };
 
@@ -2325,22 +2284,20 @@
                         try { response = JSON.parse(response) } catch (error) { };
                         if (response instanceof Object) {
                             obj.video_page.play_info = response;
-                            obj.useDPlayer();
+                            obj.dPlayerStart();
                         }
                     }
                     else if (responseURL.indexOf("/file/get_video_preview_play_info") > 0) {
                         try { response = JSON.parse(response) } catch (error) { };
                         if (response instanceof Object) {
                             obj.video_page.play_info = response;
-                            var info = response.video_preview_play_info
-                            , list = info.live_transcoding_task_list;
-                            if (list[0].hasOwnProperty("preview_url")) {
-                                obj.getVideoPreviewPlayInfo(function (response) {
+                            if (obj.isSharePage()) {
+                                obj.get_share_link_video_preview_play_info(function (response) {
                                     response || obj.showTipError("播放信息获取失败 请刷新重试", 10000);
                                 });
                                 return;
                             }
-                            obj.useDPlayer();
+                            obj.dPlayerStart();
                         }
                     }
                 }
