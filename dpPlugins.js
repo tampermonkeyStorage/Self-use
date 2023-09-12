@@ -73,6 +73,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
 }([
     class HlsEvents {
         constructor(obj) {
+    console.log("obj", obj);
             this.player = obj.player;
             this.hls = this.player.plugins.hls;
 
