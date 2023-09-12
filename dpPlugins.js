@@ -815,6 +815,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
     class SelectEpisode {
         constructor(obj) {
             this.player = obj.player;
+            this.append = obj.append;
             this.prepend = obj.prepend;
             this.play_info = obj.play_info;
             this.getPlayInfo = obj.getPlayInfo;
