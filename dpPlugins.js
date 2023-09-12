@@ -64,6 +64,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
 
         obj.ready(obj.player).then(() => {
             t.forEach((k) => {
+            console.log("forEach", obj);
                 new k(obj);
             });
         });
@@ -73,7 +74,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
 }([
     class HlsEvents {
         constructor(obj) {
-    console.log("obj", obj);
+            console.log("obj", obj);
             this.player = obj.player;
             this.hls = this.player.plugins.hls;
 
