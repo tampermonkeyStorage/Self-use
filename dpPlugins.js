@@ -1,16 +1,6 @@
 window.dpPlugins = window.dpPlugins || function(t) {
     var obj = {};
 
-    obj.init = function (option) {
-        obj = Object.assign(option || {}, obj);
-
-        obj.ready(obj.player).then(() => {
-            t.forEach((k) => {
-                new k(obj);
-            });
-        });
-    };
-
     obj.ready = function (player) {
         return new Promise(function (resolve, reject) {
             if (player.isReady) {
@@ -67,6 +57,16 @@ window.dpPlugins = window.dpPlugins || function(t) {
         }
         element.style[key] = value;
         return element;
+    };
+
+    obj.init = function (option) {
+        obj = Object.assign(option || {}, obj);
+
+        obj.ready(obj.player).then(() => {
+            t.forEach((k) => {
+                new k(obj);
+            });
+        });
     };
 
     return obj;
