@@ -1,5 +1,4 @@
-
-    window.dpPlugins = window.dpPlugins || function(t) {
+window.dpPlugins = window.dpPlugins || function(t) {
         var obj = {};
 
         obj.init = function (player, option) {
@@ -805,11 +804,13 @@
         class SelectEpisode {
             constructor(player, obj) {
                 this.player = player;
-                this.player.fileIndex = (this.player.options.fileList || []).findIndex((item, index) => {
-                    return item.file_id == this.player.options?.file?.file_id;
-                });
+                this.fileIndex = 0;
 
                 if (Array.isArray(this.player.options.fileList) && this.player.options.fileList.length && this.player.options.file) {
+                    this.fileIndex = (this.player.options.fileList || []).findIndex((item, index) => {
+                        return item.file_id === this.player.options.file.file_id;
+                    });
+
                     obj.prepend(this.player.template.controller.querySelector('.dplayer-icons-right'), '<style>.episode .content{max-width: 360px;max-height: 330px;width: auto;height: auto;box-sizing: border-box;overflow: hidden auto;position: absolute;left: 0px;transition: all 0.38s ease-in-out 0s;bottom: 52px;transform: scale(0);z-index: 2;}.episode .content .list{background-color: rgba(0,0,0,.3);height: 100%;}.episode .content .video-item{color: #fff;cursor: pointer;font-size: 14px;line-height: 35px;overflow: hidden;padding: 0 10px;text-overflow: ellipsis;text-align: center;white-space: nowrap;}.episode .content .active{background-color: rgba(0,0,0,.3);color: #0df;}</style><div class="dplayer-quality episode"><button class="dplayer-icon prev-icon" title="上一集"><svg viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><path d="M757.527273 190.138182L382.510545 490.123636a28.020364 28.020364 0 0 0 0 43.752728l375.016728 299.985454a28.020364 28.020364 0 0 0 45.474909-21.876363V212.014545a28.020364 28.020364 0 0 0-45.474909-21.876363zM249.949091 221.509818a28.020364 28.020364 0 0 0-27.973818 27.973818v525.032728a28.020364 28.020364 0 1 0 55.994182 0V249.483636a28.020364 28.020364 0 0 0-28.020364-27.973818zM747.054545 270.242909v483.514182L444.834909 512l302.173091-241.757091z"></path></svg></button><button class="dplayer-icon dplayer-quality-icon episode-icon">选集</button><button class="dplayer-icon next-icon" title="下一集"><svg viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><path d="M248.506182 190.138182l374.970182 299.985454a28.020364 28.020364 0 0 1 0 43.752728L248.552727 833.861818a28.020364 28.020364 0 0 1-45.521454-21.876363V212.014545c0-23.505455 27.182545-36.538182 45.521454-21.876363z m507.485091 31.371636c15.453091 0 28.020364 12.567273 28.020363 27.973818v525.032728a28.020364 28.020364 0 1 1-55.994181 0V249.483636c0-15.453091 12.520727-27.973818 27.973818-27.973818zM258.978909 270.242909v483.514182L561.198545 512 258.978909 270.242909z"></path></svg></button><div class="content"><div class="list"></div></div></div>')
                     this.player.template.episodeButton = this.player.template.controller.querySelector('.episode .episode-icon');
                     this.player.template.episodePrevButton = this.player.template.controller.querySelector('.episode .prev-icon');
@@ -820,7 +821,7 @@
                         obj.append(this.player.template.episodeList, '<div class="video-item" data-index="' + index + '" title="' + item.name + '">' + item.name + '</div>');
                     });
                     this.player.template.episodeVideoItems = this.player.template.controller.querySelectorAll('.episode .video-item');
-                    this.player.template.episodeVideoItems[this.player.fileIndex].classList.add('active');
+                    this.player.template.episodeVideoItems[this.fileIndex].classList.add('active');
 
                     this.player.template.mask.addEventListener('click', () => {
                         this.hide();
@@ -836,24 +837,24 @@
 
                     this.player.template.episodeList.addEventListener('click', (e) => {
                         if (e.target.classList.contains('video-item') && !e.target.classList.contains('active')) {
-                            this.player.template.episodeVideoItems[this.player.fileIndex].classList.remove('active');
+                            this.player.template.episodeVideoItems[this.fileIndex].classList.remove('active');
                             e.target.classList.add('active');
-                            this.player.fileIndex = e.target.dataset.index;
-                            this.switchEpisodes(this.player.options.fileList[this.player.fileIndex]);
-                            this.player.notice('准备播放：' + this.player.options.fileList[this.player.fileIndex].name, 5000);
+                            this.fileIndex = e.target.dataset.index * 1;
+                            this.switchEpisodes(this.player.options.fileList[this.fileIndex]);
+                            this.player.notice('准备播放：' + this.player.options.fileList[this.fileIndex].name, 5000);
                             this.hide();
                             this.player.controller.hide();
                         }
                     });
 
                     this.player.template.episodePrevButton.addEventListener('click', (e) => {
-                        const index = this.player.fileIndex - 1;
+                        const index = this.fileIndex - 1;
                         if (index >= 0) {
-                            this.player.template.episodeVideoItems[this.player.fileIndex].classList.remove('active');
+                            this.player.template.episodeVideoItems[this.fileIndex].classList.remove('active');
                             this.player.template.episodeVideoItems[index].classList.add('active');
-                            this.player.fileIndex = index;
-                            this.switchEpisodes(this.player.options.fileList[this.player.fileIndex], this.player, false);
-                            this.player.notice('准备播放：' + this.player.options.fileList[this.player.fileIndex].name, 5000);
+                            this.fileIndex = index;
+                            this.switchEpisodes(this.player.options.fileList[this.fileIndex], this.player, false);
+                            this.player.notice('准备播放：' + this.player.options.fileList[this.fileIndex].name, 5000);
                         }
                         else {
                             this.player.notice('没有上一集了');
@@ -861,13 +862,13 @@
                     });
 
                     this.player.template.episodeNextButton.addEventListener('click', (e) => {
-                        const index = this.player.fileIndex + 1;
+                        const index = this.fileIndex + 1;
                         if (index <= player.options.fileList.length - 1) {
-                            this.player.template.episodeVideoItems[this.player.fileIndex].classList.remove('active');
+                            this.player.template.episodeVideoItems[this.fileIndex].classList.remove('active');
                             this.player.template.episodeVideoItems[index].classList.add('active');
-                            this.player.fileIndex = index;
-                            this.switchEpisodes(this.player.options.fileList[this.player.fileIndex], this.player, false);
-                            this.player.notice('准备播放：' + this.player.options.fileList[this.player.fileIndex].name, 5000);
+                            this.fileIndex = index;
+                            this.switchEpisodes(this.player.options.fileList[this.fileIndex], this.player, false);
+                            this.player.notice('准备播放：' + this.player.options.fileList[this.fileIndex].name, 5000);
                         }
                         else {
                             this.player.notice('没有下一集了');
