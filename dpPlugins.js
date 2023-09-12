@@ -64,7 +64,6 @@ window.dpPlugins = window.dpPlugins || function(t) {
 
         obj.ready(obj.player).then(() => {
             t.forEach((k) => {
-            console.log("forEach", obj);
                 new k(obj);
             });
         });
@@ -74,7 +73,6 @@ window.dpPlugins = window.dpPlugins || function(t) {
 }([
     class HlsEvents {
         constructor(obj) {
-            console.log("obj", obj);
             this.player = obj.player;
             this.hls = this.player.plugins.hls;
 
@@ -207,6 +205,8 @@ window.dpPlugins = window.dpPlugins || function(t) {
                 const i = lastItemIndex + index;
                 this.player.options.subtitle.url.splice(i, 0, item); // 占个位quality_end不会报错
 
+            console.log("obj", obj);
+            console.log("obj.prepend", obj.prepend);
                 const element = obj.prepend(this.player.template.subtitlesBox, '<div class="dplayer-subtitles-item" data-subtitle=""><span class="dplayer-label">' + (item.name + ' ' + (item.lang || "")) + '</span></div>');
                 element.addEventListener('click', (event) => {
                     this.player.subtitles.hide();
