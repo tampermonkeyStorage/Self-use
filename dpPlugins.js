@@ -4,7 +4,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
     obj.init = function (player, option) {
         obj = Object.assign(option || {}, obj);
 
-        obj.ready(player).then((obj) => {
+        obj.ready(player, obj).then((obj) => {
             t.forEach((k) => {
                 new k(player, obj);
             });
