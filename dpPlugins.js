@@ -4,7 +4,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
     obj.init = function (player, option) {
         obj = Object.assign(option || {}, obj);
 
-        obj.ready(player).then(() => {
+        obj.ready(player).then((obj) => {
             t.forEach((k) => {
                 new k(player, obj);
             });
@@ -14,17 +14,17 @@ window.dpPlugins = window.dpPlugins || function(t) {
     obj.ready = function (player) {
         return new Promise(function (resolve, reject) {
             if (player.isReady) {
-                resolve(player);
+                resolve(obj);
             }
             else if (player.video.duration > 0 || player.video.readyState > 2) {
                 player.isReady = true;
-                resolve(player);
+                resolve(obj);
             }
             else {
                 player.video.ondurationchange = function () {
                     player.video.ondurationchange = null;
                     player.isReady = true;
-                    resolve(player);
+                    resolve(obj);
                 }
             }
         });
