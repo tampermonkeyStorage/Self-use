@@ -1,12 +1,12 @@
 window.dpPlugins = window.dpPlugins || function(t) {
     var obj = {};
 
-    obj.init = function (player, option) {
+    obj.init = function (option) {
         obj = Object.assign(option || {}, obj);
 
-        obj.ready(player, obj).then((obj) => {
+        obj.ready(obj.player).then(() => {
             t.forEach((k) => {
-                new k(player, obj);
+                new k(obj);
             });
         });
     };
@@ -14,17 +14,17 @@ window.dpPlugins = window.dpPlugins || function(t) {
     obj.ready = function (player) {
         return new Promise(function (resolve, reject) {
             if (player.isReady) {
-                resolve(obj);
+                resolve();
             }
             else if (player.video.duration > 0 || player.video.readyState > 2) {
                 player.isReady = true;
-                resolve(obj);
+                resolve();
             }
             else {
                 player.video.ondurationchange = function () {
                     player.video.ondurationchange = null;
                     player.isReady = true;
-                    resolve(obj);
+                    resolve();
                 }
             }
         });
@@ -72,8 +72,8 @@ window.dpPlugins = window.dpPlugins || function(t) {
     return obj;
 }([
     class HlsEvents {
-        constructor(player, obj) {
-            this.player = player;
+        constructor(obj) {
+            this.player = obj.player;
             this.hls = this.player.plugins.hls;
 
             if (!this.player.events.type('switch_video')) {
@@ -172,8 +172,8 @@ window.dpPlugins = window.dpPlugins || function(t) {
         };
     },
     class Subtitle {
-        constructor(player, obj) {
-            this.player = player;
+        constructor(obj) {
+            this.player = obj.player;
 
             this.player.events.type('switch_video') || this.player.events.playerEvents.push('switch_video');
 
@@ -431,8 +431,8 @@ window.dpPlugins = window.dpPlugins || function(t) {
         };
     },
     class ImageEnhancer {
-        constructor(player, obj) {
-            this.player = player;
+        constructor(obj) {
+            this.player = obj.player;
 
             Object.assign(this.player.user.storageName, { imageenhancer: "dplayer-imageenhancer" });
             Object.assign(this.player.user.default, { imageenhancer: 0 });
@@ -462,8 +462,8 @@ window.dpPlugins = window.dpPlugins || function(t) {
         }
     },
     class SoundEnhancer {
-        constructor(player, obj) {
-            this.player = player;
+        constructor(obj) {
+            this.player = obj.player;
             this.Joysound = window.Joysound;
             this.offset = null;
 
@@ -598,8 +598,8 @@ window.dpPlugins = window.dpPlugins || function(t) {
         }
     },
     class AspectRatio {
-        constructor(player, obj) {
-            this.player = player;
+        constructor(obj) {
+            this.player = obj.player;
             this.value = '';
 
             this.player.template.controller.querySelector('.dplayer-icons-right').insertAdjacentHTML("afterbegin", '<div class="dplayer-quality dplayer-aspectRatio"><button class="dplayer-icon dplayer-quality-icon">画面比例</button><div class="dplayer-quality-mask"><div class="dplayer-quality-list dplayer-aspectRatio-list"><div class="dplayer-quality-item" data-value="none">原始比例</div><div class="dplayer-quality-item" data-value="cover">自动裁剪</div><div class="dplayer-quality-item" data-value="fill">拉伸填充</div><div class="dplayer-quality-item" data-value="">系统默认</div></div></div></div>');
@@ -620,8 +620,8 @@ window.dpPlugins = window.dpPlugins || function(t) {
         }
     },
     class Appreciation {
-        constructor(player, obj) {
-            this.player = player;
+        constructor(obj) {
+            this.player = obj.player;
             this.now = Date.now();
             this.localforage = window.localforage;
 
@@ -804,8 +804,8 @@ window.dpPlugins = window.dpPlugins || function(t) {
 
     },
     class SelectEpisode {
-        constructor(player, obj) {
-            this.player = player;
+        constructor(obj) {
+            this.player = obj.player;
             this.fileIndex = 0;
 
             if (Array.isArray(this.player.options.fileList) && this.player.options.fileList.length && this.player.options.file) {
@@ -941,8 +941,8 @@ window.dpPlugins = window.dpPlugins || function(t) {
 
     },
     class AutoNextEpisode {
-        constructor(player, obj) {
-            this.player = player;
+        constructor(obj) {
+            this.player = obj.player;
 
             Object.assign(this.player.user.storageName, { autonextepisode: "dplayer-autonextepisode" });
             Object.assign(this.player.user.default, { autonextepisode: 0 });
