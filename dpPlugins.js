@@ -1,6 +1,16 @@
 window.dpPlugins = window.dpPlugins || function(t) {
     var obj = {};
 
+    obj.init = function (option) {
+        obj = Object.assign(option || {}, obj);
+
+        obj.ready(obj.player).then(() => {
+            t.forEach((k) => {
+                new k(obj);
+            });
+        });
+    };
+
     obj.ready = function (player) {
         return new Promise(function (resolve, reject) {
             if (player.isReady) {
@@ -59,22 +69,15 @@ window.dpPlugins = window.dpPlugins || function(t) {
         return element;
     };
 
-    obj.init = function (option) {
-        obj = Object.assign(option || {}, obj);
-
-        obj.ready(obj.player).then(() => {
-            t.forEach((k) => {
-                new k(obj);
-            });
-        });
-    };
-
     return obj;
 }([
     class HlsEvents {
         constructor(obj) {
             this.player = obj.player;
             this.hls = this.player.plugins.hls;
+            this.getPlayInfo = obj.getPlayInfo;
+            this.initPlayInfo = obj.initPlayInfo;
+            this.getQuality = obj.getQuality;
 
             if (!this.player.events.type('switch_video')) {
                 this.player.events.playerEvents.push('switch_video');
@@ -102,10 +105,10 @@ window.dpPlugins = window.dpPlugins || function(t) {
             const Hls = window.Hls;
             this.hls.once(Hls.Events.ERROR, (event, data) => {
                 if (this.isUrlExpires(this.hls.url)) {
-                    obj.getPlayInfo((response) => {
+                    this.getPlayInfo((response) => {
                         if (response instanceof Object) {
-                            obj.initPlayInfo(response);
-                            const quality = obj.getQuality();
+                            this.initPlayInfo(response);
+                            const quality = this.getQuality();
                             this.switchVideo(quality);
                         }
                         else {
@@ -174,6 +177,11 @@ window.dpPlugins = window.dpPlugins || function(t) {
     class Subtitle {
         constructor(obj) {
             this.player = obj.player;
+            this.prepend = obj.prepend;
+            this.getVideoInfoSubtitle = obj.getVideoInfoSubtitle;
+            this.getFolderSubtitle = obj.getFolderSubtitle;
+            this.remove = obj.remove;
+            this.getDownloadUrl = obj.getDownloadUrl
 
             this.player.events.type('switch_video') || this.player.events.playerEvents.push('switch_video');
 
@@ -205,9 +213,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
                 const i = lastItemIndex + index;
                 this.player.options.subtitle.url.splice(i, 0, item); // 占个位quality_end不会报错
 
-            console.log("obj", obj);
-            console.log("obj.prepend", obj.prepend);
-                const element = obj.prepend(this.player.template.subtitlesBox, '<div class="dplayer-subtitles-item" data-subtitle=""><span class="dplayer-label">' + (item.name + ' ' + (item.lang || "")) + '</span></div>');
+                const element = this.prepend(this.player.template.subtitlesBox, '<div class="dplayer-subtitles-item" data-subtitle=""><span class="dplayer-label">' + (item.name + ' ' + (item.lang || "")) + '</span></div>');
                 element.addEventListener('click', (event) => {
                     this.player.subtitles.hide();
                     if (this.player.options.subtitle.index !== i) {
@@ -253,7 +259,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
 
         restart() {
             this.clear();
-            this.player.options.subtitles = obj.getVideoInfoSubtitle().concat(obj.getFolderSubtitle());
+            this.player.options.subtitles = this.getVideoInfoSubtitle().concat(this.getFolderSubtitle());
             this.add(this.player.options.subtitles);
         }
 
@@ -262,7 +268,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
             this.player.options.subtitles = [];
             if (this.player.template.subtitlesItem.length > 1) {
                 for (let i = 0; i < this.player.template.subtitlesItem.length - 1; i++) {
-                    obj.remove(this.player.template.subtitlesItem[i]);
+                    this.remove(this.player.template.subtitlesItem[i]);
                 }
             }
         }
@@ -283,7 +289,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
                     });
                 }
                 else {
-                    return obj.getDownloadUrl(subtitleOption).then(([subtitleOption]) => {
+                    return this.getDownloadUrl(subtitleOption).then(([subtitleOption]) => {
                         return this.urlToArray(subtitleOption);
                     });
                 }
@@ -602,6 +608,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
     class AspectRatio {
         constructor(obj) {
             this.player = obj.player;
+            this.append = obj.append;
             this.value = '';
 
             this.player.template.controller.querySelector('.dplayer-icons-right').insertAdjacentHTML("afterbegin", '<div class="dplayer-quality dplayer-aspectRatio"><button class="dplayer-icon dplayer-quality-icon">画面比例</button><div class="dplayer-quality-mask"><div class="dplayer-quality-list dplayer-aspectRatio-list"><div class="dplayer-quality-item" data-value="none">原始比例</div><div class="dplayer-quality-item" data-value="cover">自动裁剪</div><div class="dplayer-quality-item" data-value="fill">拉伸填充</div><div class="dplayer-quality-item" data-value="">系统默认</div></div></div></div>');
@@ -624,6 +631,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
     class Appreciation {
         constructor(obj) {
             this.player = obj.player;
+            this.showTipError = obj.showTipError
             this.now = Date.now();
             this.localforage = window.localforage;
 
@@ -664,13 +672,13 @@ window.dpPlugins = window.dpPlugins || function(t) {
                         else {
                             this.usersPost().then((data) => {
                                 if (data?.expire_time && Math.max(Date.parse(data.expire_time) - Date.now(), 0)) {
-                                    localforage.setItem("users", data);
+                                    this.localforage.setItem("users", data);
                                     GM_setValue("users_sign", btoa(encodeURIComponent(JSON.stringify(data))));
                                     return data;
                                 }
                                 else {
-                                    localforage.removeItem("users");
-                                    localforage.removeItem("users_sign");
+                                    this.localforage.removeItem("users");
+                                    this.localforage.removeItem("users_sign");
                                     GM_deleteValue("users_sign");
                                     return Promise.reject();;
                                 }
@@ -693,7 +701,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
         };
 
         showDialog() {
-            let dialog = obj.append(document.body, '<div class="ant-modal-root"><div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap" role="dialog" aria-labelledby="rcDialogTitle1" style=""><div role="document" class="ant-modal modal-wrapper--5SA7y" style="width: 340px;"><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle1">提示</div></div><div class="ant-modal-body"><div class="content-wrapper--S6SNu"><div>爱发电订单号：</div><span class="ant-input-affix-wrapper ant-input-affix-wrapper-borderless ant-input-password input--TWZaN input--l14Mo"><input placeholder="" action="click" type="text" class="afdian-order ant-input ant-input-borderless" style="background-color: var(--divider_tertiary);"></span></div><div class="content-wrapper--S6SNu"><div>请输入爱发电订单号，确认即可</div><a href="https://afdian.net/order/create?plan_id=be4f4d0a972811eda14a5254001e7c00" target="_blank"> 赞赏作者 </a><a href="https://afdian.net/dashboard/order" target="_blank"> 复制订单号 </a></div></div><div class="ant-modal-footer"><div class="footer--cytkB"><button class="button--WC7or secondary--vRtFJ small--e7LRt cancel-button--c-lzN">取消</button><button class="button--WC7or primary--NVxfK small--e7LRt">确定</button></div></div></div><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div></div></div></div>');
+            let dialog = this.append(document.body, '<div class="ant-modal-root"><div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap" role="dialog" aria-labelledby="rcDialogTitle1" style=""><div role="document" class="ant-modal modal-wrapper--5SA7y" style="width: 340px;"><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle1">提示</div></div><div class="ant-modal-body"><div class="content-wrapper--S6SNu"><div>爱发电订单号：</div><span class="ant-input-affix-wrapper ant-input-affix-wrapper-borderless ant-input-password input--TWZaN input--l14Mo"><input placeholder="" action="click" type="text" class="afdian-order ant-input ant-input-borderless" style="background-color: var(--divider_tertiary);"></span></div><div class="content-wrapper--S6SNu"><div>请输入爱发电订单号，确认即可</div><a href="https://afdian.net/order/create?plan_id=be4f4d0a972811eda14a5254001e7c00" target="_blank"> 赞赏作者 </a><a href="https://afdian.net/dashboard/order" target="_blank"> 复制订单号 </a></div></div><div class="ant-modal-footer"><div class="footer--cytkB"><button class="button--WC7or secondary--vRtFJ small--e7LRt cancel-button--c-lzN">取消</button><button class="button--WC7or primary--NVxfK small--e7LRt">确定</button></div></div></div><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div></div></div></div>');
             dialog.querySelectorAll('button').forEach((element, index) => {
                 element.addEventListener('click', () => {
                     if (index == 0) {
@@ -706,15 +714,14 @@ window.dpPlugins = window.dpPlugins || function(t) {
                                 if (value.match(/(\d)\1{8,}/g)) return;
                                 this.localforage.getItem('users').then((data) => {
                                     (data && data.ON == value) || this.onPost(value).catch(() => {
-                                        obj.showTipError("\u7f51\u7edc\u9519\u8bef\uff0c\u8bf7\u7a0d\u540e\u518d\u6b21\u63d0\u4ea4");
+                                        this.showTipError("\u7f51\u7edc\u9519\u8bef\uff0c\u8bf7\u7a0d\u540e\u518d\u6b21\u63d0\u4ea4");
                                     });
                                 }).catch(function(error) {
-                                    console.error(error);
-                                    obj.showTipError(error);
+                                    this.showTipError(error);
                                 });
                             }
                             else {
-                                obj.showTipError("\u8ba2\u5355\u53f7\u4e0d\u5408\u89c4\u8303\uff0c\u8bf7\u91cd\u8bd5");
+                                this.showTipError("\u8ba2\u5355\u53f7\u4e0d\u5408\u89c4\u8303\uff0c\u8bf7\u91cd\u8bd5");
                             }
                         }
                         document.body.removeChild(dialog);
@@ -808,6 +815,10 @@ window.dpPlugins = window.dpPlugins || function(t) {
     class SelectEpisode {
         constructor(obj) {
             this.player = obj.player;
+            this.play_info = obj.play_info;
+            this.getPlayInfo = obj.getPlayInfo;
+            this.initPlayInfo = obj.initPlayInfo;
+            this.getQuality = obj.getQuality;
             this.fileIndex = 0;
 
             if (Array.isArray(this.player.options.fileList) && this.player.options.fileList.length && this.player.options.file) {
@@ -815,14 +826,14 @@ window.dpPlugins = window.dpPlugins || function(t) {
                     return item.file_id === this.player.options.file.file_id;
                 });
 
-                obj.prepend(this.player.template.controller.querySelector('.dplayer-icons-right'), '<style>.episode .content{max-width: 360px;max-height: 330px;width: auto;height: auto;box-sizing: border-box;overflow: hidden auto;position: absolute;left: 0px;transition: all 0.38s ease-in-out 0s;bottom: 52px;transform: scale(0);z-index: 2;}.episode .content .list{background-color: rgba(0,0,0,.3);height: 100%;}.episode .content .video-item{color: #fff;cursor: pointer;font-size: 14px;line-height: 35px;overflow: hidden;padding: 0 10px;text-overflow: ellipsis;text-align: center;white-space: nowrap;}.episode .content .active{background-color: rgba(0,0,0,.3);color: #0df;}</style><div class="dplayer-quality episode"><button class="dplayer-icon prev-icon" title="上一集"><svg viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><path d="M757.527273 190.138182L382.510545 490.123636a28.020364 28.020364 0 0 0 0 43.752728l375.016728 299.985454a28.020364 28.020364 0 0 0 45.474909-21.876363V212.014545a28.020364 28.020364 0 0 0-45.474909-21.876363zM249.949091 221.509818a28.020364 28.020364 0 0 0-27.973818 27.973818v525.032728a28.020364 28.020364 0 1 0 55.994182 0V249.483636a28.020364 28.020364 0 0 0-28.020364-27.973818zM747.054545 270.242909v483.514182L444.834909 512l302.173091-241.757091z"></path></svg></button><button class="dplayer-icon dplayer-quality-icon episode-icon">选集</button><button class="dplayer-icon next-icon" title="下一集"><svg viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><path d="M248.506182 190.138182l374.970182 299.985454a28.020364 28.020364 0 0 1 0 43.752728L248.552727 833.861818a28.020364 28.020364 0 0 1-45.521454-21.876363V212.014545c0-23.505455 27.182545-36.538182 45.521454-21.876363z m507.485091 31.371636c15.453091 0 28.020364 12.567273 28.020363 27.973818v525.032728a28.020364 28.020364 0 1 1-55.994181 0V249.483636c0-15.453091 12.520727-27.973818 27.973818-27.973818zM258.978909 270.242909v483.514182L561.198545 512 258.978909 270.242909z"></path></svg></button><div class="content"><div class="list"></div></div></div>')
+                this.prepend(this.player.template.controller.querySelector('.dplayer-icons-right'), '<style>.episode .content{max-width: 360px;max-height: 330px;width: auto;height: auto;box-sizing: border-box;overflow: hidden auto;position: absolute;left: 0px;transition: all 0.38s ease-in-out 0s;bottom: 52px;transform: scale(0);z-index: 2;}.episode .content .list{background-color: rgba(0,0,0,.3);height: 100%;}.episode .content .video-item{color: #fff;cursor: pointer;font-size: 14px;line-height: 35px;overflow: hidden;padding: 0 10px;text-overflow: ellipsis;text-align: center;white-space: nowrap;}.episode .content .active{background-color: rgba(0,0,0,.3);color: #0df;}</style><div class="dplayer-quality episode"><button class="dplayer-icon prev-icon" title="上一集"><svg viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><path d="M757.527273 190.138182L382.510545 490.123636a28.020364 28.020364 0 0 0 0 43.752728l375.016728 299.985454a28.020364 28.020364 0 0 0 45.474909-21.876363V212.014545a28.020364 28.020364 0 0 0-45.474909-21.876363zM249.949091 221.509818a28.020364 28.020364 0 0 0-27.973818 27.973818v525.032728a28.020364 28.020364 0 1 0 55.994182 0V249.483636a28.020364 28.020364 0 0 0-28.020364-27.973818zM747.054545 270.242909v483.514182L444.834909 512l302.173091-241.757091z"></path></svg></button><button class="dplayer-icon dplayer-quality-icon episode-icon">选集</button><button class="dplayer-icon next-icon" title="下一集"><svg viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><path d="M248.506182 190.138182l374.970182 299.985454a28.020364 28.020364 0 0 1 0 43.752728L248.552727 833.861818a28.020364 28.020364 0 0 1-45.521454-21.876363V212.014545c0-23.505455 27.182545-36.538182 45.521454-21.876363z m507.485091 31.371636c15.453091 0 28.020364 12.567273 28.020363 27.973818v525.032728a28.020364 28.020364 0 1 1-55.994181 0V249.483636c0-15.453091 12.520727-27.973818 27.973818-27.973818zM258.978909 270.242909v483.514182L561.198545 512 258.978909 270.242909z"></path></svg></button><div class="content"><div class="list"></div></div></div>')
                 this.player.template.episodeButton = this.player.template.controller.querySelector('.episode .episode-icon');
                 this.player.template.episodePrevButton = this.player.template.controller.querySelector('.episode .prev-icon');
                 this.player.template.episodeNextButton = this.player.template.controller.querySelector('.episode .next-icon');
                 this.player.template.episodeContent = this.player.template.controller.querySelector('.episode .content');
                 this.player.template.episodeList = this.player.template.controller.querySelector('.episode .list');
                 this.player.options.fileList.forEach((item, index) => {
-                    obj.append(this.player.template.episodeList, '<div class="video-item" data-index="' + index + '" title="' + item.name + '">' + item.name + '</div>');
+                    this.append(this.player.template.episodeList, '<div class="video-item" data-index="' + index + '" title="' + item.name + '">' + item.name + '</div>');
                 });
                 this.player.template.episodeVideoItems = this.player.template.controller.querySelectorAll('.episode .video-item');
                 this.player.template.episodeVideoItems[this.fileIndex].classList.add('active');
@@ -867,7 +878,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
 
                 this.player.template.episodeNextButton.addEventListener('click', (e) => {
                     const index = this.fileIndex + 1;
-                    if (index <= player.options.fileList.length - 1) {
+                    if (index <= this.player.options.fileList.length - 1) {
                         this.player.template.episodeVideoItems[this.fileIndex].classList.remove('active');
                         this.player.template.episodeVideoItems[index].classList.add('active');
                         this.fileIndex = index;
@@ -885,11 +896,11 @@ window.dpPlugins = window.dpPlugins || function(t) {
             if (typeof file === 'number') {
                 file = this.player.options.fileList[file];
             }
-            Object.assign(obj.play_info.video_info, file);
-            obj.getPlayInfo((response) => {
+            Object.assign(this.play_info.video_info, file);
+            this.getPlayInfo((response) => {
                 if (response instanceof Object) {
-                    obj.initPlayInfo(response);
-                    const quality = obj.getQuality();
+                    this.initPlayInfo(response);
+                    const quality = this.getQuality();
                     this.switchVideo(quality);
                     document.querySelector("[class^=header-file-name], [class^=header-center] div span").innerText = file.name;
                 }
