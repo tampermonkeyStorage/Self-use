@@ -631,6 +631,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
     class Appreciation {
         constructor(obj) {
             this.player = obj.player;
+            this.append = obj.append;
             this.showTipError = obj.showTipError
             this.now = Date.now();
             this.localforage = window.localforage;
