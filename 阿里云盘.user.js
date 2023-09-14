@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      4.0.1
+// @version      4.1.0
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，支持移动端播放，...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -102,13 +102,12 @@
 
         const quality = obj.getQuality();
         const defaultQuality = obj.getDefaultQuality(quality);
-        const subtitles = obj.getVideoInfoSubtitle().concat(obj.getFolderSubtitle());
         if (!quality.length) {
             return obj.showTipError("获取播放信息失败：请刷新网页重试");
         }
 
         try {
-            obj.player = new window.DPlayer({
+            const player = new window.DPlayer({
                 container: container,
                 video: {
                     quality: quality,
@@ -138,9 +137,9 @@
                     bottom: (localStorage.getItem("dplayer-subtitle-bottom") || 10) + "%",
                     color: localStorage.getItem("dplayer-subtitle-color") || "#ffd821",
                 },
-                subtitles: subtitles,
+                subtitles: [],
                 file: obj.play_info.video_info,
-                fileList: obj.play_info.video_items.length > 1 ? obj.play_info.video_items : [],
+                fileList: obj.play_info.video_items,
                 autoplay: true,
                 screenshot: true,
                 hotkey: true,
@@ -157,12 +156,58 @@
                 theme: obj.getRandomColor()
             });
             if (window.dpPlugins) {
-                window.dpPlugins.init(obj);
+                window.dpPlugins.init(player, obj);
+
+                if (!player.events.type('subtitle_start')) {
+                    player.events.playerEvents.push('subtitle_start');
+                }
+                player.on('subtitle_start', () => {
+                    obj.getFolderSubtitle().then((subtitleFiles) => {
+                        const sublist = subtitleFiles.filter((item) => item.download_url || item.url);
+                        player.options.subtitles = obj.getVideoInfoSubtitle().concat(sublist);
+                        player.events.trigger('subtitle_end');
+                    }).catch(() => {
+                        player.options.subtitles = obj.getVideoInfoSubtitle();
+                        player.events.trigger('subtitle_end');
+                    });
+                });
+
+                if (!player.events.type('video_start')) {
+                    player.events.playerEvents.push('video_start');
+                }
+                player.on('video_start', () => {
+                    obj.getPlayInfo((response) => {
+                        if (response instanceof Object) {
+                            obj.initPlayInfo(response);
+                            const quality = obj.getQuality();
+                            player.options.video.quality = quality;
+                            player.quality = player.options.video.quality[ player.qualityIndex ];
+                            player.events.trigger('video_end');
+                        }
+                    });
+                });
+
+                if (!player.events.type('episode_start')) {
+                    player.events.playerEvents.push('episode_start');
+                }
+                player.on('episode_start', () => {
+                    obj.play_info.video_info = player.options.fileList[player.fileIndex];
+                    obj.getPlayInfo((response) => {
+                        if (response instanceof Object) {
+                            obj.initPlayInfo(response);
+                            const quality = obj.getQuality();
+                            player.options.video.quality = quality;
+                            player.quality = quality[ obj.getDefaultQuality(quality) ];
+                            document.querySelector("[class^=header-file-name], [class^=header-center] div span").innerText = player.options.file.name;
+                            player.events.trigger('episode_end');
+                        }
+                    });
+                });
             }
 
             $("#root > div.modal--nw7G9 > div > div.content--9N3Eh > div.header--u7XR- > div.header-left--Kobd9").one("click", function () {
                 console.info("VideoPreviewer exit");
-                obj.player.destroy();
+                player.destroy();
             });
         } catch (error) {
             console.error("播放器创建错误", error);
@@ -225,6 +270,16 @@
     };
 
     obj.getFolderSubtitle = function () {
+        const sublist = obj.searchSubtitleFiles();
+        if (sublist.length) {
+            return obj.getDownloadUrl(sublist);
+        }
+        else {
+            return Promise.reject();
+        }
+    };
+
+    obj.searchSubtitleFiles = function () {
         const extensions = ["webvtt", "vtt", "srt", "ssa", "ass"];
         const subfileList = obj.files_info.items.filter(function (item) {
             return item.type === "file" && extensions.includes(item.file_extension.toLowerCase());
@@ -280,9 +335,11 @@
         if (response instanceof Object) {
             obj.play_info.video_info = response;
 
-            obj.play_info.video_items = obj.files_info.items.filter(function (item, index) {
-                return item.type == "file" && item.category == "video";
-            });
+            if (obj.play_info.video_items.length === 0) {
+                obj.play_info.video_items = obj.files_info.items.filter(function (item, index) {
+                    return item.type == "file" && item.category == "video";
+                });
+            }
         }
     };
 
@@ -922,298 +979,298 @@
         });
     };
 
-obj.downloadFile = function (content, filename) {
-    var a = document.createElement("a");
-    var blob = new Blob([content]);
-    var url = window.URL.createObjectURL(blob);
-    a.href = url;
-    a.download = filename;
-    a.click();
-    window.URL.revokeObjectURL(url);
-};
+    obj.downloadFile = function (content, filename) {
+        var a = document.createElement("a");
+        var blob = new Blob([content]);
+        var url = window.URL.createObjectURL(blob);
+        a.href = url;
+        a.download = filename;
+        a.click();
+        window.URL.revokeObjectURL(url);
+    };
 
-obj.aria2RPC = function (downData, callback) {
-    var urls = ["http://127.0.0.1:6800/jsonrpc", "http://localhost:16800/jsonrpc"];
-    var url = obj.getItem("aria-url");
-    obj.ajax({
-        type: "post",
-        url: url || urls[0],
-        data: JSON.stringify(downData),
-        success: function (response) {
-            url || obj.setItem("aria-url", this.url);
-            callback && callback(response);
-        },
-        error: function (error) {
-            var index = urls.indexOf(this.url);
-            if (index >= 0) {
-                if (index < urls.length - 1) {
+    obj.aria2RPC = function (downData, callback) {
+        var urls = ["http://127.0.0.1:6800/jsonrpc", "http://localhost:16800/jsonrpc"];
+        var url = obj.getItem("aria-url");
+        obj.ajax({
+            type: "post",
+            url: url || urls[0],
+            data: JSON.stringify(downData),
+            success: function (response) {
+                url || obj.setItem("aria-url", this.url);
+                callback && callback(response);
+            },
+            error: function (error) {
+                var index = urls.indexOf(this.url);
+                if (index >= 0) {
+                    if (index < urls.length - 1) {
+                        obj.setItem("aria-url", urls[index + 1]);
+                        setTimeout(function() { obj.aria2RPC(downData, callback) }, 500);
+                    }
+                    else {
+                        console.error("Aria2 推送服务 错误：", this.url, error);
+                        obj.removeItem("aria-url");
+                        callback && callback("");
+                    }
+                }
+                else {
                     obj.setItem("aria-url", urls[index + 1]);
                     setTimeout(function() { obj.aria2RPC(downData, callback) }, 500);
                 }
-                else {
-                    console.error("Aria2 推送服务 错误：", this.url, error);
-                    obj.removeItem("aria-url");
-                    callback && callback("");
-                }
             }
-            else {
-                obj.setItem("aria-url", urls[index + 1]);
-                setTimeout(function() { obj.aria2RPC(downData, callback) }, 500);
+        });
+    };
+
+    obj.bytesToSize = function (e) {
+        return (function () {
+            var t = 1024;
+            return e <= 0 ? "0 B" : e >= Math.pow(t, 4) ? "".concat(
+                r(e / Math.pow(t, 4), 2), " TB") : e >= Math.pow(t, 3) ? "".concat(
+                r(e / Math.pow(t, 3), 2), " GB") : e >= Math.pow(t, 2) ? "".concat(
+                r(e / Math.pow(t, 2), 2), " MB") : e >= t ? "".concat(
+                r(e / t, 2), " KB") : "".concat(
+                r(e, 2), " B");
+        })();
+        function r(e) {
+            var t = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : 2
+            , n = !(arguments.length > 2 && void 0 !== arguments[2]) || arguments[2];
+            if (0 === e) {
+                return "0";
             }
+            var r = n ? e.toFixed(t) : i(e, t);
+            return t ? r.replace(/0+$/, "").replace(/\.$/, "") : r;
         }
-    });
-};
-
-obj.bytesToSize = function (e) {
-    return (function () {
-        var t = 1024;
-        return e <= 0 ? "0 B" : e >= Math.pow(t, 4) ? "".concat(
-            r(e / Math.pow(t, 4), 2), " TB") : e >= Math.pow(t, 3) ? "".concat(
-            r(e / Math.pow(t, 3), 2), " GB") : e >= Math.pow(t, 2) ? "".concat(
-            r(e / Math.pow(t, 2), 2), " MB") : e >= t ? "".concat(
-            r(e / t, 2), " KB") : "".concat(
-            r(e, 2), " B");
-    })();
-    function r(e) {
-        var t = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : 2
-        , n = !(arguments.length > 2 && void 0 !== arguments[2]) || arguments[2];
-        if (0 === e) {
-            return "0";
-        }
-        var r = n ? e.toFixed(t) : i(e, t);
-        return t ? r.replace(/0+$/, "").replace(/\.$/, "") : r;
-    }
-    function i(e, t) {
-        return (Math.floor(e * Math.pow(10, t)) / Math.pow(10, t)).toFixed(t);
-    }
-};
-
-/*******************************************************/
-
-obj.isHomePage = function () {
-    return location.href.indexOf(".aliyundrive.com/drive") > 0;
-};
-
-obj.isSharePage = function () {
-    return location.href.indexOf("aliyundrive.com/s/") > 0;
-};
-
-obj.getTokenExpires = function (file) {
-    var t = file.expire_time, i = Number(file.expires_in), e = Date.parse(t) - Date.now();
-    if (0 < e && e < 1e3 * i) return !0;
-    return !1;
-};
-
-obj.setTokenExpires = function(file, time) {
-    time = void 0 === time ? 600 : time;
-    file.expire_time = new Date(Date.now() + time).toISOString();
-    file.expires_in = time;
-    return file;
-};
-
-obj.refresh_token = function () {
-    var token = obj.getItem("token");
-    if (!(token && token.refresh_token)) {
-        return Promise.reject();
-    }
-    if (obj.getTokenExpires(token)) {
-        return Promise.resolve();
-    }
-    return fetch("https://api.aliyundrive.com/token/refresh", {
-        body: JSON.stringify({
-            refresh_token: token.refresh_token
-        }),
-        method: "POST"
-    }).then((response) => {
-        return response.ok ? response.json() : Promise.reject();
-    }).then((response) => {
-        obj.setItem("token", response);
-        return response;
-    });
-};
-
-obj.get_share_token = function () {
-    var shareToken = obj.getItem("shareToken");
-    if (!shareToken) {
-        return Promise.reject();
-    }
-    if (obj.getTokenExpires(shareToken)) {
-        return Promise.resolve();
-    }
-    return fetch("https://api.aliyundrive.com/v2/share_link/get_share_token", {
-        body: JSON.stringify({
-            share_id: obj.getShareId(),
-            share_pwd: ""
-        }),
-        method: "POST"
-    }).then((response) => {
-        return response.ok ? response.json() : Promise.reject();
-    }).then((response) => {
-        obj.setItem("shareToken", response);
-        return response;
-    });
-};
-
-obj.ajax = function(option) {
-    var details = {
-        method: option.type || "get",
-        url: option.url,
-        responseType: option.dataType || "json",
-        onload: function(result) {
-            if (parseInt(result.status / 100) == 2) {
-                var response = result.response || result.responseText;
-                option.success && option.success(response);
-            } else {
-                option.error && option.error(result);
-            }
-        },
-        onerror: function(result) {
-            option.error && option.error(result.error);
+        function i(e, t) {
+            return (Math.floor(e * Math.pow(10, t)) / Math.pow(10, t)).toFixed(t);
         }
     };
-    if (option.data instanceof Object && (option.type || "").toUpperCase() !== "POST") {
-        option.data = Object.keys(option.data).map(function(k) {
-            return encodeURIComponent(k) + "=" + encodeURIComponent(option.data[k]).replace("%20", "+");
-        }).join("&");
-        option.url += (option.url.includes("?") ? "&" : "?") + option.data;
-        delete option.data;
-    }
-    Object.assign(details, option);
-    GM_xmlhttpRequest(details);
-};
 
-obj.getShareId = function () {
-    var match = location.href.match(/aliyundrive\.com\/s\/([a-zA-Z\d]+)/);
-    return match ? match[1] : null;
-};
+    /*******************************************************/
 
-obj.loadJs = function (src) {
-    if (!window.instances) {
-        window.instances = {};
-    }
-    if (!window.instances[src]) {
-        window.instances[src] = new Promise((resolve, reject) => {
-            const script = document.createElement("script")
-            script.src = src;
-            script.type = "text/javascript";
-            script.onload = resolve;
-            script.onerror = reject;
-            Node.prototype.appendChild.call(document.head, script);
+    obj.isHomePage = function () {
+        return location.href.indexOf(".aliyundrive.com/drive") > 0;
+    };
+
+    obj.isSharePage = function () {
+        return location.href.indexOf("aliyundrive.com/s/") > 0;
+    };
+
+    obj.getTokenExpires = function (file) {
+        var t = file.expire_time, i = Number(file.expires_in), e = Date.parse(t) - Date.now();
+        if (0 < e && e < 1e3 * i) return !0;
+        return !1;
+    };
+
+    obj.setTokenExpires = function(file, time) {
+        time = void 0 === time ? 600 : time;
+        file.expire_time = new Date(Date.now() + time).toISOString();
+        file.expires_in = time;
+        return file;
+    };
+
+    obj.refresh_token = function () {
+        var token = obj.getItem("token");
+        if (!(token && token.refresh_token)) {
+            return Promise.reject();
+        }
+        if (obj.getTokenExpires(token)) {
+            return Promise.resolve();
+        }
+        return fetch("https://api.aliyundrive.com/token/refresh", {
+            body: JSON.stringify({
+                refresh_token: token.refresh_token
+            }),
+            method: "POST"
+        }).then((response) => {
+            return response.ok ? response.json() : Promise.reject();
+        }).then((response) => {
+            obj.setItem("token", response);
+            return response;
         });
-    }
-    return window.instances[src];
-};
+    };
 
-obj.getItem = function (n) {
-    n = localStorage.getItem(n);
-    if (!n) {
-        return null;
-    }
-    try {
-        return JSON.parse(n);
-    } catch (e) {
-        return n;
-    }
-};
+    obj.get_share_token = function () {
+        var shareToken = obj.getItem("shareToken");
+        if (!shareToken) {
+            return Promise.reject();
+        }
+        if (obj.getTokenExpires(shareToken)) {
+            return Promise.resolve();
+        }
+        return fetch("https://api.aliyundrive.com/v2/share_link/get_share_token", {
+            body: JSON.stringify({
+                share_id: obj.getShareId(),
+                share_pwd: ""
+            }),
+            method: "POST"
+        }).then((response) => {
+            return response.ok ? response.json() : Promise.reject();
+        }).then((response) => {
+            obj.setItem("shareToken", response);
+            return response;
+        });
+    };
 
-obj.setItem = function (n, t) {
-    n && t != undefined && localStorage.setItem(n, t instanceof Object ? JSON.stringify(t) : t);
-};
-
-obj.removeItem = function (n) {
-    n != undefined && localStorage.removeItem(n);
-};
-
-obj.getRandomColor = function () {
-    return "#" + ("00000" + (Math.random() * 0x1000000 << 0).toString(16)).substr(-6);
-};
-
-obj.showTipSuccess = function (message, time) {
-    obj.showNotify({
-        type: "success",
-        message: message,
-        time: time
-    });
-};
-
-obj.showTipError = function (message, time) {
-    obj.showNotify({
-        type: "fail",
-        message: message,
-        time: time
-    });
-};
-
-obj.showTipLoading = function (message, time) {
-    obj.showNotify({
-        type: "loading",
-        message: message,
-        time: time
-    });
-};
-
-obj.showNotify = function (opts) {
-    if (unsafeWindow.application) {
-        unsafeWindow.application.showNotify(opts);
-    }
-    else {
-        var css = [
-            ".notify{display:none;position:absolute;top:0;left:25%;width:50%;text-align:center;overflow:hidden;z-index:1010}",
-            ".notify .alert{display:inline-block;*display:inline;*zoom:1;min-width:110px;white-space:nowrap}",
-            ".alert-success,.alert-fail,.alert-loading{padding:0 20px;line-height:34px;font-size:14px;color:#ffffff}",
-            ".alert-success,.alert-loading{background:#36be63}",
-            ".alert-fail{background:#ff794a}",
-            ".fade{opacity:0;-webkit-transition:opacity .15s linear;-o-transition:opacity .15s linear;transition:opacity .15s linear}",
-            ".fade.in{opacity:1}"
-        ];
-        $("<style></style>").text(css.join(" ")).appendTo(document.head || document.documentElement);
-        $("body").append('<div id="J_Notify" class="notify" style="width: 650px; margin: 10px auto; display: none;"></div>');
-        unsafeWindow.application = {
-            notifySets: {
-                type_class_obj: {success: "alert-success", fail: "alert-fail", loading: "alert-loading"},
-                count: 0,
-                delay: 3e3
-            },
-            showNotify: function(opts) {
-                var that = this, class_obj = that.notifySets.type_class_obj, count = that.notifySets.count;
-                opts.type == "loading" && (delay *= 5);
-                if ($(".alert").length == 0) {
-                    $("#J_Notify").empty().append('<div class="alert in fade"></div>').show();
+    obj.ajax = function(option) {
+        var details = {
+            method: option.type || "get",
+            url: option.url,
+            responseType: option.dataType || "json",
+            onload: function(result) {
+                if (parseInt(result.status / 100) == 2) {
+                    var response = result.response || result.responseText;
+                    option.success && option.success(response);
+                } else {
+                    option.error && option.error(result);
                 }
-                else {
-                    Object.keys(class_obj).forEach(function(key) {
-                        $("#J_Notify").toggleClass(class_obj[key], false);
-                    });
-                }
-                $(".alert").text(opts.message).addClass(class_obj[opts.type]);
-                that.notifySets.count += 1;
-
-                var delay = opts.time || that.notifySets.delay;
-                setTimeout(function() {
-                    if (++count == that.notifySets.count) {
-                        that.hideNotify();
-                    }
-                }, delay);
             },
-            hideNotify: function() {
-                $("#J_Notify").empty();
+            onerror: function(result) {
+                option.error && option.error(result.error);
             }
         };
-        obj.showNotify(opts);
-    }
-};
+        if (option.data instanceof Object && (option.type || "").toUpperCase() !== "POST") {
+            option.data = Object.keys(option.data).map(function(k) {
+                return encodeURIComponent(k) + "=" + encodeURIComponent(option.data[k]).replace("%20", "+");
+            }).join("&");
+            option.url += (option.url.includes("?") ? "&" : "?") + option.data;
+            delete option.data;
+        }
+        Object.assign(details, option);
+        GM_xmlhttpRequest(details);
+    };
 
-obj.hideNotify = function() {
-    if (unsafeWindow.application) {
-        unsafeWindow.application.hideNotify();
-    }
-};
+    obj.getShareId = function () {
+        var match = location.href.match(/aliyundrive\.com\/s\/([a-zA-Z\d]+)/);
+        return match ? match[1] : null;
+    };
 
-obj.run = function() {
-    obj.httpListener();
-}();
+    obj.loadJs = function (src) {
+        if (!window.instances) {
+            window.instances = {};
+        }
+        if (!window.instances[src]) {
+            window.instances[src] = new Promise((resolve, reject) => {
+                const script = document.createElement("script")
+                script.src = src;
+                script.type = "text/javascript";
+                script.onload = resolve;
+                script.onerror = reject;
+                Node.prototype.appendChild.call(document.head, script);
+            });
+        }
+        return window.instances[src];
+    };
 
-console.log("=== 阿里云盘 好棒棒！===");
+    obj.getItem = function (n) {
+        n = localStorage.getItem(n);
+        if (!n) {
+            return null;
+        }
+        try {
+            return JSON.parse(n);
+        } catch (e) {
+            return n;
+        }
+    };
 
-// Your code here...
+    obj.setItem = function (n, t) {
+        n && t != undefined && localStorage.setItem(n, t instanceof Object ? JSON.stringify(t) : t);
+    };
+
+    obj.removeItem = function (n) {
+        n != undefined && localStorage.removeItem(n);
+    };
+
+    obj.getRandomColor = function () {
+        return "#" + ("00000" + (Math.random() * 0x1000000 << 0).toString(16)).substr(-6);
+    };
+
+    obj.showTipSuccess = function (message, time) {
+        obj.showNotify({
+            type: "success",
+            message: message,
+            time: time
+        });
+    };
+
+    obj.showTipError = function (message, time) {
+        obj.showNotify({
+            type: "fail",
+            message: message,
+            time: time
+        });
+    };
+
+    obj.showTipLoading = function (message, time) {
+        obj.showNotify({
+            type: "loading",
+            message: message,
+            time: time
+        });
+    };
+
+    obj.showNotify = function (opts) {
+        if (unsafeWindow.application) {
+            unsafeWindow.application.showNotify(opts);
+        }
+        else {
+            var css = [
+                ".notify{display:none;position:absolute;top:0;left:25%;width:50%;text-align:center;overflow:hidden;z-index:1010}",
+                ".notify .alert{display:inline-block;*display:inline;*zoom:1;min-width:110px;white-space:nowrap}",
+                ".alert-success,.alert-fail,.alert-loading{padding:0 20px;line-height:34px;font-size:14px;color:#ffffff}",
+                ".alert-success,.alert-loading{background:#36be63}",
+                ".alert-fail{background:#ff794a}",
+                ".fade{opacity:0;-webkit-transition:opacity .15s linear;-o-transition:opacity .15s linear;transition:opacity .15s linear}",
+                ".fade.in{opacity:1}"
+            ];
+            $("<style></style>").text(css.join(" ")).appendTo(document.head || document.documentElement);
+            $("body").append('<div id="J_Notify" class="notify" style="width: 650px; margin: 10px auto; display: none;"></div>');
+            unsafeWindow.application = {
+                notifySets: {
+                    type_class_obj: {success: "alert-success", fail: "alert-fail", loading: "alert-loading"},
+                    count: 0,
+                    delay: 3e3
+                },
+                showNotify: function(opts) {
+                    var that = this, class_obj = that.notifySets.type_class_obj, count = that.notifySets.count;
+                    opts.type == "loading" && (delay *= 5);
+                    if ($(".alert").length == 0) {
+                        $("#J_Notify").empty().append('<div class="alert in fade"></div>').show();
+                    }
+                    else {
+                        Object.keys(class_obj).forEach(function(key) {
+                            $("#J_Notify").toggleClass(class_obj[key], false);
+                        });
+                    }
+                    $(".alert").text(opts.message).addClass(class_obj[opts.type]);
+                    that.notifySets.count += 1;
+
+                    var delay = opts.time || that.notifySets.delay;
+                    setTimeout(function() {
+                        if (++count == that.notifySets.count) {
+                            that.hideNotify();
+                        }
+                    }, delay);
+                },
+                hideNotify: function() {
+                    $("#J_Notify").empty();
+                }
+            };
+            obj.showNotify(opts);
+        }
+    };
+
+    obj.hideNotify = function() {
+        if (unsafeWindow.application) {
+            unsafeWindow.application.hideNotify();
+        }
+    };
+
+    obj.run = function() {
+        obj.httpListener();
+    }();
+
+    console.log("=== 阿里云盘 好棒棒！===");
+
+    // Your code here...
 })();
