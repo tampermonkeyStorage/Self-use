@@ -1,12 +1,12 @@
 window.dpPlugins = window.dpPlugins || function(t) {
     var obj = {};
 
-    obj.init = function (option) {
+    obj.init = function (player, option) {
         obj = Object.assign(option || {}, obj);
 
-        obj.ready(obj.player).then(() => {
+        obj.ready(player).then(() => {
             t.forEach((k) => {
-                new k(obj);
+                new k(player, obj);
             });
         });
     };
@@ -72,22 +72,15 @@ window.dpPlugins = window.dpPlugins || function(t) {
     return obj;
 }([
     class HlsEvents {
-        constructor(obj) {
-            this.player = obj.player;
+        constructor(player) {
+            this.player = player;
             this.hls = this.player.plugins.hls;
-            this.getPlayInfo = obj.getPlayInfo;
-            this.initPlayInfo = obj.initPlayInfo;
-            this.getQuality = obj.getQuality;
 
-            if (!this.player.events.type('switch_video')) {
-                this.player.events.playerEvents.push('switch_video');
+            if (!this.player.events.type('video_end')) {
+                this.player.events.playerEvents.push('video_end');
             }
-            this.player.on('switch_video', () => {
-                if (this.hls) {
-                    this.hls.destroy();
-                    this.hls = this.player.plugins.hls;
-                    this.onEvents();
-                }
+            this.player.on('video_end', () => {
+                this.switchVideo();
             });
 
             this.player.on('quality_end', () => {
@@ -98,34 +91,16 @@ window.dpPlugins = window.dpPlugins || function(t) {
                 }
             });
 
+            this.player.on('destroy', () => {
+                if (this.hls) {
+                    this.hls.destroy();
+                }
+            });
+
             this.onEvents();
         }
 
-        onEvents() {
-            const Hls = window.Hls;
-            this.hls.once(Hls.Events.ERROR, (event, data) => {
-                if (this.isUrlExpires(this.hls.url)) {
-                    this.getPlayInfo((response) => {
-                        if (response instanceof Object) {
-                            this.initPlayInfo(response);
-                            const quality = this.getQuality();
-                            this.switchVideo(quality);
-                        }
-                        else {
-                            this.onEvents();
-                        }
-                    });
-                }
-                else {
-                    this.onEvents();
-                }
-            });
-        };
-
-        switchVideo(quality) {
-            this.player.options.video.quality = quality;
-            this.player.quality = this.player.options.video.quality[ this.player.qualityIndex ];
-
+        switchVideo() {
             const now = Date.now();
             const { currentTime, playbackRate, muted } = this.player.video;
 
@@ -142,7 +117,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
             this.player.video.oncanplaythrough = () => {
                 this.player.video.oncanplaythrough = null;
                 this.player.video.currentTime = currentTime;
-                this.player.events.trigger('switch_video');
+                this.player.events.trigger('quality_end');
 
                 if (!paused) {
                     this.player.play();
@@ -154,6 +129,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
                     this.player.video.currentTime = Math.min((Date.now() - now) / 1000, this.player.video.currentTime - currentTime + 5) + currentTime;
                     this.player.video.muted = muted;
                     this.player.speed(playbackRate);
+                    this.player.controller.hide();
 
                     this.player.prevVideo.pause();
                     this.player.template.videoWrap.removeChild(this.player.prevVideo);
@@ -168,36 +144,395 @@ window.dpPlugins = window.dpPlugins || function(t) {
             };
         };
 
+        onEvents() {
+            const Hls = window.Hls;
+            this.hls.once(Hls.Events.ERROR, (event, data) => {
+                if (this.isUrlExpires(this.hls.url)) {
+                    this.player.events.trigger('video_start');
+                }
+                else {
+                    this.onEvents();
+                }
+            });
+        };
+
         isUrlExpires(e) {
             var t = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : 6e3
             , n = e.match(/&x-oss-expires=(\d+)&/);
             return !n || n && n[1] && +"".concat(n[1], "000") - t < Date.now();
         };
     },
-    class Subtitle {
-        constructor(obj) {
-            this.player = obj.player;
-            this.prepend = obj.prepend;
-            this.getVideoInfoSubtitle = obj.getVideoInfoSubtitle;
-            this.getFolderSubtitle = obj.getFolderSubtitle;
-            this.remove = obj.remove;
-            this.getDownloadUrl = obj.getDownloadUrl
+    class ImageEnhancer {
+        constructor(player, obj) {
+            this.player = player;
 
-            this.player.events.type('switch_video') || this.player.events.playerEvents.push('switch_video');
+            Object.assign(this.player.user.storageName, { imageenhancer: "dplayer-imageenhancer" });
+            Object.assign(this.player.user.default, { imageenhancer: 0 });
+            this.player.user.init();
 
-            this.player.on('switch_video', () => {
-                this.restart();
+            this.imageenhancer = this.player.user.get("imageenhancer");
+            if (this.imageenhancer) {
+                this.player.video.style.filter = 'contrast(1.01) brightness(1.05) saturate(1.1)';
+            }
+
+            this.player.template.imageEnhancer = obj.append(obj.query('.dplayer-setting-origin-panel', this.player.template.settingBox), '<div class="dplayer-setting-item dplayer-setting-imageenhancer"><span class="dplayer-label">画质增强</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>');
+            this.player.template.imageEnhancerToggle = obj.query('input', this.player.template.imageEnhancer);
+            this.player.template.imageEnhancerToggle.checked = this.imageenhancer;
+
+            this.player.template.imageEnhancer.addEventListener('click', () => {
+                this.imageenhancer = this.player.template.imageEnhancerToggle.checked = !this.player.template.imageEnhancerToggle.checked;
+                this.player.user.set("imageenhancer", Number(this.imageenhancer));
+                this.player.video.style.filter = this.imageenhancer ? 'contrast(1.01) brightness(1.05) saturate(1.1)' : '';
+                this.player.notice(`画质增强： ${this.imageenhancer ? '开启' : '关闭'}`);
             });
 
-            this.player.on('quality_end', () => {
-                if (Array.isArray(this.player.options.subtitles) && this.player.options.subtitles.length) {
-                    this.switch(this.player.options.subtitles[this.player.options.subtitle.index]);
+            this.player.on("playing", () => {
+                if (this.imageenhancer) {
+                    this.player.video.style.filter = 'contrast(1.01) brightness(1.05) saturate(1.1)';
+                }
+            });
+        }
+    },
+    class SoundEnhancer {
+        constructor(player, obj) {
+            this.player = player;
+            this.Joysound = window.Joysound || unsafeWindow.Joysound;
+            this.joySound = null;
+            this.offset = null;
+
+            Object.assign(this.player.user.storageName, { soundenhancer: "dplayer-soundenhancer", volumeenhancer: "dplayer-volumeenhancer" });
+            Object.assign(this.player.user.default, { soundenhancer: 0, volumeenhancer: 0 });
+            this.player.user.init();
+
+            /*** SoundEnhancer ***/
+            this.player.template.soundEnhancer = obj.append(obj.query('.dplayer-setting-origin-panel', this.player.template.settingBox), '<div class="dplayer-setting-item dplayer-setting-soundenhancer"><span class="dplayer-label">音质增强</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>');
+            this.player.template.soundEnhancerToggle = obj.query('input', this.player.template.soundEnhancer);
+            this.player.template.soundEnhancerToggle.checked = !!this.player.user.get("soundenhancer");
+
+            this.player.template.soundEnhancer.addEventListener('click', () => {
+                let checked = this.player.template.soundEnhancerToggle.checked = !this.player.template.soundEnhancerToggle.checked;
+                this.player.user.set("soundenhancer", Number(checked));
+                this.switchJoysound(checked);
+            });
+
+            /*** VolumeEnhancer ***/
+            this.player.template.gainBox = obj.prepend(obj.query('.dplayer-setting-origin-panel', this.player.template.settingBox), '<div class="dplayer-setting-item dplayer-setting-danmaku dplayer-setting-gain" style="display: block;"><span class="dplayer-label">音量增强</span><div class="dplayer-danmaku-bar-wrap dplayer-gain-bar-wrap"><div class="dplayer-danmaku-bar dplayer-gain-bar"><div class="dplayer-danmaku-bar-inner dplayer-gain-bar-inner" style="width: 0%;"><span class="dplayer-thumb"></span></div></div></div></div>');
+            this.player.template.gainBarWrap = this.player.template.gainBox.querySelector('.dplayer-gain-bar-wrap');
+            this.player.bar.elements.gain = this.player.template.gainBox.querySelector('.dplayer-gain-bar-inner');
+
+            const gainMove = (event) => {
+                const e = event || window.event;
+                let percentage = ((e.clientX || e.changedTouches[0].clientX) - this.getElementViewLeft(this.player.template.gainBarWrap)) / 130;
+                this.switchGainValue(percentage);
+            };
+            const gainUp = () => {
+                document.removeEventListener("touchend", gainUp);
+                document.removeEventListener("touchmove", gainMove);
+                document.removeEventListener("mouseup", gainUp);
+                document.removeEventListener("mousemove", gainMove);
+                this.player.template.gainBox.classList.remove('dplayer-setting-danmaku-active');
+            };
+
+            this.player.template.gainBarWrap.addEventListener('click', (event) => {
+                const e = event || window.event;
+                let percentage = ((e.clientX || e.changedTouches[0].clientX) - this.getElementViewLeft(this.player.template.gainBarWrap)) / 130;
+                this.switchGainValue(percentage);
+            });
+            this.player.template.gainBarWrap.addEventListener("touchstart", () => {
+                document.addEventListener("touchmove", gainMove);
+                document.addEventListener("touchend", gainUp);
+                this.player.template.gainBox.classList.add('dplayer-setting-danmaku-active');
+            });
+            this.player.template.gainBarWrap.addEventListener("mousedown", () => {
+                document.addEventListener("mousemove", gainMove);
+                document.addEventListener("mouseup", gainUp);
+                this.player.template.gainBox.classList.add('dplayer-setting-danmaku-active');
+            });
+
+            this.player.on("playing", () => {
+                if (!this.player.video.joySound) {
+                    this.init();
+                }
+            });
+        }
+
+        init() {
+            if (this.Joysound && this.Joysound.isSupport()) {
+                this.joySound = new this.Joysound();
+                this.joySound.init(this.player.video);
+                this.player.video.joySound = true;
+                let isJoysound = this.player.user.get("soundenhancer");
+                if (isJoysound) {
+                    this.switchJoysound(isJoysound);
+                }
+                let percentage = this.player.user.get("volumeenhancer");
+                if (percentage) {
+                    this.switchGainValue(percentage);
+                }
+            }
+        }
+
+        switchJoysound(o) {
+            if (this.joySound) {
+                this.joySound.setEnabled(o);
+                this.player.notice(`音质增强： ${o ? '开启' : '关闭'}`);
+            } else {
+                this.player.notice('Joysound 未完成初始化');
+            }
+        }
+
+        switchGainValue(percentage) {
+            if (this.joySound) {
+                percentage = Math.min(Math.max(percentage, 0), 1);
+                this.player.bar.set("gain", percentage, "width");
+                this.player.user.set("volumeenhancer", percentage);
+                this.joySound.setVolume(percentage);
+                this.player.notice(`音量增强： ${100 + Math.floor(percentage * 100)}%`);
+            } else {
+                this.player.notice('Joysound 未完成初始化');
+            }
+        }
+
+        getElementViewLeft(element) {
+            const scrollTop = window.scrollY || window.pageYOffset || document.body.scrollTop + ((document.documentElement && document.documentElement.scrollTop) || 0);
+            if (element.getBoundingClientRect) {
+                if (typeof this.offset !== 'number') {
+                    let temp = document.createElement('div');
+                    temp.style.cssText = 'position:absolute;top:0;left:0;';
+                    document.body.appendChild(temp);
+                    this.offset = -temp.getBoundingClientRect().top - scrollTop;
+                    document.body.removeChild(temp);
+                    temp = null;
+                }
+                const rect = element.getBoundingClientRect();
+                return rect.left + this.offset;
+            } else {
+                let actualLeft = element.offsetLeft;
+                let current = element.offsetParent;
+                const elementScrollLeft = document.body.scrollLeft + document.documentElement.scrollLeft;
+                if (!document.fullscreenElement && !document.mozFullScreenElement && !document.webkitFullscreenElement) {
+                    while (current !== null) {
+                        actualLeft += current.offsetLeft;
+                        current = current.offsetParent;
+                    }
+                } else {
+                    while (current !== null && current !== element) {
+                        actualLeft += current.offsetLeft;
+                        current = current.offsetParent;
+                    }
+                }
+                return actualLeft - elementScrollLeft;
+            }
+        }
+    },
+    class AspectRatio {
+        constructor(player) {
+            this.player = player;
+            this.value = null;
+
+            this.player.template.controller.querySelector('.dplayer-icons-right').insertAdjacentHTML("afterbegin", '<div class="dplayer-quality dplayer-aspectRatio"><button class="dplayer-icon dplayer-quality-icon">画面比例</button><div class="dplayer-quality-mask"><div class="dplayer-quality-list dplayer-aspectRatio-list"><div class="dplayer-quality-item" data-value="none">原始比例</div><div class="dplayer-quality-item" data-value="cover">自动裁剪</div><div class="dplayer-quality-item" data-value="fill">拉伸填充</div><div class="dplayer-quality-item" data-value="">系统默认</div></div></div></div>');
+            this.player.template.aspectRatioButton = this.player.template.controller.querySelector('.dplayer-aspectRatio button');
+            this.player.template.aspectRatioList = this.player.template.controller.querySelector('.dplayer-aspectRatio-list');
+
+            this.player.template.aspectRatioList.addEventListener('click', (e) => {
+                if (e.target.classList.contains('dplayer-quality-item')) {
+                    this.value = e.target.dataset.value;
+                    this.player.video.style['object-fit'] = e.target.dataset.value;
+                    this.player.template.aspectRatioButton.innerText = e.target.innerText;
                 }
             });
 
-            if (Array.isArray(this.player.options.subtitles) && this.player.options.subtitles.length) {
-                this.add(this.player.options.subtitles);
+            this.player.on("playing", () => {
+                if (this.value) {
+                    this.player.video.style['object-fit'] = this.value;
+                }
+            });
+        }
+    },
+    class SelectEpisode {
+        constructor(player, obj) {
+            this.player = player;
+
+            if (!this.player.events.type('episode_end')) {
+                this.player.events.playerEvents.push('episode_end');
             }
+            this.player.on('episode_end', () => {
+                this.switchVideo();
+            });
+
+            if (Array.isArray(this.player.options.fileList) && this.player.options.fileList.length > 1 && this.player.options.file) {
+                this.player.fileIndex = (this.player.options.fileList || []).findIndex((item, index) => {
+                    return item.file_id === this.player.options.file.file_id;
+                });
+
+                obj.prepend(this.player.template.controller.querySelector('.dplayer-icons-right'), '<style>.episode .content{max-width: 360px;max-height: 330px;width: auto;height: auto;box-sizing: border-box;overflow: hidden auto;position: absolute;left: 0px;transition: all 0.38s ease-in-out 0s;bottom: 52px;transform: scale(0);z-index: 2;}.episode .content .list{background-color: rgba(0,0,0,.3);height: 100%;}.episode .content .video-item{color: #fff;cursor: pointer;font-size: 14px;line-height: 35px;overflow: hidden;padding: 0 10px;text-overflow: ellipsis;text-align: center;white-space: nowrap;}.episode .content .active{background-color: rgba(0,0,0,.3);color: #0df;}</style><div class="dplayer-quality episode"><button class="dplayer-icon prev-icon" title="上一集"><svg viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><path d="M757.527273 190.138182L382.510545 490.123636a28.020364 28.020364 0 0 0 0 43.752728l375.016728 299.985454a28.020364 28.020364 0 0 0 45.474909-21.876363V212.014545a28.020364 28.020364 0 0 0-45.474909-21.876363zM249.949091 221.509818a28.020364 28.020364 0 0 0-27.973818 27.973818v525.032728a28.020364 28.020364 0 1 0 55.994182 0V249.483636a28.020364 28.020364 0 0 0-28.020364-27.973818zM747.054545 270.242909v483.514182L444.834909 512l302.173091-241.757091z"></path></svg></button><button class="dplayer-icon dplayer-quality-icon episode-icon">选集</button><button class="dplayer-icon next-icon" title="下一集"><svg viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><path d="M248.506182 190.138182l374.970182 299.985454a28.020364 28.020364 0 0 1 0 43.752728L248.552727 833.861818a28.020364 28.020364 0 0 1-45.521454-21.876363V212.014545c0-23.505455 27.182545-36.538182 45.521454-21.876363z m507.485091 31.371636c15.453091 0 28.020364 12.567273 28.020363 27.973818v525.032728a28.020364 28.020364 0 1 1-55.994181 0V249.483636c0-15.453091 12.520727-27.973818 27.973818-27.973818zM258.978909 270.242909v483.514182L561.198545 512 258.978909 270.242909z"></path></svg></button><div class="content"><div class="list"></div></div></div>')
+                this.player.template.episodeButton = this.player.template.controller.querySelector('.episode .episode-icon');
+                this.player.template.episodePrevButton = this.player.template.controller.querySelector('.episode .prev-icon');
+                this.player.template.episodeNextButton = this.player.template.controller.querySelector('.episode .next-icon');
+                this.player.template.episodeContent = this.player.template.controller.querySelector('.episode .content');
+                this.player.template.episodeList = this.player.template.controller.querySelector('.episode .list');
+                this.player.options.fileList.forEach((item, index) => {
+                    obj.append(this.player.template.episodeList, '<div class="video-item" data-index="' + index + '" title="' + item.name + '">' + item.name + '</div>');
+                });
+                this.player.template.episodeVideoItems = this.player.template.controller.querySelectorAll('.episode .video-item');
+                this.player.template.episodeVideoItems[this.player.fileIndex].classList.add('active');
+
+                this.player.template.mask.addEventListener('click', () => {
+                    this.hide();
+                });
+
+                this.player.template.episodeButton.addEventListener('click', (e) => {
+                    if (this.player.template.episodeContent.style.transform === 'scale(1)') {
+                        this.hide();
+                    }
+                    else {
+                        this.show();
+                    }
+                });
+
+                this.player.template.episodeList.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('video-item') && !e.target.classList.contains('active')) {
+                        this.player.template.episodeVideoItems[this.player.fileIndex].classList.remove('active');
+                        e.target.classList.add('active');
+                        this.player.fileIndex = e.target.dataset.index * 1;
+                        this.player.options.file = this.player.options.fileList[this.player.fileIndex];
+
+                        this.hide();
+                        this.player.events.trigger('episode_start');
+                        this.player.notice('准备播放：' + this.player.options.file.name, 5000);
+                    }
+                });
+
+                this.player.template.episodePrevButton.addEventListener('click', (e) => {
+                    const index = this.player.fileIndex - 1;
+                    if (index >= 0) {
+                        this.player.template.episodeVideoItems[this.player.fileIndex].classList.remove('active');
+                        this.player.template.episodeVideoItems[index].classList.add('active');
+                        this.player.fileIndex = index;
+                        this.player.options.file = this.player.options.fileList[this.player.fileIndex];
+
+                        this.hide();
+                        this.player.events.trigger('episode_start');
+                        this.player.notice('准备播放：' + this.player.options.file.name, 5000);
+                    }
+                    else {
+                        this.player.notice('没有上一集了');
+                    }
+                });
+
+                this.player.template.episodeNextButton.addEventListener('click', (e) => {
+                    const index = this.player.fileIndex + 1;
+                    if (index <= this.player.options.fileList.length - 1) {
+                        this.player.template.episodeVideoItems[this.player.fileIndex].classList.remove('active');
+                        this.player.template.episodeVideoItems[index].classList.add('active');
+                        this.player.fileIndex = index;
+                        this.player.options.file = this.player.options.fileList[this.player.fileIndex];
+
+                        this.hide();
+                        this.player.events.trigger('episode_start');
+                        this.player.notice('准备播放：' + this.player.options.file.name, 5000);
+                    }
+                    else {
+                        this.player.notice('没有下一集了');
+                    }
+                });
+            }
+        }
+
+        switchVideo() {
+            const videoHTML = '<video class="dplayer-video" webkit-playsinline playsinline crossorigin="anonymous" preload="auto" src="' + this.player.quality.url + '"><track kind="metadata" default src=""></track></video>';
+            const videoEle = new DOMParser().parseFromString(videoHTML, 'text/html').body.firstChild;
+            this.player.template.videoWrap.insertBefore(videoEle, this.player.template.videoWrap.getElementsByTagName('div')[0]);
+            this.player.prevVideo = this.player.video;
+            this.player.video = videoEle;
+            this.player.initVideo(this.player.video, this.player.quality.type || this.player.options.video.type);
+            this.player.video.currentTime = 0;
+            this.player.controller.hide();
+
+            this.player.video.oncanplaythrough = () => {
+                this.player.video.oncanplaythrough = null;
+                this.player.video.currentTime = 0;
+                this.player.events.trigger('quality_end');
+
+                this.player.play();
+                this.player.controller.hide();
+
+                if (this.player.prevVideo) {
+                    this.player.prevVideo.pause && this.player.prevVideo.pause();
+                    this.player.template.videoWrap.removeChild(this.player.prevVideo);
+                    this.player.template.video = this.player.video;
+                    this.player.video.classList.add('dplayer-video-current');
+                    this.player.prevVideo = null;
+                }
+
+                while (this.player.template.videoWrap.querySelectorAll('video').length > 1) {
+                    this.player.template.videoWrap.removeChild(this.player.template.videoWrap.getElementsByTagName('video')[1]);
+                }
+            };
+        }
+
+        show() {
+            this.player.template.episodeContent.style.transform = 'scale(1)';
+            this.player.template.mask.classList.add('dplayer-mask-show');
+        }
+
+        hide() {
+            this.player.template.episodeContent.style.transform = 'scale(0)';
+            this.player.template.mask.classList.remove('dplayer-mask-show');
+        }
+    },
+    class AutoNextEpisode {
+        constructor(player, obj) {
+            this.player = player;
+
+            Object.assign(this.player.user.storageName, { autonextepisode: "dplayer-autonextepisode" });
+            Object.assign(this.player.user.default, { autonextepisode: 0 });
+            this.player.user.init();
+
+            this.autonextepisode = this.player.user.get("autonextepisode");
+
+            this.player.template.autoNextEpisode = obj.append(obj.query('.dplayer-setting-origin-panel', this.player.template.settingBox), '<div class="dplayer-setting-item dplayer-setting-autonextepisode"><span class="dplayer-label">自动下一集</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>');
+            this.player.template.autoNextEpisodeToggle = obj.query('input', this.player.template.autoNextEpisode);
+            this.player.template.autoNextEpisodeToggle.checked = this.autonextepisode;
+
+            this.player.template.autoNextEpisode.addEventListener('click', () => {
+                this.autonextepisode = this.player.template.autoNextEpisodeToggle.checked = !this.player.template.autoNextEpisodeToggle.checked;
+                this.player.user.set("autonextepisode", Number(this.autonextepisode));
+                this.player.notice(`自动播放下集： ${this.autonextepisode ? '开启' : '关闭'}`);
+            });
+
+            this.player.on("ended", () => {
+                if (this.autonextepisode) {
+                    this.player.template.episodeNextButton && this.player.template.episodeNextButton.click();
+                }
+            });
+        }
+    },
+    class Subtitle {
+        constructor(player, obj) {
+            this.player = player;
+
+            if (!player.events.type('subtitle_end')) {
+                player.events.playerEvents.push('subtitle_end');
+            }
+            player.on('subtitle_end', () => {
+                this.add(this.player.options.subtitles);
+            });
+            this.player.events.trigger('subtitle_start');
+
+            this.player.on('quality_end', () => {
+                this.player.template.subtitle.innerHTML = `<p></p>`;
+                if (this.player.options.subtitle.url.length && this.player.options.subtitles.length) {
+                    this.switch(this.player.options.subtitles[this.player.options.subtitle.index]);
+                }
+                else {
+                    this.player.events.trigger('subtitle_start');
+                }
+            });
+
+            this.player.on('episode_end', () => {
+                this.clear();
+            });
         }
 
         add(sublist) {
@@ -211,10 +546,14 @@ window.dpPlugins = window.dpPlugins || function(t) {
             const lastItemIndex = this.player.template.subtitlesItem.length - 1;
             sublist.forEach((item, index) => {
                 const i = lastItemIndex + index;
-                this.player.options.subtitle.url.splice(i, 0, item); // 占个位quality_end不会报错
+                this.player.options.subtitle.url.splice(i, 0, item);
 
-                const element = this.prepend(this.player.template.subtitlesBox, '<div class="dplayer-subtitles-item" data-subtitle=""><span class="dplayer-label">' + (item.name + ' ' + (item.lang || "")) + '</span></div>');
-                element.addEventListener('click', (event) => {
+                let itemNode = document.createElement('div');
+                itemNode.setAttribute('class', 'dplayer-subtitles-item');
+                itemNode.innerHTML = '<span class="dplayer-label">' + (item.name + ' ' + (item.language || item.lang || "")) + '</span>';
+                this.player.template.subtitlesBox.insertBefore(itemNode, this.player.template.subtitlesBox.childNodes[i]);
+
+                itemNode.addEventListener('click', (event) => {
                     this.player.subtitles.hide();
                     if (this.player.options.subtitle.index !== i) {
                         this.player.options.subtitle.index = i;
@@ -227,10 +566,8 @@ window.dpPlugins = window.dpPlugins || function(t) {
                         }
                     }
                 });
-
-                this.player.template.subtitlesBox.insertBefore(element, this.player.template.subtitlesBox.lastElementChild);
-                this.player.template.subtitlesItem = this.player.template.subtitlesBox.querySelectorAll('.dplayer-subtitles-item');
             });
+            this.player.template.subtitlesItem = this.player.template.subtitlesBox.querySelectorAll('.dplayer-subtitles-item');
 
             if (!(this.player.video.textTracks.length && this.player.video.textTracks[0])?.cues) {
                 this.player.options.subtitle.index = this.player.options.subtitles.findIndex((item) => {
@@ -239,38 +576,37 @@ window.dpPlugins = window.dpPlugins || function(t) {
                 if (this.player.options.subtitle.index < 0) {
                     this.player.options.subtitle.index = 0;
                 }
-                this.switch(sublist[this.player.options.subtitle.index]);
+                this.switch(this.player.options.subtitle.url[this.player.options.subtitle.index]);
             }
         }
 
         switch(newOption = {}) {
-            return this.init(newOption).then((subArr) => {
+            return this.initCues(newOption).then((subArr) => {
                 if (newOption.name) {
                     this.player.notice(`切换字幕: ${newOption.name}`);
                 }
             });
         }
 
-        init(subtitleOption) {
-            return this.urlToArray(subtitleOption).then((subtitleOption) => {
-                return this.createTrack(subtitleOption);
-            });
-        }
-
         restart() {
             this.clear();
-            this.player.options.subtitles = this.getVideoInfoSubtitle().concat(this.getFolderSubtitle());
             this.add(this.player.options.subtitles);
         }
 
         clear() {
             this.player.template.subtitle.innerHTML = `<p></p>`;
             this.player.options.subtitles = [];
-            if (this.player.template.subtitlesItem.length > 1) {
-                for (let i = 0; i < this.player.template.subtitlesItem.length - 1; i++) {
-                    this.remove(this.player.template.subtitlesItem[i]);
-                }
+            this.player.options.subtitle.url = [];
+            for (let i = 0; i < this.player.template.subtitlesItem.length - 1; i++) {
+                this.player.template.subtitlesBox.removeChild(this.player.template.subtitlesItem[i]);
             }
+            this.player.template.subtitlesItem = this.player.template.subtitlesBox.querySelectorAll('.dplayer-subtitles-item');
+        }
+
+        initCues(subtitleOption) {
+            return this.urlToArray(subtitleOption).then((subtitleOption) => {
+                return this.createTrack(subtitleOption);
+            });
         }
 
         urlToArray(subtitleOption) {
@@ -289,9 +625,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
                     });
                 }
                 else {
-                    return this.getDownloadUrl(subtitleOption).then(([subtitleOption]) => {
-                        return this.urlToArray(subtitleOption);
-                    });
+                    return Promise.reject();
                 }
             }
         }
@@ -313,18 +647,6 @@ window.dpPlugins = window.dpPlugins || function(t) {
                 textTrackCue.id = item.index;
                 textTrack.addCue(textTrackCue);
             });
-        }
-
-        style(key, value) {
-            const { subtitle } = this.player.template;
-            if (typeof key === 'object') {
-                for (const k in key) {
-                    subtitle.style[k] = key[k];
-                }
-                return subtitle;
-            }
-            subtitle.style[key] = value;
-            return subtitle;
         }
 
         requestFile(url) {
@@ -437,202 +759,125 @@ window.dpPlugins = window.dpPlugins || function(t) {
                 "zh-TW": "繁体中文"
             }[lang] || "未知语言";
         };
-    },
-    class ImageEnhancer {
-        constructor(obj) {
-            this.player = obj.player;
 
-            Object.assign(this.player.user.storageName, { imageenhancer: "dplayer-imageenhancer" });
-            Object.assign(this.player.user.default, { imageenhancer: 0 });
-            this.player.user.init();
-
-            this.imageenhancer = this.player.user.get("imageenhancer");
-            if (this.imageenhancer) {
-                this.player.video.style.filter = 'contrast(1.01) brightness(1.05) saturate(1.1)';
-            }
-
-            this.player.template.imageEnhancer = obj.append(obj.query('.dplayer-setting-origin-panel', this.player.template.settingBox), '<div class="dplayer-setting-item dplayer-setting-imageenhancer"><span class="dplayer-label">画质增强</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>');
-            this.player.template.imageEnhancerToggle = obj.query('input', this.player.template.imageEnhancer);
-            this.player.template.imageEnhancerToggle.checked = this.imageenhancer;
-
-            this.player.template.imageEnhancer.addEventListener('click', () => {
-                this.imageenhancer = this.player.template.imageEnhancerToggle.checked = !this.player.template.imageEnhancerToggle.checked;
-                this.player.user.set("imageenhancer", Number(this.imageenhancer));
-                this.player.video.style.filter = this.imageenhancer ? 'contrast(1.01) brightness(1.05) saturate(1.1)' : '';
-                this.player.notice(`画质增强： ${this.imageenhancer ? '开启' : '关闭'}`);
-            });
-
-            this.player.on("playing", () => {
-                if (this.imageenhancer) {
-                    this.player.video.style.filter = 'contrast(1.01) brightness(1.05) saturate(1.1)';
+        style(key, value) {
+            const { subtitle } = this.player.template;
+            if (typeof key === 'object') {
+                for (const k in key) {
+                    subtitle.style[k] = key[k];
                 }
-            });
+                return subtitle;
+            }
+            subtitle.style[key] = value;
+            return subtitle;
         }
     },
-    class SoundEnhancer {
-        constructor(obj) {
-            this.player = obj.player;
-            this.Joysound = window.Joysound;
-            this.offset = null;
+    class MemoryPlay {
+        constructor(player, obj) {
+            this.player = player;
+            this.file_id = this.player.options?.file?.file_id;
+            this.hasMemoryDisplay = false;
 
-            Object.assign(this.player.user.storageName, { soundenhancer: "dplayer-soundenhancer", volumeenhancer: "dplayer-volumeenhancer" });
-            Object.assign(this.player.user.default, { soundenhancer: 0, volumeenhancer: 0 });
+            Object.assign(this.player.user.storageName, { automemoryplay: "dplayer-automemoryplay" });
+            Object.assign(this.player.user.default, { automemoryplay: 0 });
             this.player.user.init();
+            this.automemoryplay = this.player.user.get("automemoryplay");
 
-            /*** SoundEnhancer ***/
-            this.player.template.soundEnhancer = obj.append(obj.query('.dplayer-setting-origin-panel', this.player.template.settingBox), '<div class="dplayer-setting-item dplayer-setting-soundenhancer"><span class="dplayer-label">音质增强</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>');
-            this.player.template.soundEnhancerToggle = obj.query('input', this.player.template.soundEnhancer);
-            this.player.template.soundEnhancerToggle.checked = !!this.player.user.get("soundenhancer");
+            this.player.template.autoMemoryPlay = obj.append(obj.query('.dplayer-setting-origin-panel', this.player.template.settingBox), '<div class="dplayer-setting-item dplayer-setting-automemoryplay"><span class="dplayer-label">自动记忆播放</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>');
+            this.player.template.autoMemoryPlayToggle = obj.query('input', this.player.template.autoMemoryPlay);
+            this.player.template.autoMemoryPlayToggle.checked = this.automemoryplay;
 
-            this.player.template.soundEnhancer.addEventListener('click', () => {
-                let checked = this.player.template.soundEnhancerToggle.checked = !this.player.template.soundEnhancerToggle.checked;
-                this.player.user.set("soundenhancer", Number(checked));
-                this.switchJoysound(checked);
+            this.player.template.autoMemoryPlay.addEventListener('click', () => {
+                this.automemoryplay = this.player.template.autoMemoryPlayToggle.checked = !this.player.template.autoMemoryPlayToggle.checked;
+                this.player.user.set("automemoryplay", Number(this.automemoryplay));
+                this.player.notice(`自动记忆播放： ${this.automemoryplay ? '开启' : '关闭'}`);
             });
 
-            /*** VolumeEnhancer ***/
-            this.player.template.gainBox = obj.prepend(obj.query('.dplayer-setting-origin-panel', this.player.template.settingBox), '<div class="dplayer-setting-item dplayer-setting-danmaku dplayer-setting-gain" style="display: block;"><span class="dplayer-label">音量增强</span><div class="dplayer-danmaku-bar-wrap dplayer-gain-bar-wrap"><div class="dplayer-danmaku-bar dplayer-gain-bar"><div class="dplayer-danmaku-bar-inner dplayer-gain-bar-inner" style="width: 0%;"><span class="dplayer-thumb"></span></div></div></div></div>');
-            this.player.template.gainBarWrap = obj.query('.dplayer-gain-bar-wrap', this.player.template.gainBox);
-            this.player.bar.elements.gain = obj.query('.dplayer-gain-bar-inner', this.player.template.gainBox);
-
-            this.player.events.playerEvents.push("gain_value");
-            this.player.on("gain_value", (percentage) => {
-                percentage = Math.min(Math.max(percentage, 0), 1);
-                this.player.bar.set("gain", percentage, "width");
-                this.player.user.set("volumeenhancer", percentage);
-                this.setVolume(percentage);
+            this.player.on('quality_end', () => {
+                if (this.file_id !== this.player.options?.file?.file_id) {
+                    this.file_id = this.player.options?.file?.file_id;
+                    this.hasMemoryDisplay = false;
+                }
+                this.run();
             });
 
-            const gainMove = (event) => {
-                const e = event || window.event;
-                let percentage = ((e.clientX || e.changedTouches[0].clientX) - this.getElementViewLeft(this.player.template.gainBarWrap)) / 130;
-                this.player.events.trigger("gain_value", percentage);
-            };
-            const gainUp = () => {
-                document.removeEventListener("touchend", gainUp);
-                document.removeEventListener("touchmove", gainMove);
-                document.removeEventListener("mouseup", gainUp);
-                document.removeEventListener("mousemove", gainMove);
-                this.player.template.gainBox.classList.remove('dplayer-setting-danmaku-active');
+            document.onvisibilitychange = () => {
+                if (document.visibilityState === 'hidden') {
+                    const { video: { currentTime, duration } } = this.player;
+                    this.setTime(this.file_id, currentTime, duration);
+                }
             };
 
-            this.player.template.gainBarWrap.addEventListener('click', (event) => {
-                const e = event || window.event;
-                let percentage = ((e.clientX || e.changedTouches[0].clientX) - this.getElementViewLeft(this.player.template.gainBarWrap)) / 130;
-                this.player.events.trigger("gain_value", percentage);
-            });
-            this.player.template.gainBarWrap.addEventListener("touchstart", () => {
-                document.addEventListener("touchmove", gainMove);
-                document.addEventListener("touchend", gainUp);
-                this.player.template.gainBox.classList.add('dplayer-setting-danmaku-active');
-            });
-            this.player.template.gainBarWrap.addEventListener("mousedown", () => {
-                document.addEventListener("mousemove", gainMove);
-                document.addEventListener("mouseup", gainUp);
-                this.player.template.gainBox.classList.add('dplayer-setting-danmaku-active');
-            });
+            window.onbeforeunload = () => {
+                const { video: { currentTime, duration } } = this.player;
+                this.setTime(this.file_id, currentTime, duration);
+            };
 
-            this.player.on("playing", () => {
-                if (!this.player.video.joySound) {
-                    this.init();
-                }
-            });
+            this.run();
         }
 
-        init() {
-            if (window.Joysound && window.Joysound.isSupport()) {
-                this.joySound = new window.Joysound();
-                this.joySound.init(this.player.video);
-                this.player.video.joySound = true;
-                let isJoysound = this.player.user.get("soundenhancer");
-                if (isJoysound) {
-                    this.switchJoysound(isJoysound);
-                }
-                let percentage = this.player.user.get("volumeenhancer");
-                if (percentage) {
-                    this.player.events.trigger("gain_value", percentage);
-                }
-            }
-        }
+        run() {
+            if (this.hasMemoryDisplay === false) {
+                this.hasMemoryDisplay = true;
 
-        switchJoysound(o) {
-            if (this.joySound) {
-                this.joySound.setEnabled(o);
-                this.player.notice(`音质增强： ${o ? '开启' : '关闭'}`);
-            } else {
-                this.player.notice('Joysound 未完成初始化');
-            }
-        }
+                const { video: { currentTime, duration } } = this.player;
+                const memoryTime = this.getTime(this.file_id);
+                if (memoryTime && memoryTime > currentTime) {
+                    if (this.automemoryplay) {
+                        this.player.seek(memoryTime);
 
-        setVolume(percentage) {
-            if (this.joySound) {
-                this.joySound.setVolume(percentage);
-                this.player.notice(`音量增强： ${100 + Math.floor(percentage * 100)}%`);
-            } else {
-                this.player.notice('Joysound 未完成初始化');
-            }
-        }
-
-        getElementViewLeft(element) {
-            const scrollTop = window.scrollY || window.pageYOffset || document.body.scrollTop + ((document.documentElement && document.documentElement.scrollTop) || 0);
-            if (element.getBoundingClientRect) {
-                if (typeof this.offset !== 'number') {
-                    let temp = document.createElement('div');
-                    temp.style.cssText = 'position:absolute;top:0;left:0;';
-                    document.body.appendChild(temp);
-                    this.offset = -temp.getBoundingClientRect().top - scrollTop;
-                    document.body.removeChild(temp);
-                    temp = null;
-                }
-                const rect = element.getBoundingClientRect();
-                return rect.left + this.offset;
-            } else {
-                let actualLeft = element.offsetLeft;
-                let current = element.offsetParent;
-                const elementScrollLeft = document.body.scrollLeft + document.documentElement.scrollLeft;
-                if (!document.fullscreenElement && !document.mozFullScreenElement && !document.webkitFullscreenElement) {
-                    while (current !== null) {
-                        actualLeft += current.offsetLeft;
-                        current = current.offsetParent;
+                        if (this.player.video.paused) {
+                            this.player.play();
+                        }
                     }
-                } else {
-                    while (current !== null && current !== element) {
-                        actualLeft += current.offsetLeft;
-                        current = current.offsetParent;
+                    else {
+                        const fTime = this.formatTime(memoryTime);
+                        let memoryNode = document.createElement('div');
+                        memoryNode.setAttribute('class', 'memory-play-wrap');
+                        memoryNode.setAttribute('style', 'display: block;position: absolute;left: 33px;bottom: 66px;font-size: 15px;padding: 7px;border-radius: 3px;color: #fff;z-index:100;background: rgba(0,0,0,.5);');
+                        memoryNode.innerHTML = '上次播放到：' + fTime + '&nbsp;&nbsp;<a href="javascript:void(0);" class="play-jump" style="text-decoration: none;color: #06c;"> 跳转播放 &nbsp;</a><em class="close-btn" style="display: inline-block;width: 15px;height: 15px;vertical-align: middle;cursor: pointer;background: url(https://nd-static.bdstatic.com/m-static/disk-share/widget/pageModule/share-file-main/fileType/video/img/video-flash-closebtn_15f0e97.png) no-repeat;"></em>';
+                        this.player.container.insertBefore(memoryNode, null);
+
+                        let memoryTimeout = setTimeout(() => {
+                            this.player.container.removeChild(memoryNode);
+                        }, 15000);
+
+                        memoryNode.querySelector('.close-btn').onclick = () => {
+                            this.player.container.removeChild(memoryNode);
+                            clearTimeout(memoryTimeout);
+                        };
+
+                        memoryNode.querySelector('.play-jump').onclick = () => {
+                            this.player.seek(memoryTime);
+                            this.player.container.removeChild(memoryNode);
+                            clearTimeout(memoryTimeout);
+                        }
                     }
                 }
-                return actualLeft - elementScrollLeft;
             }
         }
-    },
-    class AspectRatio {
-        constructor(obj) {
-            this.player = obj.player;
-            this.append = obj.append;
-            this.value = '';
 
-            this.player.template.controller.querySelector('.dplayer-icons-right').insertAdjacentHTML("afterbegin", '<div class="dplayer-quality dplayer-aspectRatio"><button class="dplayer-icon dplayer-quality-icon">画面比例</button><div class="dplayer-quality-mask"><div class="dplayer-quality-list dplayer-aspectRatio-list"><div class="dplayer-quality-item" data-value="none">原始比例</div><div class="dplayer-quality-item" data-value="cover">自动裁剪</div><div class="dplayer-quality-item" data-value="fill">拉伸填充</div><div class="dplayer-quality-item" data-value="">系统默认</div></div></div></div>');
-            this.player.template.aspectRatioButton = this.player.template.controller.querySelector('.dplayer-aspectRatio button');
-            this.player.template.aspectRatioList = this.player.template.controller.querySelector('.dplayer-aspectRatio-list');
+        getTime(e) {
+            return localStorage.getItem("video_" + e) || 0;
+        }
 
-            this.player.template.aspectRatioList.addEventListener('click', (e) => {
-                if (e.target.classList.contains('dplayer-quality-item')) {
-                    this.value = e.target.dataset.value;
-                    this.player.video.style['object-fit'] = e.target.dataset.value;
-                    this.player.template.aspectRatioButton.innerText = e.target.innerText;
-                }
-            });
+        setTime(e, t, o) {
+            e && t && (e = "video_" + e, t <= 60 || t + 120 >= o || 0 ? localStorage.removeItem(e) : localStorage.setItem(e, t));
+        }
 
-            this.player.on("playing", () => {
-                this.player.video.style['object-fit'] = this.value;
-            });
+        formatTime(seconds) {
+            var secondTotal = Math.round(seconds)
+            , hour = Math.floor(secondTotal / 3600)
+            , minute = Math.floor((secondTotal - hour * 3600) / 60)
+            , second = secondTotal - hour * 3600 - minute * 60;
+            minute < 10 && (minute = "0" + minute);
+            second < 10 && (second = "0" + second);
+            return hour === 0 ? minute + ":" + second : hour + ":" + minute + ":" + second;
         }
     },
     class Appreciation {
-        constructor(obj) {
-            this.player = obj.player;
-            this.append = obj.append;
-            this.showTipError = obj.showTipError
+        constructor(player) {
+            this.player = player;
             this.now = Date.now();
             this.localforage = window.localforage;
 
@@ -643,6 +888,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
             this.player.template.menuItem[0].addEventListener('click', () => {
                 this.showDialog();
             });
+
             this.player.on('timeupdate', () => {
                 if (Date.now() - 1000*60*8 >= this.now) {
                     this.now = Date.now();
@@ -656,11 +902,13 @@ window.dpPlugins = window.dpPlugins || function(t) {
         }
 
         isAppreciation() {
-            this.localforage || this.player.template.menu.innerHTML.includes(5254001) || this.player.template.menuItem.length === 4 || this.player.destroy();
+            this.player.template.menu.innerHTML.includes(5254001) || this.player.template.menuItem.length === 4 || this.player.destroy();
+            this.localforage || this.player.destroy();
+            GM_getValue || GM_setValue || GM_deleteValue || this.player.destroy();
             return this.localforage.getItem("users").then((data) => {
                 if (data?.expire_time) {
                     return this.localforage.getItem("users_sign").then((users_sign) => {
-                        if (users_sign === btoa(encodeURIComponent(JSON.stringify(data)))) {
+                        if (users_sign === btoa(encodeURIComponent(JSON.stringify(data))) && new Date(data.updatedAt).getHours() % new Date().getHours()) {
                             if (Math.max(Date.parse(data.expire_time) - Date.now(), 0)) {
                                 return data;
                             }
@@ -674,6 +922,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
                             this.usersPost().then((data) => {
                                 if (data?.expire_time && Math.max(Date.parse(data.expire_time) - Date.now(), 0)) {
                                     this.localforage.setItem("users", data);
+                                    this.localforage.setItem("users_sign", btoa(encodeURIComponent(JSON.stringify(data))));
                                     GM_setValue("users_sign", btoa(encodeURIComponent(JSON.stringify(data))));
                                     return data;
                                 }
@@ -702,7 +951,10 @@ window.dpPlugins = window.dpPlugins || function(t) {
         };
 
         showDialog() {
-            let dialog = this.append(document.body, '<div class="ant-modal-root"><div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap" role="dialog" aria-labelledby="rcDialogTitle1" style=""><div role="document" class="ant-modal modal-wrapper--5SA7y" style="width: 340px;"><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle1">提示</div></div><div class="ant-modal-body"><div class="content-wrapper--S6SNu"><div>爱发电订单号：</div><span class="ant-input-affix-wrapper ant-input-affix-wrapper-borderless ant-input-password input--TWZaN input--l14Mo"><input placeholder="" action="click" type="text" class="afdian-order ant-input ant-input-borderless" style="background-color: var(--divider_tertiary);"></span></div><div class="content-wrapper--S6SNu"><div>请输入爱发电订单号，确认即可</div><a href="https://afdian.net/order/create?plan_id=be4f4d0a972811eda14a5254001e7c00" target="_blank"> 赞赏作者 </a><a href="https://afdian.net/dashboard/order" target="_blank"> 复制订单号 </a></div></div><div class="ant-modal-footer"><div class="footer--cytkB"><button class="button--WC7or secondary--vRtFJ small--e7LRt cancel-button--c-lzN">取消</button><button class="button--WC7or primary--NVxfK small--e7LRt">确定</button></div></div></div><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div></div></div></div>');
+            let dialog = document.createElement('div');
+            dialog.innerHTML = '<div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap" role="dialog" aria-labelledby="rcDialogTitle1" style=""><div role="document" class="ant-modal modal-wrapper--5SA7y" style="width: 340px;"><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle1">提示</div></div><div class="ant-modal-body"><div class="content-wrapper--S6SNu"><div>爱发电订单号：</div><span class="ant-input-affix-wrapper ant-input-affix-wrapper-borderless ant-input-password input--TWZaN input--l14Mo"><input placeholder="" action="click" type="text" class="afdian-order ant-input ant-input-borderless" style="background-color: var(--divider_tertiary);"></span></div><div class="content-wrapper--S6SNu"><div>请输入爱发电订单号，确认即可</div><a href="https://afdian.net/order/create?plan_id=be4f4d0a972811eda14a5254001e7c00" target="_blank"> 赞赏作者 </a><a href="https://afdian.net/dashboard/order" target="_blank"> 复制订单号 </a></div></div><div class="ant-modal-footer"><div class="footer--cytkB"><button class="button--WC7or secondary--vRtFJ small--e7LRt cancel-button--c-lzN">取消</button><button class="button--WC7or primary--NVxfK small--e7LRt">确定</button></div></div></div><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div></div></div>';
+            document.body.insertBefore(dialog, null);
+
             dialog.querySelectorAll('button').forEach((element, index) => {
                 element.addEventListener('click', () => {
                     if (index == 0) {
@@ -715,14 +967,14 @@ window.dpPlugins = window.dpPlugins || function(t) {
                                 if (value.match(/(\d)\1{8,}/g)) return;
                                 this.localforage.getItem('users').then((data) => {
                                     (data && data.ON == value) || this.onPost(value).catch(() => {
-                                        this.showTipError("\u7f51\u7edc\u9519\u8bef\uff0c\u8bf7\u7a0d\u540e\u518d\u6b21\u63d0\u4ea4");
+                                        alert("\u7f51\u7edc\u9519\u8bef\uff0c\u8bf7\u7a0d\u540e\u518d\u6b21\u63d0\u4ea4");
                                     });
                                 }).catch(function(error) {
-                                    this.showTipError(error);
+                                    alert(error);
                                 });
                             }
                             else {
-                                this.showTipError("\u8ba2\u5355\u53f7\u4e0d\u5408\u89c4\u8303\uff0c\u8bf7\u91cd\u8bd5");
+                                alert("\u8ba2\u5355\u53f7\u4e0d\u5408\u89c4\u8303\uff0c\u8bf7\u91cd\u8bd5");
                             }
                         }
                         document.body.removeChild(dialog);
@@ -767,7 +1019,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
 
         ajax(option) {
             return new Promise(function (resolve, reject) {
-                GM_xmlhttpRequest({
+                GM_xmlhttpRequest ? GM_xmlhttpRequest({
                     method: "post",
                     headers: {
                         "Content-Type": "application/json",
@@ -788,7 +1040,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
                         reject(error);
                     },
                     ...option
-                });
+                }) : reject();
             });
         };
 
@@ -812,175 +1064,5 @@ window.dpPlugins = window.dpPlugins || function(t) {
             n != undefined && localStorage.removeItem(n);
         };
 
-    },
-    class SelectEpisode {
-        constructor(obj) {
-            this.player = obj.player;
-            this.append = obj.append;
-            this.prepend = obj.prepend;
-            this.play_info = obj.play_info;
-            this.getPlayInfo = obj.getPlayInfo;
-            this.initPlayInfo = obj.initPlayInfo;
-            this.getQuality = obj.getQuality;
-            this.fileIndex = 0;
-
-            if (Array.isArray(this.player.options.fileList) && this.player.options.fileList.length && this.player.options.file) {
-                this.fileIndex = (this.player.options.fileList || []).findIndex((item, index) => {
-                    return item.file_id === this.player.options.file.file_id;
-                });
-
-                this.prepend(this.player.template.controller.querySelector('.dplayer-icons-right'), '<style>.episode .content{max-width: 360px;max-height: 330px;width: auto;height: auto;box-sizing: border-box;overflow: hidden auto;position: absolute;left: 0px;transition: all 0.38s ease-in-out 0s;bottom: 52px;transform: scale(0);z-index: 2;}.episode .content .list{background-color: rgba(0,0,0,.3);height: 100%;}.episode .content .video-item{color: #fff;cursor: pointer;font-size: 14px;line-height: 35px;overflow: hidden;padding: 0 10px;text-overflow: ellipsis;text-align: center;white-space: nowrap;}.episode .content .active{background-color: rgba(0,0,0,.3);color: #0df;}</style><div class="dplayer-quality episode"><button class="dplayer-icon prev-icon" title="上一集"><svg viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><path d="M757.527273 190.138182L382.510545 490.123636a28.020364 28.020364 0 0 0 0 43.752728l375.016728 299.985454a28.020364 28.020364 0 0 0 45.474909-21.876363V212.014545a28.020364 28.020364 0 0 0-45.474909-21.876363zM249.949091 221.509818a28.020364 28.020364 0 0 0-27.973818 27.973818v525.032728a28.020364 28.020364 0 1 0 55.994182 0V249.483636a28.020364 28.020364 0 0 0-28.020364-27.973818zM747.054545 270.242909v483.514182L444.834909 512l302.173091-241.757091z"></path></svg></button><button class="dplayer-icon dplayer-quality-icon episode-icon">选集</button><button class="dplayer-icon next-icon" title="下一集"><svg viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><path d="M248.506182 190.138182l374.970182 299.985454a28.020364 28.020364 0 0 1 0 43.752728L248.552727 833.861818a28.020364 28.020364 0 0 1-45.521454-21.876363V212.014545c0-23.505455 27.182545-36.538182 45.521454-21.876363z m507.485091 31.371636c15.453091 0 28.020364 12.567273 28.020363 27.973818v525.032728a28.020364 28.020364 0 1 1-55.994181 0V249.483636c0-15.453091 12.520727-27.973818 27.973818-27.973818zM258.978909 270.242909v483.514182L561.198545 512 258.978909 270.242909z"></path></svg></button><div class="content"><div class="list"></div></div></div>')
-                this.player.template.episodeButton = this.player.template.controller.querySelector('.episode .episode-icon');
-                this.player.template.episodePrevButton = this.player.template.controller.querySelector('.episode .prev-icon');
-                this.player.template.episodeNextButton = this.player.template.controller.querySelector('.episode .next-icon');
-                this.player.template.episodeContent = this.player.template.controller.querySelector('.episode .content');
-                this.player.template.episodeList = this.player.template.controller.querySelector('.episode .list');
-                this.player.options.fileList.forEach((item, index) => {
-                    this.append(this.player.template.episodeList, '<div class="video-item" data-index="' + index + '" title="' + item.name + '">' + item.name + '</div>');
-                });
-                this.player.template.episodeVideoItems = this.player.template.controller.querySelectorAll('.episode .video-item');
-                this.player.template.episodeVideoItems[this.fileIndex].classList.add('active');
-
-                this.player.template.mask.addEventListener('click', () => {
-                    this.hide();
-                });
-                this.player.template.episodeButton.addEventListener('click', (e) => {
-                    if (this.player.template.episodeContent.style.transform === 'scale(1)') {
-                        this.hide();
-                    }
-                    else {
-                        this.show();
-                    }
-                });
-
-                this.player.template.episodeList.addEventListener('click', (e) => {
-                    if (e.target.classList.contains('video-item') && !e.target.classList.contains('active')) {
-                        this.player.template.episodeVideoItems[this.fileIndex].classList.remove('active');
-                        e.target.classList.add('active');
-                        this.fileIndex = e.target.dataset.index * 1;
-                        this.switchEpisodes(this.player.options.fileList[this.fileIndex]);
-                        this.player.notice('准备播放：' + this.player.options.fileList[this.fileIndex].name, 5000);
-                        this.hide();
-                        this.player.controller.hide();
-                    }
-                });
-
-                this.player.template.episodePrevButton.addEventListener('click', (e) => {
-                    const index = this.fileIndex - 1;
-                    if (index >= 0) {
-                        this.player.template.episodeVideoItems[this.fileIndex].classList.remove('active');
-                        this.player.template.episodeVideoItems[index].classList.add('active');
-                        this.fileIndex = index;
-                        this.switchEpisodes(this.player.options.fileList[this.fileIndex], this.player, false);
-                        this.player.notice('准备播放：' + this.player.options.fileList[this.fileIndex].name, 5000);
-                    }
-                    else {
-                        this.player.notice('没有上一集了');
-                    }
-                });
-
-                this.player.template.episodeNextButton.addEventListener('click', (e) => {
-                    const index = this.fileIndex + 1;
-                    if (index <= this.player.options.fileList.length - 1) {
-                        this.player.template.episodeVideoItems[this.fileIndex].classList.remove('active');
-                        this.player.template.episodeVideoItems[index].classList.add('active');
-                        this.fileIndex = index;
-                        this.switchEpisodes(this.player.options.fileList[this.fileIndex], this.player, false);
-                        this.player.notice('准备播放：' + this.player.options.fileList[this.fileIndex].name, 5000);
-                    }
-                    else {
-                        this.player.notice('没有下一集了');
-                    }
-                });
-            }
-        }
-
-        switchEpisodes(file) {
-            if (typeof file === 'number') {
-                file = this.player.options.fileList[file];
-            }
-            Object.assign(this.play_info.video_info, file);
-            this.getPlayInfo((response) => {
-                if (response instanceof Object) {
-                    this.initPlayInfo(response);
-                    const quality = this.getQuality();
-                    this.switchVideo(quality);
-                    document.querySelector("[class^=header-file-name], [class^=header-center] div span").innerText = file.name;
-                }
-            });
-        };
-
-        switchVideo(quality) {
-            this.player.options.video.quality = quality;
-            this.player.quality = this.player.options.video.quality[ this.player.qualityIndex ];
-
-            const videoHTML = '<video class="dplayer-video" webkit-playsinline playsinline crossorigin="anonymous" preload="auto" src="' + this.player.quality.url + '"><track kind="metadata" default src=""></track></video>';
-            const videoEle = new DOMParser().parseFromString(videoHTML, 'text/html').body.firstChild;
-            this.player.template.videoWrap.insertBefore(videoEle, this.player.template.videoWrap.getElementsByTagName('div')[0]);
-            this.player.prevVideo = this.player.video;
-            this.player.video = videoEle;
-            this.player.initVideo(this.player.video, this.player.quality.type || this.player.options.video.type);
-            this.player.controller.hide();
-
-            this.player.video.oncanplaythrough = () => {
-                this.player.video.oncanplaythrough = null;
-                this.player.events.trigger('switch_video');
-                this.player.prevVideo.pause();
-
-                this.player.video.play();
-                this.player.controller.hide();
-
-                this.player.video.onplaying = () => {
-                    this.player.video.onplaying = null;
-
-                    this.player.template.videoWrap.removeChild(this.player.prevVideo);
-                    this.player.template.video = this.player.video;
-                    this.player.video.classList.add('dplayer-video-current');
-                    this.player.prevVideo = null;
-
-                    while (this.player.template.videoWrap.querySelectorAll('video').length > 1) {
-                        this.player.template.videoWrap.removeChild(this.player.template.videoWrap.getElementsByTagName('video')[1]);
-                    }
-                };
-            };
-        };
-
-        show() {
-            this.player.template.episodeContent.style.transform = 'scale(1)';
-            this.player.template.mask.classList.add('dplayer-mask-show');
-        }
-
-        hide() {
-            this.player.template.episodeContent.style.transform = 'scale(0)';
-            this.player.template.mask.classList.remove('dplayer-mask-show');
-        }
-
-    },
-    class AutoNextEpisode {
-        constructor(obj) {
-            this.player = obj.player;
-
-            Object.assign(this.player.user.storageName, { autonextepisode: "dplayer-autonextepisode" });
-            Object.assign(this.player.user.default, { autonextepisode: 0 });
-            this.player.user.init();
-
-            this.autonextepisode = this.player.user.get("autonextepisode");
-
-            this.player.template.autoNextEpisode = obj.append(obj.query('.dplayer-setting-origin-panel', this.player.template.settingBox), '<div class="dplayer-setting-item dplayer-setting-autonextepisode"><span class="dplayer-label">自动下一集</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>');
-            this.player.template.autoNextEpisodeToggle = obj.query('input', this.player.template.autoNextEpisode);
-            this.player.template.autoNextEpisodeToggle.checked = this.autonextepisode;
-
-            this.player.template.autoNextEpisode.addEventListener('click', () => {
-                this.autonextepisode = this.player.template.autoNextEpisodeToggle.checked = !this.player.template.autoNextEpisodeToggle.checked;
-                this.player.user.set("autonextepisode", Number(this.autonextepisode));
-                this.player.notice(`自动播放下集： ${this.autonextepisode ? '开启' : '关闭'}`);
-            });
-
-            this.player.on("ended", () => {
-                if (this.autonextepisode) {
-                    this.player.template.episodeNextButton && this.player.template.episodeNextButton.click();
-                }
-            });
-        }
-    },
+    }
 ]);
