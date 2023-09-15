@@ -34,6 +34,10 @@ window.dpPlugins = window.dpPlugins || function(t) {
         return parent.querySelector(selector);
     };
 
+    obj.queryAll = function (selector, parent = document) {
+        return parent.querySelectorAll(selector);
+    };
+
     obj.append = function (parent, child) {
         if (child instanceof Element) {
             Node.prototype.appendChild.call(parent, child);
@@ -88,6 +92,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
                     this.hls.destroy();
                     this.hls = this.player.plugins.hls;
                     this.onEvents();
+                    localStorage.setItem("dplayer-defaultQuality", this.player.quality.name);
                 }
             });
 
@@ -169,7 +174,6 @@ window.dpPlugins = window.dpPlugins || function(t) {
             Object.assign(this.player.user.storageName, { imageenhancer: "dplayer-imageenhancer" });
             Object.assign(this.player.user.default, { imageenhancer: 0 });
             this.player.user.init();
-
             this.imageenhancer = this.player.user.get("imageenhancer");
             if (this.imageenhancer) {
                 this.player.video.style.filter = 'contrast(1.01) brightness(1.05) saturate(1.1)';
@@ -508,9 +512,117 @@ window.dpPlugins = window.dpPlugins || function(t) {
             });
         }
     },
+    class MemoryPlay {
+        constructor(player, obj) {
+            this.player = player;
+            this.file_id = this.player.options?.file?.file_id;
+            this.hasMemoryDisplay = false;
+
+            Object.assign(this.player.user.storageName, { automemoryplay: "dplayer-automemoryplay" });
+            Object.assign(this.player.user.default, { automemoryplay: 0 });
+            this.player.user.init();
+            this.automemoryplay = this.player.user.get("automemoryplay");
+
+            this.player.template.autoMemoryPlay = obj.append(obj.query('.dplayer-setting-origin-panel', this.player.template.settingBox), '<div class="dplayer-setting-item dplayer-setting-automemoryplay"><span class="dplayer-label">自动记忆播放</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>');
+            this.player.template.autoMemoryPlayToggle = obj.query('input', this.player.template.autoMemoryPlay);
+            this.player.template.autoMemoryPlayToggle.checked = this.automemoryplay;
+
+            this.player.template.autoMemoryPlay.addEventListener('click', () => {
+                this.automemoryplay = this.player.template.autoMemoryPlayToggle.checked = !this.player.template.autoMemoryPlayToggle.checked;
+                this.player.user.set("automemoryplay", Number(this.automemoryplay));
+                this.player.notice(`自动记忆播放： ${this.automemoryplay ? '开启' : '关闭'}`);
+            });
+
+            this.player.on('quality_end', () => {
+                if (this.file_id !== this.player.options?.file?.file_id) {
+                    this.file_id = this.player.options?.file?.file_id;
+                    this.hasMemoryDisplay = false;
+                }
+                this.run();
+            });
+
+            document.onvisibilitychange = () => {
+                if (document.visibilityState === 'hidden') {
+                    const { video: { currentTime, duration } } = this.player;
+                    this.setTime(this.file_id, currentTime, duration);
+                }
+            };
+
+            window.onbeforeunload = () => {
+                const { video: { currentTime, duration } } = this.player;
+                this.setTime(this.file_id, currentTime, duration);
+            };
+
+            this.run();
+        }
+
+        run() {
+            if (this.hasMemoryDisplay === false) {
+                this.hasMemoryDisplay = true;
+
+                const { video: { currentTime, duration } } = this.player;
+                const memoryTime = this.getTime(this.file_id);
+                if (memoryTime && memoryTime > currentTime) {
+                    if (this.automemoryplay) {
+                        this.player.seek(memoryTime);
+
+                        if (this.player.video.paused) {
+                            this.player.play();
+                        }
+                    }
+                    else {
+                        const fTime = this.formatTime(memoryTime);
+                        let memoryNode = document.createElement('div');
+                        memoryNode.setAttribute('class', 'memory-play-wrap');
+                        memoryNode.setAttribute('style', 'display: block;position: absolute;left: 33px;bottom: 66px;font-size: 15px;padding: 7px;border-radius: 3px;color: #fff;z-index:100;background: rgba(0,0,0,.5);');
+                        memoryNode.innerHTML = '上次播放到：' + fTime + '&nbsp;&nbsp;<a href="javascript:void(0);" class="play-jump" style="text-decoration: none;color: #06c;"> 跳转播放 &nbsp;</a><em class="close-btn" style="display: inline-block;width: 15px;height: 15px;vertical-align: middle;cursor: pointer;background: url(https://nd-static.bdstatic.com/m-static/disk-share/widget/pageModule/share-file-main/fileType/video/img/video-flash-closebtn_15f0e97.png) no-repeat;"></em>';
+                        this.player.container.insertBefore(memoryNode, null);
+
+                        let memoryTimeout = setTimeout(() => {
+                            this.player.container.removeChild(memoryNode);
+                        }, 15000);
+
+                        memoryNode.querySelector('.close-btn').onclick = () => {
+                            this.player.container.removeChild(memoryNode);
+                            clearTimeout(memoryTimeout);
+                        };
+
+                        memoryNode.querySelector('.play-jump').onclick = () => {
+                            this.player.seek(memoryTime);
+                            this.player.container.removeChild(memoryNode);
+                            clearTimeout(memoryTimeout);
+                        }
+                    }
+                }
+            }
+        }
+
+        getTime(e) {
+            return localStorage.getItem("video_" + e) || 0;
+        }
+
+        setTime(e, t, o) {
+            e && t && (e = "video_" + e, t <= 60 || t + 120 >= o || 0 ? localStorage.removeItem(e) : localStorage.setItem(e, t));
+        }
+
+        formatTime(seconds) {
+            var secondTotal = Math.round(seconds)
+            , hour = Math.floor(secondTotal / 3600)
+            , minute = Math.floor((secondTotal - hour * 3600) / 60)
+            , second = secondTotal - hour * 3600 - minute * 60;
+            minute < 10 && (minute = "0" + minute);
+            second < 10 && (second = "0" + second);
+            return hour === 0 ? minute + ":" + second : hour + ":" + minute + ":" + second;
+        }
+    },
     class Subtitle {
         constructor(player, obj) {
             this.player = player;
+            this.color = '#fff';
+            this.bottom = 10;
+            this.fontSize = 5;
+            this.offset = 0;
+            this.offsetStep = 1;
 
             if (!player.events.type('subtitle_end')) {
                 player.events.playerEvents.push('subtitle_end');
@@ -532,6 +644,118 @@ window.dpPlugins = window.dpPlugins || function(t) {
 
             this.player.on('episode_end', () => {
                 this.clear();
+            });
+
+
+            this.player.template.subtitleSettingBox = obj.append(this.player.template.controller, '<div class="dplayer-icons dplayer-comment-box subtitle-setting-box" style="bottom: 10px;left: auto;right: 400px !important;display: block;"><div class="dplayer-comment-setting-box"><div class="dplayer-comment-setting-color"><div class="dplayer-comment-setting-title">字幕颜色<button type="text" class="color-custom" style="line-height: 16px;font-size: 12px;top: 12px;right: 12px;color: #fff;background: rgba(28, 28, 28, 0.9);position: absolute;">自定义</button></div><label><input type="radio" name="dplayer-danmaku-color-1" value="#fff" checked=""><span style="background: #fff;"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#e54256"><span style="background: #e54256"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#ffe133"><span style="background: #ffe133"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#64DD17"><span style="background: #64DD17"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#39ccff"><span style="background: #39ccff"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#D500F9"><span style="background: #D500F9"></span></label></div><div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">字幕位置</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>上移</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0" checked=""><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>下移</span></label></div><div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">字幕大小</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>加大</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>减小</span></label></div><div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">字幕偏移<div style="margin-top: -30px;right: 14px;position: absolute;">偏移量<input type="number" class="subtitle-offset-step" style="height: 14px;width: 50px;margin-left: 4px;border: 1px solid #fff;border-radius: 3px;color: #fff;background: rgba(28, 28, 28, 0.9);text-align: center;" value="1" step="1" min="1"></div></div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>前移</span></label><label><span><input type="text" class="subtitle-offset" style="width: 94%;height: 14px;background: rgba(28, 28, 28, 0.9);border: 0px solid #fff;text-align: center;" value="0" title="双击恢复默认"></span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>后移</span></label></div><div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">更多字幕功能</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>本地字幕</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>待定</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>待定</span></label></div></div></div>');
+            this.player.template.subtitleCommentSettingBox = obj.query('.dplayer-comment-setting-box', this.player.template.subtitleSettingBox);
+            this.player.template.subtitleSetting = obj.append(obj.query('.dplayer-setting-origin-panel', this.player.template.settingBox), '<div class="dplayer-setting-item dplayer-setting-subtitle"><span class="dplayer-label">字幕设置</span><div class="dplayer-toggle"><svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 32 32"><path d="M22 16l-10.105-10.6-1.895 1.987 8.211 8.613-8.211 8.612 1.895 1.988 8.211-8.613z"></path></svg></div></div>');
+            this.player.template.mask.addEventListener('click', () => {
+                this.hide();
+            });
+            this.player.template.subtitleSetting.addEventListener('click', () => {
+                this.toggle();
+            });
+
+            this.player.template.subtitleColorPicker = obj.append(this.player.template.container, '<input type="color" id="colorPicker">');
+            this.player.template.subtitleColorCustom = obj.query('.color-custom', this.player.template.subtitleCommentSettingBox);
+            this.player.template.subtitleColorCustom.addEventListener('click', () => {
+                this.player.template.subtitleColorPicker.click();
+            });
+            this.player.template.subtitleColorPicker.addEventListener('input', (event) => {
+                this.color = event.target.value;
+                this.set("color", this.color);
+                this.style({color: this.color});
+            });
+
+            this.player.template.subtitleSettingColor = obj.query('.dplayer-comment-setting-color', this.player.template.subtitleCommentSettingBox);
+            this.player.template.subtitleSettingColor.addEventListener('click', (event) => {
+                if (event.target.nodeName === "INPUT") {
+                    this.color = event.target.value;
+                    this.set("color", this.color);
+                    this.style({color: this.color});
+                }
+            });
+
+            this.player.template.subtitleSettingItem = obj.queryAll('.dplayer-comment-setting-type', this.player.template.subtitleCommentSettingBox);
+            this.player.template.subtitleSettingItem[0].addEventListener('click', (event) => {
+                if (event.target.nodeName === "INPUT") {
+                    event.target.value == "1" ? this.bottom += 1 : event.target.value == "2" ? this.bottom -= 1 : this.bottom = 10;
+                    this.set("bottom", this.bottom);
+                    this.style({bottom: this.bottom + "%"});
+                }
+            });
+
+            this.player.template.subtitleSettingItem[1].addEventListener('click', (event) => {
+                if (event.target.nodeName === "INPUT") {
+                    event.target.value == "1" ? this.fontSize += .5 : event.target.value == "2" ? this.fontSize -= .5 : this.fontSize = 5;
+                    this.set("fontSize", this.fontSize);
+                    this.style({fontSize: this.fontSize + "vh"});
+                }
+            });
+
+            this.player.template.subtitleOffsetStep = obj.query('.subtitle-offset-step', this.player.template.subtitleSettingItem[2]);
+            this.player.template.subtitleOffsetStep.addEventListener('input', (event) => {
+                this.offsetStep = event.target.value * 1;
+            });
+
+            this.player.template.subtitleOffset = obj.query('.subtitle-offset', this.player.template.subtitleSettingItem[2]);
+            this.player.template.subtitleOffset.addEventListener('input', (event) => {
+                this.offset = event.target.value * 1;
+                this.subtitleOffset();
+            });
+            this.player.template.subtitleOffset.addEventListener('dblclick', (event) => {
+                if (this.offset != 0) {
+                    this.offset = 0;
+                    event.target.value = 0;
+                    this.subtitleOffset();
+                }
+            });
+
+            this.player.template.subtitleSettingItem[2].addEventListener('click', (event) => {
+                if (event.target.nodeName === "INPUT") {
+                    if (event.target.type === "radio") {
+                        let value = this.player.template.subtitleOffset.value *= 1;
+                        if (event.target.value == "1") {
+                            value += this.offsetStep || 1;
+                        }
+                        else if (event.target.value == "2") {
+                            value -= this.offsetStep || 1;
+                        }
+                        else {
+                            value = 0;
+                        }
+                        this.offset = value;
+                        this.player.template.subtitleOffset.value = value;
+                        this.subtitleOffset();
+                    }
+                }
+            });
+
+            this.player.template.subtitleLocalFile = obj.append(this.player.template.container, '<input class="subtitleLocalFile" type="file" accept="webvtt,.vtt,.srt,.ssa,.ass" style="display: none;">');
+            this.player.template.subtitleSettingItem[3].addEventListener('click', (event) => {
+                if (event.target.nodeName === "INPUT") {
+                    if (event.target.value == "1") {
+                        this.player.template.subtitleLocalFile.click();
+                        this.hide();
+                    }
+                }
+            });
+            this.player.template.subtitleLocalFile.addEventListener("change", (event) => {
+                if (event.target.files.length) {
+                    const file = event.target.files[0];
+                    const file_ext = file.name.split(".").pop().toLowerCase();
+                    this.blobToText(file).then((text) => {
+                        let subtitleOption = {};
+                        subtitleOption.url = '';
+                        subtitleOption.sarr = this.subParser(text, file_ext);
+                        subtitleOption.lang = this.getlangBySarr(subtitleOption.sarr);
+                        subtitleOption.name = subtitleOption.name || this.langToLabel(subtitleOption.lang);
+                        this.add([subtitleOption]);
+                        this.switch(subtitleOption);
+                    });
+                }
+                event.target.value = "";
             });
         }
 
@@ -620,7 +844,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
                     return this.requestFile(url).then((text) => {
                         subtitleOption.sarr = this.subParser(text, extension, subtitleOption.delay || 0);
                         subtitleOption.lang = subtitleOption.lang || this.getlangBySarr(subtitleOption.sarr);
-                        subtitleOption.label = this.langToLabel(subtitleOption.lang);
+                        subtitleOption.name = subtitleOption.name || this.langToLabel(subtitleOption.lang);
                         return subtitleOption;
                     });
                 }
@@ -760,6 +984,59 @@ window.dpPlugins = window.dpPlugins || function(t) {
             }[lang] || "未知语言";
         };
 
+        subtitleOffset() {
+            const { video, subtitle } = this.player;
+            const textTrack = video.textTracks[0];
+            if (textTrack && textTrack.cues) {
+                const cues = Array.from(textTrack.cues);
+                const sarr = this.player.options.subtitle.url.find((item) => {
+                    return item.sarr && item.sarr[parseInt(item.sarr.length / 2)].text === cues[parseInt(cues.length / 2)].text;
+                })?.sarr;
+                if (!sarr) {
+                    return;
+                }
+
+                for (let index = 0; index < cues.length; index++) {
+                    const cue = cues[index];
+                    cue.startTime = sarr[index].startTime + this.offset;
+                    cue.endTime = sarr[index].endTime + this.offset;
+                }
+
+                subtitle.init();
+                this.player.notice(`字幕偏移: ${this.offset} 秒`);
+            }
+            else {
+                this.offset = 0;
+            }
+        }
+
+        toggle() {
+            if (this.player.template.subtitleCommentSettingBox.classList.contains('dplayer-comment-setting-open')) {
+                this.hide();
+            } else {
+                this.show();
+            }
+        }
+
+        show() {
+            this.player.template.subtitleCommentSettingBox.classList.add('dplayer-comment-setting-open');
+            this.player.template.mask.classList.add('dplayer-mask-show');
+        }
+
+        hide() {
+            this.player.template.subtitleCommentSettingBox.classList.remove('dplayer-comment-setting-open');
+            this.player.template.settingBox.classList.remove('dplayer-setting-box-open');
+            this.player.template.mask.classList.remove('dplayer-mask-show');
+        }
+
+        get(key) {
+            return localStorage.getItem("dplayer-subtitle-" + key);
+        }
+
+        set(key, value) {
+            key && value && localStorage.setItem("dplayer-subtitle-" + key, value);
+        }
+
         style(key, value) {
             const { subtitle } = this.player.template;
             if (typeof key === 'object') {
@@ -772,111 +1049,8 @@ window.dpPlugins = window.dpPlugins || function(t) {
             return subtitle;
         }
     },
-    class MemoryPlay {
-        constructor(player, obj) {
-            this.player = player;
-            this.file_id = this.player.options?.file?.file_id;
-            this.hasMemoryDisplay = false;
-
-            Object.assign(this.player.user.storageName, { automemoryplay: "dplayer-automemoryplay" });
-            Object.assign(this.player.user.default, { automemoryplay: 0 });
-            this.player.user.init();
-            this.automemoryplay = this.player.user.get("automemoryplay");
-
-            this.player.template.autoMemoryPlay = obj.append(obj.query('.dplayer-setting-origin-panel', this.player.template.settingBox), '<div class="dplayer-setting-item dplayer-setting-automemoryplay"><span class="dplayer-label">自动记忆播放</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>');
-            this.player.template.autoMemoryPlayToggle = obj.query('input', this.player.template.autoMemoryPlay);
-            this.player.template.autoMemoryPlayToggle.checked = this.automemoryplay;
-
-            this.player.template.autoMemoryPlay.addEventListener('click', () => {
-                this.automemoryplay = this.player.template.autoMemoryPlayToggle.checked = !this.player.template.autoMemoryPlayToggle.checked;
-                this.player.user.set("automemoryplay", Number(this.automemoryplay));
-                this.player.notice(`自动记忆播放： ${this.automemoryplay ? '开启' : '关闭'}`);
-            });
-
-            this.player.on('quality_end', () => {
-                if (this.file_id !== this.player.options?.file?.file_id) {
-                    this.file_id = this.player.options?.file?.file_id;
-                    this.hasMemoryDisplay = false;
-                }
-                this.run();
-            });
-
-            document.onvisibilitychange = () => {
-                if (document.visibilityState === 'hidden') {
-                    const { video: { currentTime, duration } } = this.player;
-                    this.setTime(this.file_id, currentTime, duration);
-                }
-            };
-
-            window.onbeforeunload = () => {
-                const { video: { currentTime, duration } } = this.player;
-                this.setTime(this.file_id, currentTime, duration);
-            };
-
-            this.run();
-        }
-
-        run() {
-            if (this.hasMemoryDisplay === false) {
-                this.hasMemoryDisplay = true;
-
-                const { video: { currentTime, duration } } = this.player;
-                const memoryTime = this.getTime(this.file_id);
-                if (memoryTime && memoryTime > currentTime) {
-                    if (this.automemoryplay) {
-                        this.player.seek(memoryTime);
-
-                        if (this.player.video.paused) {
-                            this.player.play();
-                        }
-                    }
-                    else {
-                        const fTime = this.formatTime(memoryTime);
-                        let memoryNode = document.createElement('div');
-                        memoryNode.setAttribute('class', 'memory-play-wrap');
-                        memoryNode.setAttribute('style', 'display: block;position: absolute;left: 33px;bottom: 66px;font-size: 15px;padding: 7px;border-radius: 3px;color: #fff;z-index:100;background: rgba(0,0,0,.5);');
-                        memoryNode.innerHTML = '上次播放到：' + fTime + '&nbsp;&nbsp;<a href="javascript:void(0);" class="play-jump" style="text-decoration: none;color: #06c;"> 跳转播放 &nbsp;</a><em class="close-btn" style="display: inline-block;width: 15px;height: 15px;vertical-align: middle;cursor: pointer;background: url(https://nd-static.bdstatic.com/m-static/disk-share/widget/pageModule/share-file-main/fileType/video/img/video-flash-closebtn_15f0e97.png) no-repeat;"></em>';
-                        this.player.container.insertBefore(memoryNode, null);
-
-                        let memoryTimeout = setTimeout(() => {
-                            this.player.container.removeChild(memoryNode);
-                        }, 15000);
-
-                        memoryNode.querySelector('.close-btn').onclick = () => {
-                            this.player.container.removeChild(memoryNode);
-                            clearTimeout(memoryTimeout);
-                        };
-
-                        memoryNode.querySelector('.play-jump').onclick = () => {
-                            this.player.seek(memoryTime);
-                            this.player.container.removeChild(memoryNode);
-                            clearTimeout(memoryTimeout);
-                        }
-                    }
-                }
-            }
-        }
-
-        getTime(e) {
-            return localStorage.getItem("video_" + e) || 0;
-        }
-
-        setTime(e, t, o) {
-            e && t && (e = "video_" + e, t <= 60 || t + 120 >= o || 0 ? localStorage.removeItem(e) : localStorage.setItem(e, t));
-        }
-
-        formatTime(seconds) {
-            var secondTotal = Math.round(seconds)
-            , hour = Math.floor(secondTotal / 3600)
-            , minute = Math.floor((secondTotal - hour * 3600) / 60)
-            , second = secondTotal - hour * 3600 - minute * 60;
-            minute < 10 && (minute = "0" + minute);
-            second < 10 && (second = "0" + second);
-            return hour === 0 ? minute + ":" + second : hour + ":" + minute + ":" + second;
-        }
-    },
     class Appreciation {
-        constructor(player) {
+        constructor(player, obj) {
             this.player = player;
             this.now = Date.now();
             this.localforage = window.localforage;
@@ -948,7 +1122,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
                     }
                 }
             });
-        };
+        }
 
         showDialog() {
             let dialog = document.createElement('div');
@@ -981,18 +1155,18 @@ window.dpPlugins = window.dpPlugins || function(t) {
                     }
                 });
             });
-        };
+        }
 
         onPost(on) {
             return this.usersPost().then((data) => {
                 Date.parse(data.expire_time) === 0 || this.localforage.setItem("users", Object.assign(data || {}, { expire_time: new Date(Date.now() + 864000).toISOString() })).then((data) => {GM_setValue("users_sign", btoa(encodeURIComponent(JSON.stringify(data))))});
                 return this.infoPost(data, on);
             });
-        };
+        }
 
         usersPost() {
             return this.users(this.getItem("token"));
-        };
+        }
 
         users(data) {
             return this.ajax({
@@ -1003,7 +1177,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
                     version: GM_info?.script?.version
                 })}})
             });
-        };
+        }
 
         infoPost(data, on) {
             delete data.createdAt;
@@ -1015,7 +1189,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
                     ON: on
                 }))
             });
-        };
+        }
 
         ajax(option) {
             return new Promise(function (resolve, reject) {
@@ -1042,7 +1216,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
                     ...option
                 }) : reject();
             });
-        };
+        }
 
         getItem(n) {
             n = localStorage.getItem(n);
@@ -1058,11 +1232,33 @@ window.dpPlugins = window.dpPlugins || function(t) {
 
         setItem(n, t) {
             n && t != undefined && localStorage.setItem(n, t instanceof Object ? JSON.stringify(t) : t);
-        };
+        }
 
         removeItem(n) {
             n != undefined && localStorage.removeItem(n);
-        };
+        }
+    },
+    class doHotKey {
+        constructor(player) {
+            this.player = player;
 
-    }
+            this.player.template.videoWrap.addEventListener('dblclick', (event) => {
+                this.player.fullScreen.toggle();
+            });
+
+            document.addEventListener("wheel", (event) => {
+                if (this.player.focus) {
+                    event = event || window.event;
+                    var o, t = this.player;
+                    if (event.deltaY < 0) {
+                        o = t.volume() + .01;
+                        t.volume(o);
+                    } else if (event.deltaY > 0) {
+                        o = t.volume() - .01;
+                        t.volume(o);
+                    }
+                }
+            });
+        }
+    },
 ]);
