@@ -100,7 +100,7 @@
                     const quality = obj.getQuality();
                     window.player.options.video.quality = quality;
                     window.player.quality = quality[ obj.getDefaultQuality(quality) ];
-                    window.player.events.trigger('video_end');
+                    window.player.events.trigger('episode_end');
                 }
                 return;
             }
