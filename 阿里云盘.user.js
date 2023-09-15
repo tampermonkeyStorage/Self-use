@@ -97,6 +97,9 @@
             }
             else {
                 if (window.player) {
+                    const quality = obj.getQuality();
+                    window.player.options.video.quality = quality;
+                    window.player.quality = quality[ obj.getDefaultQuality(quality) ];
                     window.player.events.trigger('video_end');
                 }
                 return;
