@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      4.1.1
+// @version      4.1.2
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，支持移动端播放，...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -186,8 +186,9 @@
                         if (response instanceof Object) {
                             obj.initPlayInfo(response);
                             const quality = obj.getQuality();
+                            const defaultQuality = obj.getDefaultQuality(quality);
                             player.options.video.quality = quality;
-                            player.quality = player.options.video.quality[ player.qualityIndex ];
+                            player.quality = player.options.video.quality[ defaultQuality ];
                             player.events.trigger('video_end');
                         }
                     });
@@ -218,7 +219,7 @@
         } catch (error) {
             console.error("播放器创建错误", error);
         }
-    }
+    };
 
     obj.getQuality = function (live_task_list) {
         var task_list = live_task_list || obj.play_info.video_info?.video_preview_play_info?.live_transcoding_task_list || [];
@@ -374,13 +375,13 @@
     };
 
     obj.get_video_preview_play_info = function () {
-        const { default_drive_id, token_type, access_token } = obj.getItem("token");
-        const { file_id } = obj.play_info.video_info;
+        const { token_type, access_token } = obj.getItem("token");
+        const { drive_id, file_id } = obj.play_info.video_info;
         const { "x-device-id": x_id, "x-signature": x_signature } = obj.headers;
         return fetch("https://api.aliyundrive.com/v2/file/get_video_preview_play_info", {
             body: JSON.stringify({
                 category: "live_transcoding",
-                drive_id: default_drive_id,
+                drive_id: drive_id,
                 file_id: file_id,
                 template_id: "",
                 get_subtitle_info: !0
