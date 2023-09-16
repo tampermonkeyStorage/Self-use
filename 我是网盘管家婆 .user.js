@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.6.1
+// @version      0.6.2
 // @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云.夸克.123盘】 功能概述：【网盘页面增加资源搜索快捷方式，访问过的分享链接和密码自动记忆，本地缓存数据库搜索】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -265,7 +265,7 @@
             ".dialog-dialog .active{background-color:#06a7ff;color:#fff;}",
             ".dialog-dialog .cache-count{width:18%;height:25px;color:green;font-weight:900;;font-size:20px;;text-align:center;}",
             ".dialog-dialog .cache-clear{color:red;float:right}",
-            ".dialog-dialog .find-key{width:78%;height:25px;}",
+            ".dialog-dialog .find-key{width:78%;height:25px;text-align: center;}",
             ".dialog-dialog .find-share{color:green;float:right}",
 
             ".dialog-dialog .web-items{width:100%;max-height:400px;overflow-y:auto;box-sizing:border-box;padding:1px;}",
@@ -428,6 +428,11 @@
         //此列表不分先后，不定时更新
         return {
             "baidu": [
+                {
+                    name: "M免费音乐网",
+                    link: "http://www.mianfeiyinyue.com/search.php?q=%s",
+                    type: 0,
+                },
                 {
                     name: "音乐磁场",
                     link: "https://www.hifini.com/search-%s.htm",
@@ -616,6 +621,11 @@
                 },
                 //不能直接搜索
                 {
+                    name: "万学阁",
+                    link: "https://www.wanxuege.com/forum.php",
+                    type: 0,
+                },
+                {
                     name: "云盘狗",
                     link: "http://www.yunpangou.com",
                     type: 8,
@@ -758,11 +768,6 @@
                 },
             ],
             "ty189": [
-                {
-                    name: "天翼小站",
-                    link: "https://yun.hei521.cn/index.php/search/%s/",
-                    type: 1,
-                },
                 {
                     name: "雷鲸小站",
                     link: "http://www.leijing.xyz/search?keyword=%s",
@@ -1357,7 +1362,8 @@
     ty189.initButtonShare = function() {
         $(document).on("DOMNodeInserted", ".outlink-box-s, .file-info", function(event) {
             if ($(".share-search").length == 0) {
-                $(".file-operate").prepend('<div data-v-a9c726de="" class="save-box share-search"><a data-v-a9c726de="" href="javascript:;" class="btn btn-save-as">资源搜索</a></div>');
+                var node = document.querySelector(".file-operate a"), attrName = node ? node.getAttributeNames()[0] : "";
+                $(".file-operate").append('<a ' + attrName + ' class="btn btn-show-link share-search" style="margin-left: 20px;background: #2b89ea; position: relative">资源搜索</a>');
                 $(".save-box a").css({"margin-left": 0});
                 $(".share-search").click(function () {
                     $(".dialog-dialog").css({display: "flex"});
@@ -1511,19 +1517,20 @@
     };
 
     aliyundrive.initButtonHome = function() {
-        if ($("#root header").length) {
-            console.warn($("#root header"));
-            if ($(".share-search").length == 0) {
-                var html = '<div style="margin:0px 8px;"></div><button class="button--2Aa4u primary--3AJe5 small---B8mi share-search">资源搜索</button>';
-                $("#root header:eq(0)").append(html);
-                $(".share-search").click(function () {
-                    $(".dialog-dialog").css({display: "flex"});
-                });
-            }
+        if ($(".share-search").length) return;
+        if ($('#root [class^="page-content"] header').length) {
+            var html = '<div style="margin:0px 8px;"></div><button class="button--WC7or primary--NVxfK small--e7LRt modal-footer-button--9CQLU share-search">资源搜索</button>';
+            $('#root [class^="page-content"] header').append(html);
+            $(".share-search").click(function () {
+                $(".dialog-dialog").css({display: "flex"});
+            });
+            $('#root').off("DOMNodeInserted").on("DOMNodeInserted", function() {
+                setTimeout(aliyundrive.initButtonHome, 1000);
+            });
         }
         else {
             console.warn("wait initButtonHome ...");
-            setTimeout(aliyundrive.initButtonHome, 1000)
+            setTimeout(aliyundrive.initButtonHome, 1000);
         }
     };
 
