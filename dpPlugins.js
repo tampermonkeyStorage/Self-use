@@ -58,6 +58,17 @@ window.dpPlugins = window.dpPlugins || function(t) {
         return parent.firstElementChild || parent.firstChild;
     };
 
+    obj.insertAfter = function (targetElement, child) {
+        var parent = targetElement.parentNode;
+        if (parent.lastChild == targetElement) {
+            return obj.append(parent, child);
+        }
+        else{
+            child = obj.append(parent, child);
+            return Node.prototype.insertBefore.call(parent, child, targetElement.nextSibling);
+        }
+    };
+
     obj.remove = function (child) {
         return Node.prototype.removeChild.call(child?.parentNode || document, child);
     };
@@ -615,14 +626,112 @@ window.dpPlugins = window.dpPlugins || function(t) {
             return hour === 0 ? minute + ":" + second : hour + ":" + minute + ":" + second;
         }
     },
+    class SkipPosition {
+        constructor(player, obj) {
+            this.player = player;
+            this.file_id = this.player.options?.file?.file_id;
+            this.timer = null;
+
+            Object.assign(this.player.user.storageName, { skipposition: "dplayer-skipposition", skipstarttime: "dplayer-skipstarttime", skipendtime: "dplayer-endtime" });
+            Object.assign(this.player.user.default, { skipposition: 0, skipstarttime: 0, skipendtime: 0 });
+            this.player.user.init();
+            this.skipposition = this.player.user.get("skipposition");
+            this.skipstarttime = this.player.user.get("skipstarttime");
+            this.skipendtime = this.player.user.get("skipendtime");
+
+            this.player.template.skipPosition = obj.append(obj.query('.dplayer-setting-origin-panel', this.player.template.settingBox), '<div class="dplayer-setting-item dplayer-setting-skipposition"><span class="dplayer-label">跳过片头片尾</span><div class="dplayer-toggle"><input class="dplayer-toggle-setting-input" type="checkbox" name="dplayer-toggle"><label for="dplayer-toggle"></label></div></div>');
+            this.player.template.skipPositionToggle = obj.query('input', this.player.template.skipPosition);
+            this.player.template.skipPositionToggle.checked = this.skipposition;
+
+            this.player.template.skipPositionBox = obj.insertAfter(this.player.template.settingBox, '<div class="dplayer-setting-skipposition-item" style="display: none;right: 155px;position: absolute;bottom: 50px;width: 150px;border-radius: 2px;background: rgba(28, 28, 28, 0.9);padding: 7px 0px;transition: all 0.3s ease-in-out 0s;overflow: hidden;z-index: 2;"><div class="dplayer-skipposition-item" style="padding: 5px 10px;box-sizing: border-box;cursor: pointer;position: relative;"><span class="dplayer-skipposition-label" title="双击设置当前时间为跳过片头时间" style="color: #eee;font-size: 13px;display: inline-block;vertical-align: middle;white-space: nowrap;">片头时间：</span><input type="number" style="width: 55px;height: 15px;top: 3px;font-size: 13px;border: 1px solid #fff;border-radius: 3px;text-align: center;" step="1" min="0" value="60"></div><div class="dplayer-skipposition-item" style="padding: 5px 10px;box-sizing: border-box;cursor: pointer;position: relative;"><span class="dplayer-skipposition-label" title="双击设置剩余时间为跳过片尾时间" style="color: #eee;font-size: 13px;display: inline-block;vertical-align: middle;white-space: nowrap;">片尾时间：</span><input type="number" style="width: 55px;height: 15px;top: 3px;font-size: 13px;border: 1px solid #fff;border-radius: 3px;text-align: center;" step="1" min="0" value="120"></div></div>');
+            this.player.template.skipPositionItems = obj.queryAll('.dplayer-skipposition-item', this.player.template.skipPositionBox);
+            this.player.template.jumpStartSpan = obj.query('span', this.player.template.skipPositionItems[0]);
+            this.player.template.jumpStartInput = obj.query('input', this.player.template.skipPositionItems[0]);
+            this.player.template.jumpEndSpan = obj.query('span', this.player.template.skipPositionItems[1]);
+            this.player.template.jumpEndInput = obj.query('input', this.player.template.skipPositionItems[1]);
+            this.player.template.jumpStartInput.value = this.skipstarttime;
+            this.player.template.jumpEndInput.value = this.skipendtime;
+
+            this.player.template.jumpStartSpan.addEventListener('dblclick', (event) => {
+                this.player.template.jumpStartInput.value = this.player.video.currentTime;
+                this.skipstarttime = this.player.video.currentTime;
+            });
+            this.player.template.jumpStartInput.addEventListener('input', (event) => {
+                this.skipstarttime = event.target.value * 1;
+                this.player.user.set("skipstarttime", this.skipstarttime);
+            });
+            this.player.template.jumpEndSpan.addEventListener('dblclick', (event) => {
+                this.skipendtime = this.player.video.duration - this.player.video.currentTime;
+                this.player.template.jumpEndInput.value = this.skipendtime;
+            });
+            this.player.template.jumpEndInput.addEventListener('input', (event) => {
+                this.skipendtime = event.target.value * 1;
+                this.player.user.set("skipendtime", this.skipendtime);
+            });
+
+            this.player.template.skipPosition.addEventListener('click', () => {
+                this.skipposition = this.player.template.skipPositionToggle.checked = !this.player.template.skipPositionToggle.checked;
+                this.player.user.set("skipposition", Number(this.skipposition));
+                this.skipposition ? this.show() : this.hide();
+                this.player.notice(`跳过片头片尾： ${this.skipposition ? '开启' : '关闭'}`);
+            });
+            this.player.template.skipPosition.addEventListener('mouseenter', () => {
+                if (this.skipposition) {
+                    this.show();
+                }
+            });
+
+            this.player.template.mask.addEventListener('click', () => {
+                this.hide();
+            });
+
+            this.player.on('quality_end', () => {
+                if (this.file_id !== this.player.options?.file?.file_id) {
+                    this.file_id = this.player.options?.file?.file_id;
+                    this.jumpStart();
+                    this.jumpEnd();
+                }
+            });
+
+            this.jumpStart();
+            this.jumpEnd();
+        }
+
+        jumpStart() {
+            if (this.skipposition && this.skipstarttime > this.player.video.currentTime) {
+                this.player.video.currentTime = this.skipstarttime;
+            }
+        }
+
+        jumpEnd() {
+            if (!this.timer) {
+                this.timer = setInterval(() => {
+                    if (this.skipposition && this.skipendtime >= (this.player.video.duration - this.player.video.currentTime)) {
+                        this.player.video.currentTime = this.player.video.duration;
+                        clearInterval(this.timer);
+                        this.timer = null;
+                    }
+                }, 3000);
+            }
+        }
+
+        show() {
+            this.player.template.skipPositionBox.style.display = 'block';
+        }
+
+        hide() {
+            this.player.template.skipPositionBox.style.display = 'none';
+        }
+
+    },
     class Subtitle {
         constructor(player, obj) {
             this.player = player;
-            this.color = '#fff';
-            this.bottom = 10;
-            this.fontSize = 5;
             this.offset = 0;
             this.offsetStep = 1;
+            this.color = this.get('color') || '#fff';
+            this.bottom = this.get('bottom') || '40px';
+            this.fontSize = this.get('fontSize') || '20px';
 
             if (!player.events.type('subtitle_end')) {
                 player.events.playerEvents.push('subtitle_end');
@@ -644,8 +753,21 @@ window.dpPlugins = window.dpPlugins || function(t) {
 
             this.player.on('episode_end', () => {
                 this.clear();
+
+                this.style({
+                    color: this.color,
+                    bottom: this.bottom,
+                    fontSize: this.fontSize,
+                });
             });
 
+            this.player.on('video_end', () => {
+                this.style({
+                    color: this.color,
+                    bottom: this.bottom,
+                    fontSize: this.fontSize,
+                });
+            });
 
             this.player.template.subtitleSettingBox = obj.append(this.player.template.controller, '<div class="dplayer-icons dplayer-comment-box subtitle-setting-box" style="bottom: 10px;left: auto;right: 400px !important;display: block;"><div class="dplayer-comment-setting-box"><div class="dplayer-comment-setting-color"><div class="dplayer-comment-setting-title">字幕颜色<button type="text" class="color-custom" style="line-height: 16px;font-size: 12px;top: 12px;right: 12px;color: #fff;background: rgba(28, 28, 28, 0.9);position: absolute;">自定义</button></div><label><input type="radio" name="dplayer-danmaku-color-1" value="#fff" checked=""><span style="background: #fff;"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#e54256"><span style="background: #e54256"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#ffe133"><span style="background: #ffe133"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#64DD17"><span style="background: #64DD17"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#39ccff"><span style="background: #39ccff"></span></label><label><input type="radio" name="dplayer-danmaku-color-1" value="#D500F9"><span style="background: #D500F9"></span></label></div><div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">字幕位置</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>上移</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0" checked=""><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>下移</span></label></div><div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">字幕大小</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>加大</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>默认</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>减小</span></label></div><div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">字幕偏移<div style="margin-top: -30px;right: 14px;position: absolute;">偏移量<input type="number" class="subtitle-offset-step" style="height: 14px;width: 50px;margin-left: 4px;border: 1px solid #fff;border-radius: 3px;color: #fff;background: rgba(28, 28, 28, 0.9);text-align: center;" value="1" step="1" min="1"></div></div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>前移</span></label><label><span><input type="text" class="subtitle-offset" style="width: 94%;height: 14px;background: rgba(28, 28, 28, 0.9);border: 0px solid #fff;text-align: center;" value="0" title="双击恢复默认"></span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>后移</span></label></div><div class="dplayer-comment-setting-type"><div class="dplayer-comment-setting-title">更多字幕功能</div><label><input type="radio" name="dplayer-danmaku-type-1" value="1"><span>本地字幕</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="0"><span>待定</span></label><label><input type="radio" name="dplayer-danmaku-type-1" value="2"><span>待定</span></label></div></div></div>');
             this.player.template.subtitleCommentSettingBox = obj.query('.dplayer-comment-setting-box', this.player.template.subtitleSettingBox);
@@ -680,17 +802,33 @@ window.dpPlugins = window.dpPlugins || function(t) {
             this.player.template.subtitleSettingItem = obj.queryAll('.dplayer-comment-setting-type', this.player.template.subtitleCommentSettingBox);
             this.player.template.subtitleSettingItem[0].addEventListener('click', (event) => {
                 if (event.target.nodeName === "INPUT") {
-                    event.target.value == "1" ? this.bottom += 1 : event.target.value == "2" ? this.bottom -= 1 : this.bottom = 10;
-                    this.set("bottom", this.bottom);
-                    this.style({bottom: this.bottom + "%"});
+                    if (event.target.value == "1") {
+                        this.bottom = parseFloat(this.bottom) + 1 + this.bottom.replace(/[\d\.]+/, '');
+                    }
+                    else if (event.target.value == "2") {
+                        this.bottom = parseFloat(this.bottom) - 1 + this.bottom.replace(/[\d\.]+/, '');
+                    }
+                    else {
+                        this.bottom = '20px';
+                    }
+                    this.set('bottom', this.bottom);
+                    this.style({bottom: this.bottom});
                 }
             });
 
             this.player.template.subtitleSettingItem[1].addEventListener('click', (event) => {
                 if (event.target.nodeName === "INPUT") {
-                    event.target.value == "1" ? this.fontSize += .5 : event.target.value == "2" ? this.fontSize -= .5 : this.fontSize = 5;
+                    if (event.target.value == "1") {
+                        this.fontSize = parseFloat(this.fontSize) + 1 + this.fontSize.replace(/[\d\.]+/, '');
+                    }
+                    else if (event.target.value == "2") {
+                        this.fontSize = parseFloat(this.fontSize) - 1 + this.fontSize.replace(/[\d\.]+/, '');
+                    }
+                    else {
+                        this.fontSize = '40px';
+                    }
                     this.set("fontSize", this.fontSize);
-                    this.style({fontSize: this.fontSize + "vh"});
+                    this.style({fontSize: this.fontSize});
                 }
             });
 
@@ -757,6 +895,12 @@ window.dpPlugins = window.dpPlugins || function(t) {
                 }
                 event.target.value = "";
             });
+
+            this.style({
+                color: this.color,
+                bottom: this.bottom,
+                fontSize: this.fontSize,
+            });
         }
 
         add(sublist) {
@@ -807,7 +951,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
         switch(newOption = {}) {
             return this.initCues(newOption).then((subArr) => {
                 if (newOption.name) {
-                    this.player.notice(`切换字幕: ${newOption.name}`);
+                    //this.player.notice(`切换字幕: ${newOption.name}`);
                 }
             });
         }
@@ -985,7 +1129,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
         };
 
         subtitleOffset() {
-            const { video, subtitle } = this.player;
+            const { video, subtitle, events } = this.player;
             const textTrack = video.textTracks[0];
             if (textTrack && textTrack.cues) {
                 const cues = Array.from(textTrack.cues);
@@ -1002,7 +1146,8 @@ window.dpPlugins = window.dpPlugins || function(t) {
                     cue.endTime = sarr[index].endTime + this.offset;
                 }
 
-                subtitle.init();
+                events.trigger('subtitle_change');
+
                 this.player.notice(`字幕偏移: ${this.offset} 秒`);
             }
             else {
@@ -1073,6 +1218,12 @@ window.dpPlugins = window.dpPlugins || function(t) {
                     });
                 }
             });
+
+            this.player.template.settingBox.addEventListener('click', () => {
+                this.isAppreciation().catch((error) => {
+                    this.showDialog();
+                });
+            });
         }
 
         isAppreciation() {
@@ -1126,7 +1277,7 @@ window.dpPlugins = window.dpPlugins || function(t) {
 
         showDialog() {
             let dialog = document.createElement('div');
-            dialog.innerHTML = '<div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap" role="dialog" aria-labelledby="rcDialogTitle1" style=""><div role="document" class="ant-modal modal-wrapper--5SA7y" style="width: 340px;"><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle1">提示</div></div><div class="ant-modal-body"><div class="content-wrapper--S6SNu"><div>爱发电订单号：</div><span class="ant-input-affix-wrapper ant-input-affix-wrapper-borderless ant-input-password input--TWZaN input--l14Mo"><input placeholder="" action="click" type="text" class="afdian-order ant-input ant-input-borderless" style="background-color: var(--divider_tertiary);"></span></div><div class="content-wrapper--S6SNu"><div>请输入爱发电订单号，确认即可</div><a href="https://afdian.net/order/create?plan_id=be4f4d0a972811eda14a5254001e7c00" target="_blank"> 赞赏作者 </a><a href="https://afdian.net/dashboard/order" target="_blank"> 复制订单号 </a></div></div><div class="ant-modal-footer"><div class="footer--cytkB"><button class="button--WC7or secondary--vRtFJ small--e7LRt cancel-button--c-lzN">取消</button><button class="button--WC7or primary--NVxfK small--e7LRt">确定</button></div></div></div><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div></div></div>';
+            dialog.innerHTML = '<div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap" role="dialog" aria-labelledby="rcDialogTitle1" style=""><div role="document" class="ant-modal modal-wrapper--5SA7y" style="width: 340px;"><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle1">请少量赞助以支持我更好的创作</div></div><div class="ant-modal-body"><div class="content-wrapper--S6SNu"><div>爱发电订单号：</div><span class="ant-input-affix-wrapper ant-input-affix-wrapper-borderless ant-input-password input--TWZaN input--l14Mo"><input placeholder="" action="click" type="text" class="afdian-order ant-input ant-input-borderless" style="background-color: var(--divider_tertiary);"></span></div><div class="content-wrapper--S6SNu"><div>请输入爱发电订单号，确认即可</div><a href="https://afdian.net/order/create?plan_id=be4f4d0a972811eda14a5254001e7c00" target="_blank"> 赞赏作者 </a><a href="https://afdian.net/dashboard/order" target="_blank"> 复制订单号 </a></div></div><div class="ant-modal-footer"><div class="footer--cytkB"><button class="button--WC7or secondary--vRtFJ small--e7LRt cancel-button--c-lzN">取消</button><button class="button--WC7or primary--NVxfK small--e7LRt">确定</button></div></div></div><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div></div></div>';
             document.body.insertBefore(dialog, null);
 
             dialog.querySelectorAll('button').forEach((element, index) => {
