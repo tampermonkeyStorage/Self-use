@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    http://tampermonkey.net/
-// @version      4.1.2
+// @version      4.2.0
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），支持自定义分享密码，支持图片预览，支持移动端播放，...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -39,11 +39,11 @@
     var obj = {
         errNum: 0,
         headers: {},
-        files_info: {
+        file_page: {
             send_params: {},
             items: []
         },
-        play_info: {
+        video_page: {
             video_info: {},
             video_items: []
         }
@@ -144,8 +144,8 @@
                     color: localStorage.getItem("dplayer-subtitle-color") || "#ffd821",
                 },
                 subtitles: [],
-                file: obj.play_info.video_info,
-                fileList: obj.play_info.video_items,
+                file: obj.video_page.video_info,
+                fileList: obj.video_page.video_items,
                 autoplay: true,
                 screenshot: true,
                 hotkey: true,
@@ -198,7 +198,7 @@
                     player.events.playerEvents.push('episode_start');
                 }
                 player.on('episode_start', () => {
-                    obj.play_info.video_info = player.options.fileList[player.fileIndex];
+                    obj.video_page.video_info = player.options.fileList[player.fileIndex];
                     obj.getPlayInfo((response) => {
                         if (response instanceof Object) {
                             obj.initPlayInfo(response);
@@ -222,7 +222,7 @@
     };
 
     obj.getQuality = function (live_task_list) {
-        var task_list = live_task_list || obj.play_info.video_info?.video_preview_play_info?.live_transcoding_task_list || [];
+        var task_list = live_task_list || obj.video_page.video_info?.video_preview_play_info?.live_transcoding_task_list || [];
         if (Array.isArray(task_list) && task_list.length) {
             task_list = task_list.filter(item => item.url);
             var templates = {
@@ -257,7 +257,7 @@
     };
 
     obj.getVideoInfoSubtitle = function (subtitle_task_list) {
-        var task_list = subtitle_task_list || obj.play_info.video_info?.video_preview_play_info?.live_transcoding_subtitle_task_list || [];
+        var task_list = subtitle_task_list || obj.video_page.video_info?.video_preview_play_info?.live_transcoding_subtitle_task_list || [];
         if (Array.isArray(task_list) && task_list.length) {
             var templates = {
                 jpn: "日文字幕",
@@ -288,19 +288,19 @@
 
     obj.searchSubtitleFiles = function () {
         const extensions = ["webvtt", "vtt", "srt", "ssa", "ass"];
-        const subfileList = obj.files_info.items.filter(function (item) {
+        const subfileList = obj.file_page.items.filter(function (item) {
             return item.type === "file" && extensions.includes(item.file_extension.toLowerCase());
         });
         if (subfileList.length) {
-            const videofileList = obj.files_info.items.filter(function (item) {
+            const videofileList = obj.file_page.items.filter(function (item) {
                 return item.type === "file" && item.category == "video";
             });
             if (videofileList.length === 1) {
                 return subfileList;
             }
             var filterSubFile = [];
-            var videoName = obj.play_info.video_items.find((item) => {
-                return item.file_id === obj.play_info.video_info.file_id;
+            var videoName = obj.video_page.video_items.find((item) => {
+                return item.file_id === obj.video_page.video_info.file_id;
             })?.name;
             videoName && (videoName = videoName.split('.').slice(0, -1).join(".").toLowerCase());
             while (videoName) {
@@ -319,19 +319,19 @@
     };
 
     obj.initFilesInfo = function (sendParams, response) {
-        const { send_params, } = obj.files_info;
+        const { send_params, } = obj.file_page;
         try { sendParams = JSON.parse(sendParams) } catch (error) { };
         try { response = JSON.parse(response) } catch (error) { };
         if (sendParams instanceof Object && response instanceof Object) {
             const { order_by, order_direction, parent_file_id } = sendParams || {};
             if (!(order_by === send_params.order_by && order_direction === send_params.order_direction && parent_file_id === send_params.parent_file_id)) {
-                obj.files_info.items = [];
+                obj.file_page.items = [];
             }
-            obj.files_info.send_params = sendParams;
-            obj.files_info.items.find((item) => item?.file_id === response.items[0]?.file_id) || (obj.files_info.items = obj.files_info.items.concat(response.items));
-            obj.showTipSuccess("文件列表获取完成 共：" + obj.files_info.items.length + "项");
+            obj.file_page.send_params = sendParams;
+            obj.file_page.items.find((item) => item?.file_id === response.items[0]?.file_id) || (obj.file_page.items = obj.file_page.items.concat(response.items));
+            obj.showTipSuccess("文件列表获取完成 共：" + obj.file_page.items.length + "项");
 
-            if (obj.files_info.items.length) {
+            if (obj.file_page.items.length) {
                 obj.isHomePage() ? obj.initDownloadHomePage() : obj.initDownloadSharePage();
             }
         }
@@ -340,10 +340,10 @@
     obj.initPlayInfo = function (response) {
         try { response = JSON.parse(response) } catch (error) { };
         if (response instanceof Object) {
-            obj.play_info.video_info = response;
+            obj.video_page.video_info = response;
 
-            if (obj.play_info.video_items.length === 0) {
-                obj.play_info.video_items = obj.files_info.items.filter(function (item, index) {
+            if (obj.video_page.video_items.length === 0) {
+                obj.video_page.video_items = obj.file_page.items.filter(function (item, index) {
                     return item.type == "file" && item.category == "video";
                 });
             }
@@ -376,7 +376,7 @@
 
     obj.get_video_preview_play_info = function () {
         const { token_type, access_token } = obj.getItem("token");
-        const { drive_id, file_id } = obj.play_info.video_info;
+        const { drive_id, file_id } = obj.video_page.video_info;
         const { "x-device-id": x_id, "x-signature": x_signature } = obj.headers;
         return fetch("https://api.aliyundrive.com/v2/file/get_video_preview_play_info", {
             body: JSON.stringify({
@@ -401,7 +401,7 @@
     };
 
     obj.get_share_link_video_preview_play_info = function () {
-        const { file_id, share_id } = obj.play_info.video_info;
+        const { file_id, share_id } = obj.video_page.video_info;
         const { token_type, access_token } = obj.getItem("token");
         const { share_token } = obj.getItem("shareToken");
         const { "x-device-id": x_id, "x-signature": x_signature } = obj.headers;
@@ -717,7 +717,7 @@
             return;
         }
         if ($("#root [class^=banner] [class^=right]").length) {
-            var html = '<button class="button--2Aa4u primary--3AJe5 small---B8mi button-download--batch" style="margin-right: 28px;">显示链接</button>';
+            var html = '<div class="button-download--batch to-app--r7fcK" style="height: 36px;border-radius: 18px;display: flex;flex-direction: column;justify-content: center;align-items: center;padding: 0px 28px;background: linear-gradient(105deg, #446dff 2%, rgba(99, 125, 255, 0.75) 100%),#fff;font-size: 14px;line-height: 17px;text-align: center;color: var(--basic_white);cursor: pointer;">显示链接</div>';
             $("#root [class^=banner] [class^=right]").prepend(html);
             $(".button-download--batch").on("click", obj.showDownload);
         }
@@ -732,7 +732,7 @@
             return;
         }
         else if (fileList.length > 10) {
-            obj.showTipLoading("正在努力获取直链中 。。。 请不好重复点击。建议多文件分批获取", 10e3);
+            obj.showTipLoading("正在努力获取直链中 。。。 请不好重复点击。建议小批量获取", 10e3);
         }
         obj.getDownloadUrl(fileList).then((fileList) => {
             obj.showBox(fileList);
@@ -824,7 +824,7 @@
                     return fileList;
                 }
                 else {
-                    return obj.getDownloadUrlHomePage(fileList);
+                    return obj.getDownloadUrlSharePage(fileList);
                 }
             }
             else {
@@ -875,17 +875,15 @@
     };
 
     obj.getSelectedFileList = function () {
-        var selectedFileList = [], fileList = obj.files_info.items;
+        var selectedFileList = [], fileList = obj.file_page.items;
         if (fileList.length == 0) {
             return [];
         }
-        var $node = obj.isSharePage() ? $(".tbody--3Y4Fn  .tr--5N-1q.tr--3Ypim,.outer-wrapper--25yYA") : $(".tbody--Na444 .tr--Ogi-3.tr--97U9T,.outer-wrapper--JCodp");
-        if ($node.length) {
-            $node.each(function (index) {
-                var $this = $(this);
-                if ($this.attr("data-is-selected") == "true") {
-                    var data_index = $this.closest("[data-index]").attr("data-index");
-                    data_index && selectedFileList.push(fileList[data_index]);
+        var nodeList = document.querySelectorAll('[data-index]');
+        if (nodeList.length) {
+            nodeList.forEach(function(ele) {
+                if (ele.querySelector('[data-is-selected="true"]')) {
+                    selectedFileList.push(fileList[ele.dataset.index]);
                 }
             });
             return selectedFileList.length ? selectedFileList : fileList;
