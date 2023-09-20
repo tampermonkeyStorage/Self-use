@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      4.2.0
+// @version      4.2.1
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -113,6 +113,11 @@
         }
 
         try {
+            var notice = window.DPlayer.prototype.notice;
+            window.DPlayer.prototype.notice = function (text, time, opacity, id = "default") {
+                notice.call(this, text, time, opacity, id);
+            };
+
             const player = window.player = new window.DPlayer({
                 container: container,
                 video: {
@@ -1102,11 +1107,15 @@
         if (obj.getTokenExpires(shareToken)) {
             return Promise.resolve();
         }
+        const { "x-device-id": x_id, "x-signature": x_signature } = obj.headers;
         return fetch("https://api.aliyundrive.com/v2/share_link/get_share_token", {
             body: JSON.stringify({
                 share_id: obj.getShareId(),
                 share_pwd: ""
             }),
+            headers: {
+                "x-device-id": x_id || obj.getItem("cna") || obj.uuid(),
+            },
             method: "POST"
         }).then((response) => {
             return response.ok ? response.json() : Promise.reject();
