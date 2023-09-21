@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         我是网盘管家婆
 // @namespace    http://tampermonkey.net/
-// @version      0.6.2
+// @version      0.6.3
 // @description  支持网盘：【百度.蓝奏.天翼.阿里.迅雷.微云.彩云.夸克.123盘】 功能概述：【网盘页面增加资源搜索快捷方式，访问过的分享链接和密码自动记忆，本地缓存数据库搜索】
 // @antifeature  tracking 若密码忘记，从云端查询，有异议请不要安装
 // @author       管家婆
@@ -1503,7 +1503,7 @@
     aliyundrive.initButtonShare = function() {
         if ($("#root [class^=banner] [class^=right]").length) {
             if ($(".share-search").length == 0) {
-                var html = '<button class="button--2Aa4u primary--3AJe5 small---B8mi share-search" style="margin-right: 28px;">资源搜索</button>';
+                var html = '<div class="share-search to-app--r7fcK" style="height: 36px;border-radius: 18px;display: flex;flex-direction: column;justify-content: center;align-items: center;padding: 0px 28px;background: linear-gradient(105deg, #446dff 2%, rgba(99, 125, 255, 0.75) 100%),#fff;font-size: 14px;line-height: 17px;text-align: center;color: var(--basic_white);cursor: pointer;">资源搜索</div>';
                 $("#root [class^=banner] [class^=right]").prepend(html);
                 $(".share-search").click(function () {
                     $(".dialog-dialog").css({display: "flex"});
