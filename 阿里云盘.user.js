@@ -12,7 +12,7 @@
 // @connect      127.0.0.1
 // @connect      *
 // @require      https://scriptcat.org/lib/950/^1.0.1/Joysound.js
-// @require      //https://scriptcat.org/lib/1286/^1.0.1/dpPlugins.js
+// @require      https://scriptcat.org/lib/1286/^1.0.1/dpPlugins.js
 // @require      https://cdn.staticfile.org/jquery/3.6.0/jquery.min.js
 // @require      https://cdn.staticfile.org/hls.js/1.4.12/hls.min.js
 // @require      https://cdn.staticfile.org/dplayer/1.27.1/DPlayer.min.js
