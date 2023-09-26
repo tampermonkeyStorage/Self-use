@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      4.2.1
+// @version      4.2.2
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -12,10 +12,11 @@
 // @connect      127.0.0.1
 // @connect      *
 // @require      https://scriptcat.org/lib/950/^1.0.1/Joysound.js
-// @require      https://scriptcat.org/lib/1286/^1.0.1/dpPlugins.js
+// @require      //https://scriptcat.org/lib/1286/^1.0.1/dpPlugins.js
 // @require      https://cdn.staticfile.org/jquery/3.6.0/jquery.min.js
-// @require      https://cdn.staticfile.org/hls.js/1.3.5/hls.min.js
+// @require      https://cdn.staticfile.org/hls.js/1.4.12/hls.min.js
 // @require      https://cdn.staticfile.org/dplayer/1.27.1/DPlayer.min.js
+// @require      https://cdn.staticfile.org/m3u8-parser/7.1.0/m3u8-parser.min.js
 // @require      https://cdn.staticfile.org/localforage/1.10.0/localforage.min.js
 // @icon         https://gw.alicdn.com/imgextra/i3/O1CN01aj9rdD1GS0E8io11t_!!6000000000620-73-tps-16-16.ico
 // @antifeature  ads
@@ -34,7 +35,6 @@
 (function() {
     'use strict';
 
-    var localforage = window.localforage;
     var $ = $ || window.$;
     var obj = {
         errNum: 0,
@@ -191,9 +191,8 @@
                         if (response instanceof Object) {
                             obj.initPlayInfo(response);
                             const quality = obj.getQuality();
-                            const defaultQuality = obj.getDefaultQuality(quality);
                             player.options.video.quality = quality;
-                            player.quality = player.options.video.quality[ defaultQuality ];
+                            player.quality = quality[ player.qualityIndex ] || quality[ obj.getDefaultQuality(quality) ];
                             player.events.trigger('video_end');
                         }
                     });
@@ -1090,6 +1089,10 @@
             body: JSON.stringify({
                 refresh_token: token.refresh_token
             }),
+            headers: {
+                "accept": "application/json, text/plain, */*",
+                "content-type": "application/json",
+            },
             method: "POST"
         }).then((response) => {
             return response.ok ? response.json() : Promise.reject();
@@ -1114,6 +1117,8 @@
                 share_pwd: ""
             }),
             headers: {
+                "accept": "application/json, text/plain, */*",
+                "content-type": "application/json",
                 "x-device-id": x_id || obj.getItem("cna") || obj.uuid(),
             },
             method: "POST"
