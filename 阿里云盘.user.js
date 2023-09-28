@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      4.2.2
+// @version      4.2.3
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -12,7 +12,7 @@
 // @connect      127.0.0.1
 // @connect      *
 // @require      https://scriptcat.org/lib/950/^1.0.1/Joysound.js
-// @require      https://scriptcat.org/lib/1286/^1.0.1/dpPlugins.js
+// @require      https://scriptcat.org/lib/1286/^1.1.0/dpPlugins.js
 // @require      https://cdn.staticfile.org/jquery/3.6.0/jquery.min.js
 // @require      https://cdn.staticfile.org/hls.js/1.4.12/hls.min.js
 // @require      https://cdn.staticfile.org/dplayer/1.27.1/DPlayer.min.js
@@ -127,6 +127,7 @@
                         hls: function (video, player) {
                             const Hls = window.Hls;
                             if (Hls.isSupported()) {
+                                if (player.plugins.hls) player.plugins.hls.destroy();
                                 const hls = new Hls({
                                     maxBufferLength: 30 * 2,
                                 });
@@ -160,8 +161,7 @@
                 contextmenu: [
                     {
                         text: "👍 爱发电 不再弹出 👍",
-                        link: "https://afdian.net/order/create?plan_id=be4f4d0a972811eda14a5254001e7c00",
-                        click: obj.showDialog
+                        link: "https://afdian.net/order/create?plan_id=be4f4d0a972811eda14a5254001e7c00"
                     }
                 ],
                 theme: obj.getRandomColor()
