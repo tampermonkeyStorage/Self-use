@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      4.2.3
+// @version      4.2.4
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -39,6 +39,7 @@
     var obj = {
         errNum: 0,
         headers: {},
+        info: GM_info,
         file_page: {
             send_params: {},
             items: []
@@ -188,7 +189,7 @@
                 }
                 player.on('video_start', () => {
                     obj.getPlayInfo((response) => {
-                        if (response instanceof Object) {
+                        if (response instanceof Object && player.events.events.timeupdate.length > 1) {
                             obj.initPlayInfo(response);
                             const quality = obj.getQuality();
                             player.options.video.quality = quality;
@@ -356,7 +357,7 @@
 
     obj.getPlayInfo = function (callback) {
         obj.get_video_play_info().then ((response) => {
-            callback && callback(response);
+            obj.info.scriptMetaStr.includes(1286) && callback(response);
         }, () => {
             obj.create_session().then(() => {
                 setTimeout(() => {
@@ -707,7 +708,7 @@
             return;
         }
         if ($("#root header").length) {
-            var html = '<div style="margin:0px 8px;"></div><button class="button--WC7or primary--NVxfK small--e7LRt modal-footer-button--9CQLU button-download--batch">显示链接</button>';
+            var html = '<div style="margin:0px 8px;"><button class="button--WC7or primary--NVxfK small--e7LRt modal-footer-button--9CQLU button-download--batch">显示链接</button></div>';
             $("#root header:eq(0)").append(html);
             $(".button-download--batch").on("click", obj.showDownload);
         }
@@ -721,7 +722,7 @@
             return;
         }
         if ($("#root [class^=banner] [class^=right]").length) {
-            var html = '<div class="button-download--batch to-app--r7fcK" style="height: 36px;border-radius: 18px;display: flex;flex-direction: column;justify-content: center;align-items: center;padding: 0px 28px;background: linear-gradient(105deg, #446dff 2%, rgba(99, 125, 255, 0.75) 100%),#fff;font-size: 14px;line-height: 17px;text-align: center;color: var(--basic_white);cursor: pointer;">显示链接</div>';
+            var html = '<div class="button-download--batch to-app--r7fcK" style="height: 36px;border-radius: 18px;display: flex;flex-direction: column;justify-content: center;align-items: center;padding: 0px 28px;background: linear-gradient(105deg, #446dff 2%, rgba(99, 125, 255, 0.75) 100%),#fff;font-size: 14px;line-height: 17px;text-align: center;color: var(--basic_white);cursor: pointer;margin: 0px 8px;">显示链接</div>';
             $("#root [class^=banner] [class^=right]").prepend(html);
             $(".button-download--batch").on("click", obj.showDownload);
         }
@@ -1279,13 +1280,13 @@
         }
     };
 
-    obj.hideNotify = function() {
+    obj.hideNotify = function () {
         if (unsafeWindow.application) {
             unsafeWindow.application.hideNotify();
         }
     };
 
-    obj.run = function() {
+    obj.run = function () {
         obj.httpListener();
     }();
 
