@@ -1,14 +1,14 @@
 // ==UserScript==
 // @name         百度网盘音频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.1.7
-// @description  无视文件大小，无视文件格式，告别卡顿即点即播，连歌词都帮你找好了
+// @version      0.1.8
+// @description  无视文件大小，无视文件格式，告别卡顿即点即播，自动加载歌词，画中画歌词
 // @author       You
 // @match        https://pan.baidu.com/disk/main*
 // @connect      kugou.com
 // @icon         https://nd-static.bdstatic.com/business-static/pan-center/images/vipIcon/user-level2-middle_4fd9480.png
-// @require      https://code.jquery.com/jquery-3.6.4.min.js
-// @require      https://cdn.staticfile.org/crypto-js/4.1.1/crypto-js.min.js
+// @require      https://scriptcat.org/lib/1359/^1.1.0/PipLyric.js
+// @require      https://cdn.staticfile.org/jquery/3.6.4/jquery.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.0/hls.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/aplayer/1.10.1/APlayer.min.js
 // @resource     aplayerCSS https://cdnjs.cloudflare.com/ajax/libs/aplayer/1.10.1/APlayer.min.css
@@ -59,13 +59,13 @@
                     if (__vue__ && Array.isArray(__vue__.fileList)) {
                         var playbtn = $(".wp-s-header__center .play-btn");
                         (obj.audio_page.fileList = __vue__.fileList.filter(function(item, index) {
-                            return item.category === 2 || item.category === 6 && !item.isdir && ["flac", "ape"].includes(item.server_filename.split(".").pop().toLowerCase());
+                            return item.category === 2 || item.category === 6 && !item.isdir && ["flac", "ape"].includes(item.real_category.toLowerCase());
                         })).length ? playbtn.length || $('<div class="wp-s-agile-tool-bar__h-action is-need-left-sep is-list play-btn" style="border-top-right-radius: 16px;border-bottom-right-radius: 16px;"><button type="button" class="u-button wp-s-agile-tool-bar__h-action-button u-button--text u-button--small" title="音乐播放" style="height: 32px;"><i class="u-icon-play"></i><span>音乐播放</span></button></div>').appendTo(".wp-s-header__center").on("click", function () {
                             obj.aplayerStart();
                         }) : playbtn.length && playbtn.remove();
                         if (__vue__.selectLength && obj.audio_page.fileList.length) {
                             var audiofile = __vue__.selectedList.find(function (item) {
-                                return item.category === 2 || item.category === 6 && !item.isdir && ["flac", "ape"].includes(item.server_filename.split(".").pop().toLowerCase());
+                                return item.category === 2 || item.category === 6 && !item.isdir && ["flac", "ape"].includes(item.real_category.toLowerCase());
                             });
                             audiofile && (obj.audio_page.fileIndex = obj.audio_page.fileList.findIndex(function(item, index) {
                                 return item.fs_id == audiofile.fs_id;
@@ -93,7 +93,6 @@
             if (aplayerNode) {
                 if (window.player) {
                     window.player.destroy();
-                    window.player = null;
                 }
             }
             else {
@@ -115,6 +114,7 @@
                     customHls: function (audioElement, audio, player) {
                         const Hls = window.Hls;
                         if (Hls.isSupported()) {
+                            if (player.hls) player.hls.destroy();
                             const hls = player.hls = new Hls();
                             hls.loadSource(audio.url);
                             hls.attachMedia(audioElement);
@@ -161,35 +161,14 @@
                 lrcType: 1,
                 mutex: true
             });
-            const imgs = [
-                "https://img.soogif.com/qtqfUYC4Nm2lFSqDCxbs3pE40C1JhgBP.gif",
-                "https://img.soogif.com/oyTwiGxYKBRDyAGQGA2T6zyGHkqxpVVe.gif",
-                "https://c-ssl.duitang.com/uploads/item/201806/30/20180630210743_igwje.gif",
-                "https://hbimg.b0.upaiyun.com/18cdc3f95d89d58e10df150663630589c44e3a4da1f42-88Y91f_fw658",
-                "https://attachment.mcbbs.net/data/myattachment/forum/202009/12/222259myynn4oznyolposu.gif",
-                "https://5b0988e595225.cdn.sohucs.com/images/20200309/1bac24692d4c43c5821ecba841f0e471.gif",
-            ];
-            player.on("listswitch", function ({index}) {
-                player.hls && player.hls.destroy();
-                player.audio.oncanplay = function () {
-                    obj.querySongInfo(player, index);
-                };
-                player.template.list.style.cssText += "background: url(" + imgs[Math.floor(Math.random() * imgs.length)] + ") center center / contain no-repeat;";
-            });
-            player.on("destroy", function () {
-                player.hls && player.hls.destroy();
-            });
+            obj.onEvents(player);
+
             const { list, template: { time, body } } = player;
             const fileIndex = obj.audio_page.fileIndex;
             if (fileIndex > -1 && list.audios.length > 1 && list.index !== fileIndex) {
                 list.switch(fileIndex);
             }
-            else {
-                player.audio.oncanplay = function () {
-                    obj.querySongInfo(player);
-                };
-                player.template.list.style.cssText += "background: url(" + imgs[Math.floor(Math.random() * imgs.length)] + ") center center / contain no-repeat;";
-            }
+
             $(time).children().css("display", "inline-block");
             $(body).prepend('<button class="u-dialog__headerbtn" title="关闭播放器" style="top: 0;right: 7px;"><i class="u-dialog__close u-icon u-icon-close"></i></button><a href="https://afdian.net/a/vpannice" target="_blank" title="爱我你就点点我" style="position: absolute;right: 8px;font-size: 12px;top: 22px;"><img src="https://static.afdiancdn.com/favicon.ico" style="width: 14px;"></a>').children(".u-dialog__headerbtn").one("click", function () {
                 player.destroy();
@@ -265,62 +244,151 @@
         }
     };
 
-    obj.querySongInfo = function (player, index) {
-        const { list, lrc, template: { pic, author } } = player;
-        index || index === 0 || (index = list.index);
-        if (lrc.parsed[index] && lrc.parsed[index].length > 1) return;
-        const { server_filename, md5, size } = list.audios[index] || {};
-        obj.songinfoKugou(server_filename, md5, size).then(function (result) { // 酷狗好棒棒，听歌来帮忙 https://www.kugou.com/
-            const { candidates, info, author_name, img } = result;
-            const candidate = Array.isArray(candidates) ? candidates.find(function (item) {
-                return item.lyrics;
-            }) : Array.isArray(info) ? info.find(function (item) {
-                return item.lyrics;
-            }) : "";
-            if (candidate && candidate.lyrics) {
-                lrc.parsed[index] = lrc.current = lrc.parse(candidate.lyrics);
-                lrc.container.innerHTML = lrc.parsed[index].map((item) => `<p>${item[1]}</p>`).join("\n");
+    obj.onEvents = function (player) {
+        obj.initPipLyric(player);
+        obj.loadLyric(player);
+        obj.backgroundImage(player);
+
+        player.on("listswitch", ({index}) => {
+            if (this.index != index) {
+                this.index = index;
+                obj.loadLyric(player, index);
+                this.backgroundImage(player);
+            }
+        });
+
+        player.on("destroy", () => {
+            if (player.hls) player.hls.destroy();
+            if (player.pipLyric) player.pipLyric.leave();
+            window.player = null;
+        });
+    };
+
+    obj.loadLyric = function (player, index) {
+        const { list, template: { pic, author }, lrc } = player;
+        var file = list.audios[index == null ? list.index : index] || {};
+        (file.name && file.hash) || Object.assign(file, {
+            name: file.server_filename,
+            hash: file.md5,
+            size: file.size
+        });
+        obj.querySongInfo(file).then((result) => {
+            const { author_name, img, lyric } = result;
+            author_name && (author.innerText = "- " + author_name);
+            img && (pic.style.cssText += "background-image: url(" + img + ")");
+            if (lyric) {
+                lrc.parsed[list.index] = lrc.current = lrc.parse(lyric);
+                lrc.container.innerHTML = lrc.parsed[list.index].map((item) => `<p>${item[1]}</p>`).join("\n");
                 lrc.container.getElementsByTagName("p").length && lrc.container.getElementsByTagName("p")[0].classList.add("aplayer-lrc-current");
             }
-            obj.getdataKugou(candidate.hash || md5).then(function (data) {
-                const { author_name, img } = data;
-                if (author_name) {
-                    author.innerText = "- " + (list.audios[index].artist = author_name);
-                }
-                if (img) {
-                    pic.style.cssText += "background-image: url(" + (list.audios[index].cover = img) + ")";
-                }
-            }).catch(function () { });
-        }).catch(function (error) { });
+            if (obj.initPipLyric(player)) {
+                const pipinfo = {
+                    id: result.id || result.audio_id || 1234567890,
+                    name: result.audio_name || result.songname,
+                    artists: (result.authors || []).map(function(n) {
+                        return n && {
+                            name: n.author_name
+                        };
+                    }).filter(Boolean),
+                    album: {
+                        picUrl: result.img,
+                    },
+                    lrc: {
+                        lyric: result.lyric || result.lyrics
+                    }
+                };
+                player.pipLyric.setData(pipinfo);
+            }
+        }).catch((error) => {
+            if (obj.initPipLyric(player)) {
+                player.pipLyric.setData({
+                    id: 1234567890,
+                    name: file.name.split(".").slice(0, -1).join("."),
+                    lrc: {
+                        lyric: "[00:00.00]是从容处 自有歌词\r\n[00:01.00]你逆光而来，胜过世间所有的美好。\r\n[10:00.00]ScriptCat @脚本体验师001"
+                    },
+                });
+            }
+        });
+    };
+
+    obj.initPipLyric = function (player) {
+        if (player.pipLyric) return true;
+        const PipLyric = window.PipLyric || unsafeWindow.PipLyric
+        if (PipLyric && PipLyric.support) {
+            player.template.time.insertAdjacentHTML("beforeend", '<button type="button" class="aplayer-icon aplayer-icon-pip" style="display: inline-block;"><svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 32 32"><path d="M2.667 2.667h18.667v18.667h-18.667v-18.667M29.333 10.667v18.667h-18.667v-5.333h2.667v2.667h13.333v-13.333h-2.667v-2.667h5.333z"></path></svg></button>');
+            player.template.pipButton = player.template.time.lastElementChild || player.template.time.lastChild;
+            player.pipLyric = new PipLyric({
+                audio: player.audio,
+                pip: player.template.pipButton,
+                prev: player.template.skipBackButton,
+                next: player.template.skipForwardButton,
+            });
+            return true;
+        }
+        return false;
+    };
+
+    obj.backgroundImage = function (player) {
+        const images = [
+            "https://img.soogif.com/qtqfUYC4Nm2lFSqDCxbs3pE40C1JhgBP.gif",
+            "https://img.soogif.com/oyTwiGxYKBRDyAGQGA2T6zyGHkqxpVVe.gif",
+            "https://c-ssl.duitang.com/uploads/item/201806/30/20180630210743_igwje.gif",
+            "https://hbimg.b0.upaiyun.com/18cdc3f95d89d58e10df150663630589c44e3a4da1f42-88Y91f_fw658",
+            "https://attachment.mcbbs.net/data/myattachment/forum/202009/12/222259myynn4oznyolposu.gif",
+            "https://5b0988e595225.cdn.sohucs.com/images/20200309/1bac24692d4c43c5821ecba841f0e471.gif",
+        ], image = images[Math.floor(Math.random() * images.length)];
+
+        player.template.list.style.cssText += "background: url(" + image + ") center center / contain no-repeat;";
+    };
+
+    obj.querySongInfo = function (file) {
+        const { songInfo, name, hash, size } = file;
+        if (songInfo) {
+            return Promise.resolve(songInfo);
+        }
+        return obj.songinfoKugou(name, hash, size).then(function (result) {
+            if (result.img) {
+                if (result.img.indexOf("/400/") > -1) result.img = "";
+                result.img = result.img.replace(/^https?:/, "");
+            }
+            file.songInfo = result;
+            return result;
+        });
     };
 
     obj.songinfoKugou = function (name, hash, size) {
-        return obj.songinfohashKugou(name, hash, size).then(function (result) {
+        return obj.songinfoKugouByHash(hash).then(function (result) {
             return result;
-        }, function () {
-            return obj.songinfonameKugou(name, hash, size);
+        }, function (e) {
+            return obj.songinfoKugouByName(name, hash, size);
         });
     };
 
-    obj.songinfohashKugou = function (name, hash, size) {
-        return obj.searchhashKugou(name, hash, size).then(function (result) {
-            var promises = [];
-            result.candidates.slice(0, 3).forEach(function (item, index) {
-                promises.push(obj.downloadhashKugou(item.id, item.accesskey));
-            });
-            return Promise.allSettled(promises).then(function (results) {
-                results.forEach(function (item, index) {
-                    if (item.status == "fulfilled") {
-                        var words = window.CryptoJS.enc.Base64.parse(item.value.content);
-                        result.candidates[index].lyrics = window.CryptoJS.enc.Utf8.stringify(words);
-                    }
+    obj.songinfoKugouByHash = function (hash) {
+        if (!hash) return Promise.reject();
+        return obj.searchKugouByHash(hash).then(function (result) {
+            return obj.getdataKugou(hash).then(function (data) {
+                var candidates = result.candidates.slice(0, 3);
+                var promises = [];
+                candidates.forEach(function (item, index) {
+                    promises.push(obj.downloadKugouByHash(item.id, item.accesskey));
                 });
-                return result;
+                return Promise.allSettled(promises).then(function (results) {
+                    results.forEach(function (item, index) {
+                        if (item.status == "fulfilled" && item.value) {
+                            Object.assign(candidates[index], {lyric: item.value}, {sourceType: "KuGou"});
+                        }
+                    });
+                    return candidates.find(function (item, index) {
+                        return (item.lyric || item.lyrics) && Object.assign(item, data);
+                    }) || Promise.reject();
+                });
             });
         });
     };
 
-    obj.searchhashKugou = function (name, hash, size) {
+    obj.searchKugouByHash = function (hash) {
         return new Promise(function (resolve, reject) {
             obj.ajax({
                 url: "https://lyrics.kugou.com/search?ver=1&man=yes&client=pc&keyword=&duration=&hash=" + hash,
@@ -343,7 +411,7 @@
         });
     };
 
-    obj.downloadhashKugou = function (id, accesskey) {
+    obj.downloadKugouByHash = function (id, accesskey) {
         return new Promise(function (resolve, reject) {
             obj.ajax({
                 url: "https://lyrics.kugou.com/download?ver=1&client=pc&id=" + id + "&accesskey=" + accesskey + "&fmt=lrc&charset=utf8",
@@ -361,30 +429,57 @@
         });
     };
 
-    obj.songinfonameKugou = function (name, hash, size) {
-        return obj.searchnameKugou(name, hash, size).then(function (result) {
+    obj.songinfoKugouByName = function (name, hash, size) {
+        return obj.searchKugouByName(name, hash, size).then(function (result) {
+            var info = result.info;
+            let infoFilter = info.filter(function (item, index) {
+                return item.hash == hash || item["320filesize"] == size || item.filesize == size || item.sqfilesize == size;
+            });
+            if (infoFilter.length) {
+                info = infoFilter;
+            }
+            else {
+                info.forEach(function (item, index) {
+                    item.nameSimilar = obj.textSimilarity(name.toLowerCase(), (item.audio_name || item.filename || item.songname).toLowerCase());
+                });
+                info = info.sort(function (a, b) {
+                    return +b.nameSimilar - +a.nameSimilar;
+                }).slice(0, 3);
+            }
+
             var promises = [];
-            result.info.slice(0, 3).forEach(function (item, index) {
+            info.forEach(function (item, index) {
+                promises.push(obj.getdataKugou(item.hash));
+            });
+            info.forEach(function (item, index) {
                 promises.push(obj.krcKugou(item.hash));
             });
             return Promise.allSettled(promises).then(function (results) {
+                const len = info.length;
                 results.forEach(function (item, index) {
-                    if (item.status == "fulfilled") {
-                        result.info[index].lyrics = item.value;
+                    if (item.status == "fulfilled" && item.value) {
+                        if (index < len) {
+                            Object.assign(info[index], item.value, {sourceType: "KuGou"});
+                        }
+                        else {
+                            Object.assign(info[index % len], {lyric: item.value}, {sourceType: "KuGou"});
+                        }
                     }
                 });
-                return result;
+                return info.find(function (item, index) {
+                    return item.lyric || item.lyrics;
+                }) || Promise.reject();
             });
         });
     };
 
-    obj.searchnameKugou = function (name, hash, size) {
+    obj.searchKugouByName = function (name, hash, size) {
         return new Promise(function (resolve, reject) {
             obj.ajax({
-                url: "https://mobilecdn.kugou.com/api/v3/search/song?pagesize=20&keyword=" + name,
+                url: "http://mobilecdn.kugou.com/api/v3/search/song?pagesize=20&keyword=" + name,
                 headers: {
-                    origin: "https://www.kugou.com",
-                    referer: "https://www.kugou.com/"
+                    origin: "http://www.kugou.com",
+                    referer: "http://www.kugou.com/"
                 },
                 success: function (result) {
                     if (result && result.status == 1 && result.data.total) {
@@ -477,7 +572,7 @@
             else {
                 details.data = option.data;
             }
-            if (option.type.toUpperCase() == "GET") {
+            if ((option.type || "get").toUpperCase() == "GET") {
                 details.url = option.url + (option.url.includes("?") ? "&" : "?") + details.data;
                 delete details.data;
             }
@@ -490,6 +585,41 @@
 
     obj.getRandomColor = function () {
         return "#" + ("00000" + (Math.random() * 0x1000000 << 0).toString(16)).substr(-6);
+    };
+
+    obj.textSimilarity = function (textA, textB) {
+        if (!textA || !textB) return 0;
+        var segment = function(text) {
+            return ("" + text).split("");
+        }
+        var segmentWordsA = segment(textA);
+        var segmentWordsB = segment(textB);
+        var distributionWordsArray = {};
+
+        segmentWordsA.forEach(element => {
+            if (!distributionWordsArray.hasOwnProperty(element)) {
+                distributionWordsArray[element] = [1, 0];
+            } else {
+                distributionWordsArray[element][0] += 1;
+            }
+        });
+        segmentWordsB.forEach(element => {
+            if (!distributionWordsArray.hasOwnProperty(element)) {
+                distributionWordsArray[element] = [0, 1];
+            } else {
+                distributionWordsArray[element][1] += 1;
+            }
+        });
+
+        let [sum, sumWordsA, sumWordsB] = [0, 0, 0];
+        for (const element in distributionWordsArray) {
+            const wordsA = distributionWordsArray[element][0];
+            const wordsB = distributionWordsArray[element][1];
+            sum += (wordsA * wordsB);
+            sumWordsA += Math.pow(wordsA, 2);
+            sumWordsB += Math.pow(wordsB, 2);
+        }
+        return sum / Math.sqrt(sumWordsA * sumWordsB);
     };
 
     obj.deleteFile = function (filelist) {
@@ -513,5 +643,9 @@
 
     console.log("=== 百度 网 网 网盘 好 好 好棒棒！===");
 
+    /**
+    歌词来源：酷狗音乐 https://www.kugou.com/
+    画中画：网易云音乐 https://music.163.com/
+    */
     // Your code here...
 })();
