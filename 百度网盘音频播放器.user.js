@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘音频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.1.8
+// @version      0.2.0
 // @description  无视文件大小，无视文件格式，告别卡顿即点即播，自动加载歌词，画中画歌词
 // @author       You
 // @match        https://pan.baidu.com/disk/main*
