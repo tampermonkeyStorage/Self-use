@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         夸克网盘
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.1.4
+// @version      0.1.5
 // @description  你手捏一片金黄，像一个归来的王
 // @author       You
 // @match        https://pan.quark.cn/s/*
@@ -23,87 +23,122 @@
         }
     };
 
+    obj.httpListener = function () {
+        (function(send) {
+            XMLHttpRequest.prototype.send = function (sendParams) {
+                this.addEventListener("load", function(event) {
+                    if (this.readyState == 4 && this.status == 200) {
+                        var response = this.response || this.responseText, responseURL = this.responseURL;
+                        if (responseURL.indexOf("/clouddrive/share/sharepage/detail") > 0) {
+                            obj.initFileList(response);
+                        }
+                        else if (responseURL.indexOf("/clouddrive/file/sort") > 0) {
+                            if ($(".ant-modal-mask").length && !$(".ant-modal-mask").hasClass("ant-modal-mask-hidden")) return;
+                            obj.initFileList(response);
+                        }
+                    }
+                }, false);
+                send.apply(this, arguments);
+            };
+        })(XMLHttpRequest.prototype.send);
+    };
+
+    obj.initFileList = function (response) {
+        try { response = JSON.parse(response) } catch (error) { };
+        var list = response?.data?.list;
+        if ((list || []).length) {
+            var index = parseInt(list.length / 3);
+            if (list[index].fid === obj.file_page.share_list[index]?.fid || list[index].fid === obj.file_page.home_list[index]?.fid) {
+                return;
+            }
+            if (obj.getShareId()) {
+                obj.file_page.share_list = list;
+                obj.showTipSuccess("share文件加载完成 共：" + list.length + "项");
+            }
+            else {
+                obj.file_page.home_list = response.data.list;
+                obj.showTipSuccess("home文件加载完成 共：" + list.length + "项");
+            }
+            obj.initDownloadPage();
+        }
+    };
+
     obj.initSharePage = function () {
-        obj.initPageFileList();
-        obj.initSharePageVideoFile();
+        obj.httpListener();
+        obj.openVideoSharePage();
     };
 
     obj.initHomePage = function () {
-        obj.initPageFileList();
+        obj.httpListener();
         if (obj.file_page.home_list.length == 0) {
-            obj.getHomePageFileList().then(function (result) {
-                if (result && result.data && result.data.list.length) {
-                    obj.file_page.home_list = result.data.list;
-                    obj.initDownloadPage();
-                }
+            obj.getFileListHomePage().then(function (response) {
+                obj.initFileList(response);
             });
         }
     };
 
     obj.initVideoPage = function () {
-        obj.autoResolution();
         obj.autoDelFileVideoPage();
     };
 
-    obj.initSharePageVideoFile = function () {
+    obj.getFileListHomePage = function () {
+        var pdir_fid = ((location.hash.match(/.+\/([a-z\d]{32})/) || []) [1]) || 0;
+        return fetch("https://drive.quark.cn/1/clouddrive/file/sort?pr=ucpro&fr=pc&pdir_fid=" + pdir_fid + "&_page=1&_size=50&_fetch_total=1&_fetch_sub_dirs=0&_sort=file_type:asc,updated_at:desc", {
+            body: null,
+            method: "GET",
+            credentials: "include"
+        }).then(function (result) {
+            return result.ok ? result.json() : Promise.reject();
+        }).then(function (result) {
+            return result.code == 0 ? result : Promise.reject(result);
+        });
+    };
+
+    obj.openVideoSharePage = function () {
         $(document).on("click", ".file-click-wrap", function (event) {
             var filelist = obj.getSelectedFileList();
             if (filelist.length == 1 && filelist[0].obj_category == "video") {
-                obj.saveFileList(filelist).then(function (result) {
-                    result && result.data && setTimeout(function () {
-                        obj.taskFileList(result.data.task_id).then(function (result) {
-                            if (result && result.code !== 0) return obj.showTipError(result.message);
-                            var fids = result && result.data && result.data.save_as && result.data.save_as.save_as_top_fids;
-                            if (Array.isArray(fids) && fids.length) {
-                                $(".pc-cannot-preview-cancel").click();
-
-                                var fidsStorage = JSON.parse(sessionStorage.getItem("delete_fids") || "[]");
-                                sessionStorage.setItem("delete_fids", JSON.stringify(fidsStorage.concat(fids)));
-
-                                window.open("https://pan.quark.cn/list#/video/" + fids[0], "_blank");
-
-                                window.onmessage = function(event) {
-                                    var fids = JSON.parse(sessionStorage.getItem("delete_fids") || "[]");
-                                    if (event.origin == "https://pan.quark.cn" && event.data && fids.includes(event.data)) {
-                                        obj.deleteFileList([ event.data ]).then(function (result) {
-                                            result && result.data && obj.taskFileList(result.data.task_id).then(function (result) {
-                                                if (result && result.code !== 0) return obj.showTipError(result.message);
-                                                fids.splice(fids.indexOf(event.data), 1);
-                                                sessionStorage.setItem("delete_fids", JSON.stringify(fids));
-                                            });
-                                        });
-                                    }
-                                }
-                                window.onbeforeunload = function () {
-                                    var fids = JSON.parse(sessionStorage.getItem("delete_fids") || "[]");
-                                    obj.deleteFileList(fids).then(function (result) {
-                                        result && result.data && obj.taskFileList(result.data.task_id).then(function (result) {
-                                            if (result && result.code !== 0) return obj.showTipError(result.message);
-                                            sessionStorage.removeItem("delete_fids");
+                obj.dir().then(function (data) {
+                    var pdir_fid = data.pdir_fid;
+                    return obj.save(filelist, pdir_fid).then(function (data) {
+                        var task_id = data.task_id;
+                        return obj.waitTask(task_id).then(function (data) {
+                            var fids = data.save_as && data.save_as.save_as_top_fids;
+                            var fidsStorage = JSON.parse(sessionStorage.getItem("delete_fids") || "[]");
+                            sessionStorage.setItem("delete_fids", JSON.stringify(fidsStorage.concat(fids)));
+                            $(".pc-cannot-preview-cancel").click();
+                            window.open("https://pan.quark.cn/list#/video/" + fids[0], "_blank");
+                            window.onmessage = function (event) {
+                                var fids = JSON.parse(sessionStorage.getItem("delete_fids") || "[]");
+                                if (event.origin == "https://pan.quark.cn" && event.data && fids.includes(event.data)) {
+                                    obj.delete([ event.data ]).then(function (data) {
+                                        obj.task(data.task_id).then(function (data) {
+                                            fids.splice(fids.indexOf(event.data), 1);
+                                            sessionStorage.setItem("delete_fids", JSON.stringify(fids));
                                         });
                                     });
-                                };
+                                }
                             }
+                            window.onbeforeunload = function () {
+                                var fids = JSON.parse(sessionStorage.getItem("delete_fids") || "[]");
+                                obj.delete(fids).then(function (data) {
+                                    obj.task(data.task_id).then(function (result) {
+                                        sessionStorage.removeItem("delete_fids");
+                                    });
+                                });
+                            };
                         });
-                    }, 1e3);
+                    });
                 });
             };
         });
     };
 
-    obj.getHomePageFileList = function () {
-        var pdir_fid = ((location.hash.match(/all\/(\w+)/) || []) [1]) || 0;
-        return obj.fetch("https://drive.quark.cn/1/clouddrive/file/sort?pr=ucpro&fr=pc&pdir_fid=" + pdir_fid + "&_page=1&_size=50&_fetch_total=1&_fetch_sub_dirs=0&_sort=file_type:asc,updated_at:desc", null, "GET");
-    };
-
-    obj.playFile = function (fid) {
-        fid || (fid = ((location.hash.match(/video\/(\w+)/) || []) [1]) || "");
-        return obj.fetch("https://drive.quark.cn/1/clouddrive/file/v2/play?pr=ucpro&fr=pc", {
-            fid: fid,
-            resolutions: "normal,low,high,super,2k,4k",
-            supports: "fmp4",
-            use_right: "free_limit"
-        }, "POST");
+    obj.autoDelFileVideoPage = function () {
+        var fid = ((location.hash.match(/video\/(\w+)/) || []) [1]) || "";
+        window.onbeforeunload = function () {
+            window.opener.postMessage(fid, "/");
+        };
     };
 
     obj.initDownloadPage = function () {
@@ -111,11 +146,11 @@
             return;
         }
         if ($(".file-info-share-buttom").length) {
-            $(".file-info-share-buttom").prepend('<div class="share-downloa btn-show-link" title="请勿勾选文件夹"><span class="share-downloa-ico"></span><span class="share-downloa-text">显示链接</span></div>');
+            $(".file-info-share-buttom").prepend('<div class="share-downloa btn-show-link" title="自动过滤不可下载文件"><span class="share-downloa-ico"></span><span class="share-downloa-text">显示链接</span></div>');
             $(".btn-show-link").on("click", obj.showDownloadSharePage);
         }
-        else if ($(".btn-operate").length) {
-            $(".btn-operate").append('<button type="button" class="ant-btn btn-file btn-show-link" title="请勿勾选文件夹"><span>显示链接</span></button>');
+        else if ($(".btn-main").length) {
+            $(".btn-main").append('<button type="button" class="ant-btn btn-file btn-show-link" title="自动过滤不可下载文件"><img class="btn-icon" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGcgZmlsbC1ydWxlPSJub256ZXJvIiBzdHJva2U9IiM1NTUiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSI+PHBhdGggc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBkPSJNNiA5bDIgMiAyLTJ6Ii8+PHBhdGggZD0iTTExIDVoMS41NTNjLjg1IDAgMS4xNi4wOTMgMS40Ny4yNjcuMzExLjE3NC41NTYuNDMuNzIyLjc1Ni4xNjYuMzI2LjI1NS42NS4yNTUgMS41NHY0Ljg3M2MwIC44OTItLjA4OSAxLjIxNS0uMjU1IDEuNTQtLjE2Ni4zMjctLjQxLjU4My0uNzIyLjc1Ny0uMzEuMTc0LS42Mi4yNjctMS40Ny4yNjdIMy40NDdjLS44NSAwLTEuMTYtLjA5My0xLjQ3LS4yNjdhMS43NzggMS43NzggMCAwMS0uNzIyLS43NTZjLS4xNjYtLjMyNi0uMjU1LS42NS0uMjU1LTEuNTRWNy41NjNjMC0uODkyLjA4OS0xLjIxNS4yNTUtMS41NC4xNjYtLjMyNy40MS0uNTgzLjcyMi0uNzU3LjMxLS4xNzQuNjItLjI2NyAxLjQ3LS4yNjdIOCIvPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTggMXY5Ii8+PC9nPjwvc3ZnPg=="><span>显示链接</span></button>');
             $(".btn-show-link").on("click", obj.showDownloadHomePage);
         }
         else {
@@ -125,37 +160,21 @@
 
     obj.showDownloadSharePage = function () {
         var filelist = obj.getSelectedFileList();
-        if (filelist.length == 0) return obj.showTipError("文件获取失败");
-
-        obj.saveFileList(filelist).then(function (result) {
-            setTimeout(function () {
-                result && result.data && obj.taskFileList(result.data.task_id).then(function (result) {
-                    if (result && result.code !== 0) return obj.showTipError(result.message);
-                    var fids = result && result.data && result.data.save_as && result.data.save_as.save_as_top_fids;
-                    fids && fids.length && obj.getDownloadUrl(fids).then(function (result) {
-                        obj.showBox(result.data);
-
-                        obj.deleteFileList(fids).then(function (result) {
-                            result && result.data && obj.taskFileList(result.data.task_id).then(function (result) {
-                                if (result && result.code !== 0) return obj.showTipError(result.message);
-                            });
-                        });
-                    });
-                });
-            }, 1e3);
+        if ((filelist = filelist.filter(function (item) {
+            return item.category; // 0: 文件夹
+        })).length === 0) return obj.showTipError("未获取到可下载文件");
+        obj.downloadUrlSharePage(filelist).then(function (data) {
+            obj.showBox(data);
         });
     };
 
     obj.showDownloadHomePage = function () {
-        var fileList = obj.getSelectedFileList();
-        if (fileList.length == 0) return obj.showTipError("文件获取失败");
-
-        var fids = [];
-        fileList.forEach(function (item, index) {
-            fids.push(item.fid);
-        });
-        obj.getDownloadUrl(fids).then(function (result) {
-            obj.showBox(result.data);
+        var filelist = obj.getSelectedFileList();
+        if ((filelist = filelist.filter(function (item) {
+            return item.category; // 0: 文件夹
+        })).length === 0) return obj.showTipError("未获取到可下载文件");
+        obj.downloadUrlHomePage(filelist).then(function (data) {
+            obj.showBox(data);
         });
     };
 
@@ -201,7 +220,6 @@
                     ]
                 });
             });
-
             obj.aria2RPC(downData, function (result) {
                 if (result) {
                     obj.showTipSuccess("Aria2 推送完成，请查收");
@@ -266,14 +284,45 @@
         }
     };
 
-    obj.getDownloadUrl = function (fids) {
-        return obj.fetch("https://drive.quark.cn/1/clouddrive/file/download?pr=ucpro&fr=pc", {fids: fids}, "POST");
+    obj.downloadUrlSharePage = function (filelist) {
+        return obj.dir().then(function (data) {
+            var pdir_fid = data.pdir_fid;
+            return obj.save(filelist, pdir_fid).then(function (data) {
+                var task_id = data.task_id;
+                return obj.waitTask(task_id).then(function (data) {
+                    var fids = data.save_as && data.save_as.save_as_top_fids;
+                    return obj.download(fids).finally(function () {
+                        obj.delete(fids).then(function (data) {
+                            var task_id = data.task_id;
+                            obj.task(task_id).catch(function (error) {
+                                obj.showTipError(error.message);
+                            });
+                        });
+                    });
+                });
+            });
+        });
     };
 
-    obj.saveFileList = function (filelist, to_pdir_fid) {
-        Array.isArray(filelist) || (filelist = [ filelist ]);
+    obj.downloadUrlHomePage = function (filelist) {
+        return obj.download(filelist);
+    };
+
+    obj.dir = function () {
+        return fetch("https://drive-pc.quark.cn/1/clouddrive/share/sharepage/dir?pr=ucpro&fr=pc", {
+            body: null,
+            method: "GET",
+            credentials: "include"
+        }).then(function (result) {
+            return result.ok ? result.json() : Promise.reject();
+        }).then(function (result) {
+            return result.code == 0 ? result.data : Promise.reject(result);
+        });
+    };
+
+    obj.save = function (filelist, to_pdir_fid) {
         var fid_list = [], fid_token_list = [];
-        filelist.forEach(function (item) {
+        (Array.isArray(filelist) ? filelist : [ filelist ]).filter(Boolean).forEach(function (item) {
             fid_list.push(item.fid);
             fid_token_list.push(item.share_fid_token);
         });
@@ -281,46 +330,123 @@
         , value = JSON.parse(_share_args).value
         , pwd_id = value.pwd_id
         , stoken = value.stoken;
-
-        return obj.fetch("https://drive.quark.cn/1/clouddrive/share/sharepage/save?pr=ucpro&fr=pc", {
-            to_pdir_fid: to_pdir_fid || "0",
-            fid_list: fid_list,
-            fid_token_list: fid_token_list,
-            pwd_id: pwd_id,
-            stoken: stoken,
-            pdir_fid: "0"
-        }, "POST");
-    };
-
-    obj.deleteFileList = function (filelist) {
-        Array.isArray(filelist) || (filelist = [ filelist ]);
-        if (filelist.length == 0) return;
-        var fid_list = [];
-        filelist.forEach(function (item) {
-            item && item.fid && fid_list.push(item.fid);
+        return fetch("https://drive-pc.quark.cn/1/clouddrive/share/sharepage/save?pr=ucpro&fr=pc", {
+            body: JSON.stringify({
+                fid_list: fid_list,
+                fid_token_list: fid_token_list,
+                pdir_fid: "0",
+                pwd_id: pwd_id,
+                scene: "link",
+                stoken: stoken,
+                to_pdir_fid: to_pdir_fid || "0",
+            }),
+            method: "POST",
+            credentials: "include"
+        }).then(function (result) {
+            return result.ok ? result.json() : Promise.reject();
+        }).then(function (result) {
+            return result.code == 0 ? result.data : Promise.reject(result);
         });
-
-        return obj.fetch("https://drive.quark.cn/1/clouddrive/file/delete?pr=ucpro&fr=pc", {
-            action_type: 2,
-            filelist: fid_list.length ? fid_list : filelist,
-            exclude_fids: []
-        }, "POST");
     };
 
-    obj.taskFileList = function (task_id) {
-        return obj.fetch("https://drive.quark.cn/1/clouddrive/task?pr=ucpro&fr=pc&task_id=" + task_id + "&retry_index=0", null, "GET");
+    obj.waitTask = function (task_id, retry_index = 0) {
+        return obj.task(task_id, retry_index).then(function (data) {
+            if (data.status) {
+                return data;
+            }
+            else {
+                if (retry_index < 10) {
+                    return obj.delay().then(function () {
+                        return obj.waitTask(task_id, ++retry_index);
+                    });
+                }
+                else {
+                    return Promise.reject(data);
+                }
+            }
+        });
     };
 
-    obj.fetch = function (url, body, method) {
+    obj.task = function (task_id, retry_index = 0) {
+        return fetch("https://drive-pc.quark.cn/1/clouddrive/task?pr=ucpro&fr=pc&task_id=" + task_id + "&retry_index=" + retry_index, {
+            body: null,
+            method: "GET",
+            credentials: "include"
+        }).then(function (result) {
+            return result.ok ? result.json() : Promise.reject();
+        }).then(function (result) {
+            return result.code == 0 ? result.data : Promise.reject(result);
+        });
+    };
+
+    obj.download = function (filelist) {
+        var fids = filelist.map(function (item) {
+            return item.fid || item;
+        });
+        return fetch("https://drive-pc.quark.cn/1/clouddrive/file/download?pr=ucpro&fr=pc", {
+            headers: {
+                "accept": "application/json, text/plain, */*",
+                "content-type": "application/json;charset=UTF-8"
+            },
+            body: JSON.stringify({
+                fids: fids
+            }),
+            method: "POST",
+            credentials: "include"
+        }).then(function (result) {
+            return result.ok ? result.json() : Promise.reject(result);
+        }).then(function (result) {
+            return result.code == 0 ? result.data : Promise.reject(result);
+        }).catch(function (erroe) {
+            return obj.fetch("https://drive-pc.quark.cn/1/clouddrive/file/download?pr=ucpro&fr=pc", {
+                headers: {
+                    "accept": "application/json, text/plain, */*",
+                    "content-type": "application/json;charset=UTF-8"
+                },
+                body: JSON.stringify({
+                    fids: fids
+                }),
+                method: "POST",
+            }).then(function (result) {
+                return result.code == 0 ? result.data : Promise.reject(result);
+            });
+        });
+    };
+
+    obj.delete = function (filelist) {
+        (Array.isArray(filelist) ? filelist : [ filelist ]).map(function(n) {
+            return n?.fid || n;
+        }).filter(Boolean);
+        return fetch("https://drive-pc.quark.cn/1/clouddrive/file/delete?pr=ucpro&fr=pc", {
+            headers: {
+                "accept": "application/json, text/plain, */*",
+                "content-type": "application/json;charset=UTF-8"
+            },
+            body: JSON.stringify({
+                action_type: 2,
+                exclude_fids: [],
+                filelist: filelist
+            }),
+            method: "POST",
+            credentials: "include"
+        }).then(function (result) {
+            return result.ok ? result.json() : Promise.reject();
+        }).then(function (result) {
+            return result.code == 0 ? result.data : Promise.reject(result);
+        });
+    };
+
+    obj.fetch = function (url, option) {
         return new Promise(function (resolve, reject) {
             GM_xmlhttpRequest({
-                method: method || "POST",
+                method: option.method || "POST",
                 url: url,
-                data: body ? JSON.stringify(body) : body,
-                headers: {
-                    "content-type": "application/json",
-                    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) quark-cloud-drive/2.5.20 Chrome/100.0.4896.160 Electron/18.3.5.4-b478491100 Safari/537.36 Channel/pckk_other_ch"
-                },
+                data: option.body,
+                headers: Object.assign({
+                    "accept": "application/json, text/plain, */*",
+                    "content-type": "application/json;charset=UTF-8",
+                    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) quark-cloud-drive/3.0.2 Chrome/100.0.4896.160 Electron/18.3.5.12-a038f7b798 Safari/537.36 Channel/pckk_clouddrive_share_ch"
+                }, option.headers),
                 responseType: "json",
                 onload: function (result) {
                     var response = result.response || result.responseText;
@@ -338,46 +464,8 @@
         });
     };
 
-    obj.autoDelFileVideoPage = function () {
-        var fid = ((location.hash.match(/video\/(\w+)/) || []) [1]) || "";
-        window.onbeforeunload = function () {
-            window.opener.postMessage(fid, "/");
-        };
-    };
-
-    obj.autoResolution = function () {
-        var qbox = $(".keep-quality-text-box.keep-quality-active");
-        if (qbox.length) {
-            if (qbox.text() == "流畅") {
-                obj.playFile().then(function (result) {
-                    var video_list = result && result.data && result.data.video_list;
-                    if (Array.isArray(video_list) && video_list.length) {
-                        obj.defaultResolution(video_list);
-                    }
-                });
-            }
-        }
-        else {
-            setTimeout(obj.autoResolution, .5e3);
-        }
-    };
-
-    obj.defaultResolution = function (video_list) {
-        var findIndex = video_list.findIndex(function (item, index) {
-            return item.video_info;
-        })
-        , video_info = video_list[findIndex].video_info;
-        try {
-            var video = document.querySelector("video");
-            if (video.src !== video_info.url) {
-                $(".keep-quality-text-box").eq(findIndex).click();
-            }
-            video.oncanplay = () => {
-                video.play();
-            };
-        } catch (e) {
-            throw new Error("\u753b\u8d28\u5207\u6362\u5f02\u5e38".concat(e))
-        }
+    obj.delay = function (ms = 500) {
+        return new Promise(resolve => setTimeout(resolve, ms));
     };
 
     obj.getShareId = function () {
@@ -402,35 +490,6 @@
         setTimeout(function () {
             $(".ant-message span").empty();
         }, timeout || 3e3)
-    };
-
-    obj.initPageFileList = function () {
-        var open = XMLHttpRequest.prototype.open;
-        XMLHttpRequest.prototype.open = function() {
-            this.addEventListener("load", function() {
-                if (this.readyState == 4 && this.status == 200) {
-                    var responseURL = this.responseURL, response = this.response;
-                    if (responseURL.indexOf("/clouddrive/share/sharepage/detail") > 0) {
-                        try { response = JSON.parse(response) } catch (error) { };
-                        if (response && response.data && response.data.list.length) {
-                            obj.file_page.share_list = response.data.list;
-                            obj.initDownloadPage();
-                            obj.showTipSuccess("share文件加载完成 共：" + response.data.list.length + "项");
-                        }
-                    }
-                    else if (responseURL.indexOf("/clouddrive/file/sort") > 0) {
-                        if ($(".ant-modal-mask").length && $(".ant-modal-mask").hasClass("ant-modal-mask-hidden") == false) return;
-                        try { response = JSON.parse(response) } catch (error) { };
-                        if (response && response.data && response.data.list.length) {
-                            obj.file_page.home_list = response.data.list;
-                            obj.initDownloadPage();
-                            obj.getShareId() || obj.showTipSuccess("home文件加载完成 共：" + response.data.list.length + "项");
-                        }
-                    }
-                }
-            }, false);
-            open.apply(this, arguments);
-        };
     };
 
     obj.run = function () {
