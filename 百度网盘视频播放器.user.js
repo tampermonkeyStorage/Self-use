@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.7.6
+// @version      0.7.7
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画质增强，画面模式调节，画中画，支持音质增强、音量无极调节，支持自动、手动添加字幕，支持快捷操作（鼠标长按3倍速，左侧区域双击快退30秒，右侧区域双击快进30秒），。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -11,10 +11,12 @@
 // @match        https://pan.baidu.com/mbox/streampage*
 // @connect      baidu.com
 // @connect      baidupcs.com
+// @connect      jomodns.com
+// @connect      *
 // @connect      lc-cn-n1-shared.com
-// @require      https://code.jquery.com/jquery-3.6.0.min.js
 // @require      https://scriptcat.org/lib/950/^1.0.0/Joysound.js
 // @require      https://cdn.staticfile.org/hls.js/1.3.5/hls.min.js
+// @require      https://cdn.staticfile.org/jquery/3.6.4/jquery.min.js
 // @require      https://cdn.staticfile.org/dplayer/1.26.0/DPlayer.min.js
 // @require      https://cdn.staticfile.org/localforage/1.10.0/localforage.min.js
 // @icon         https://nd-static.bdstatic.com/business-static/pan-center/images/vipIcon/user-level2-middle_4fd9480.png
@@ -344,7 +346,7 @@
                 },
                 {
                     text: "👍 为爱发电 不再弹出 👍",
-                    link: "https://afdian.net/order/create?plan_id=dc4bcdfa5c0a11ed8ee452540025c377&product_type=0",
+                    link: "https://afdian.net/order/create?plan_id=dc4bcdfa5c0a11ed8ee452540025c377",
                     click: obj.showDialog
                 },
             ],
@@ -362,29 +364,29 @@
 
     obj.initPlayer = function (player) {
         var $ = obj.getJquery();
+        obj.isIntegrity(player, function() {
+            const { container } = player;
+            $(container).nextAll().remove();
+            location.pathname == "/mbox/streampage" && $(container).css("height", "480px");
+            $(document).on("change", ".afdian-order", function () {
+                if (this.value) {
+                    if (this.value.match(/^202[\d]{22,25}$/)) {
+                        if (this.value.match(/(\d)\1{7,}/g)) return;
+                        localforage.getItem("users", (error, data) => {
+                            (data && data.ON == this.value) || obj.onPost(this.value, function (users) {
+                                localforage.removeItem("menutap");
+                            });
+                        });
+                    }
+                    else {
+                        obj.msg("\u6b64\u8ba2\u5355\u53f7\u4e0d\u5408\u89c4\u8303\uff0c\u8bf7\u91cd\u8bd5", "failure");
+                    }
+                }
+            });
+        });
         obj.playerReady(player, function(player) {
             (obj.onPost.length && obj.onPost.toString().length == 467) || player.destroy();
             (obj.isIntegrity.length && obj.isIntegrity.toString().length == 627) || player.destroy();
-            obj.isIntegrity(player, function() {
-                const { container } = player;
-                $(container).nextAll().remove();
-                location.pathname == "/mbox/streampage" && $(container).css("height", "480px");
-                $(document).on("change", ".afdian-order", function () {
-                    if (this.value) {
-                        if (this.value.match(/^202[\d]{22,25}$/)) {
-                            if (this.value.match(/(\d)\1{7,}/g)) return;
-                            localforage.getItem("users", (error, data) => {
-                                (data && data.ON == this.value) || obj.onPost(this.value, function (users) {
-                                    localforage.removeItem("menutap");
-                                });
-                            });
-                        }
-                        else {
-                            obj.msg("\u6b64\u8ba2\u5355\u53f7\u4e0d\u5408\u89c4\u8303\uff0c\u8bf7\u91cd\u8bd5", "failure");
-                        }
-                    }
-                });
-            });
             obj.isAppreciation(function (data) {
                 data ? (obj.gestureInit(player), obj.longPressInit(player), obj.dblclickInit(player), obj.dPlayerPip(player), obj.dPlayerSubtitleSetting()) : player.on("contextmenu_show", function () {
                     (player.pause(), $(".dplayer-menu").length || $(".dplayer-menu-item").length || player.destroy());
@@ -563,8 +565,10 @@
             }
         });
         player.on("quality_end", () => {
-            player.joySound.destroy();
-            player.joySound = null;
+            if (player.joySound) {
+                player.joySound.destroy();
+                player.joySound = null;
+            }
         });
     };
 
@@ -1354,7 +1358,7 @@
                         text: t.name,
                         value: t.video_lan,
                         badge: "https://staticsns.cdn.bcebos.com/amis/2022-11/" + (obj.getVip() ? "1669792379583/svipbadge.png" : "1669792379145/trial.png"),
-                        uri: t.uri
+                        uri: t.uri,
                     })
                 });
             }
@@ -1382,18 +1386,15 @@
     };
 
     obj.getSubtitleDataAI = function(url, callback) {
-        obj.getJquery().ajax({
-            type: "GET",
+        obj.ajax({
             url: url,
-            dataType: "text"
-        }).done(function(t) {
-            try {
+            dataType: "text",
+            success: function(t) {
                 callback && callback(t);
-            } catch (s) {
+            },
+            error: function(e) {
                 callback && callback("");
             }
-        }).fail(function() {
-            callback && callback("");
         });
     };
 
@@ -1652,7 +1653,7 @@
     obj.resetPlayer = function () {
         obj.async("file-widget-1:videoPlay/context.js", function(c) {
             var count, id = count = setInterval(function() {
-                var playerInstance = c ? c.getContext()?.playerInstance : obj.videoNode && obj.videoNode.firstChild;
+                var playerInstance = c && obj.isIntegrity.toString().indexOf(25) > 200 ? c.getContext()?.playerInstance : obj.videoNode && obj.videoNode.firstChild;
                 if (playerInstance && playerInstance.player) {
                     clearInterval(id);
                     playerInstance.player.dispose();
@@ -1726,7 +1727,7 @@
 
     obj.pageReady = function (callback) {
         if (obj.video_page.flag === "pfilevideo") {
-            var appdom = document.querySelector("#app")
+            var appdom = document.querySelector("#app");
             appdom && appdom.__vue_app__ ? callback && callback() : setTimeout(function () {
                 obj.pageReady(callback);
             });
@@ -1760,9 +1761,7 @@
                 }
                 else if (url.indexOf(".baidu.com/play/video#/video") > 0) {
                     obj.video_page.flag = "playvideo";
-                    obj.pageReady(function () {
-                        obj.playHomePage();
-                    });
+                    obj.playHomePage();
                     window.onhashchange = function (e) {
                         location.reload();
                     };
