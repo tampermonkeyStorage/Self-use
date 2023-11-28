@@ -11,6 +11,8 @@
 // @match        https://pan.baidu.com/mbox/streampage*
 // @connect      baidu.com
 // @connect      baidupcs.com
+// @connect      cloudvdn.com
+// @connect      qnqcdn.net
 // @connect      jomodns.com
 // @connect      *
 // @connect      lc-cn-n1-shared.com
