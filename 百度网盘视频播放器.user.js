@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.7.7
+// @version      0.7.8
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画质增强，画面模式调节，画中画，支持音质增强、音量无极调节，支持自动、手动添加字幕，支持快捷操作（鼠标长按3倍速，左侧区域双击快退30秒，右侧区域双击快进30秒），。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -279,8 +279,24 @@
                         const hls = new window.Hls({
                             maxBufferLength: 30 * 2 * 10,
                             xhrSetup: function (xhr, url) {
-                                if (url.includes("bd-qn.cloudvdn.com")) {
-                                    url = url.replace("bd-qn.cloudvdn.com", "nv1.baidupcs.com");
+                                var originalHost = (url.match(/^http(?:s)?:\/\/(.*?)\//) || [])[1];
+                                if (/backhost=/.test(url)) {
+                                    var backhosts, backhostParam = (decodeURIComponent(url || "").match(/backhost=(\[.*\])/) || [])[1];
+                                    if (backhostParam) {
+                                        try {
+                                            backhosts = JSON.parse(backhostParam);
+                                        } catch (e) {}
+                                        if (backhosts && backhosts.length) {
+                                            backhosts = [].concat(backhosts, [originalHost]);
+                                            var index = backhosts.findIndex(function(v) {
+                                                return v === player.realHost;
+                                            });
+                                            player.realHost = backhosts[index + 1 >= backhosts.length ? 0 : index + 1];
+                                        }
+                                    }
+                                }
+                                if (player.realHost) {
+                                    url = url.replace(originalHost, player.realHost);
                                     xhr.open("GET", url, true);
                                 }
                             }
