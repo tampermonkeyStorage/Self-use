@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.7.8
+// @version      0.7.9
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画质增强，画面模式调节，画中画，支持音质增强、音量无极调节，支持自动、手动添加字幕，支持快捷操作（鼠标长按3倍速，左侧区域双击快退30秒，右侧区域双击快进30秒），。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -9,11 +9,6 @@
 // @match        https://pan.baidu.com/play/video*
 // @match        https://pan.baidu.com/pfile/video*
 // @match        https://pan.baidu.com/mbox/streampage*
-// @connect      baidu.com
-// @connect      baidupcs.com
-// @connect      cloudvdn.com
-// @connect      qnqcdn.net
-// @connect      jomodns.com
 // @connect      *
 // @connect      lc-cn-n1-shared.com
 // @require      https://scriptcat.org/lib/950/^1.0.0/Joysound.js
@@ -1336,6 +1331,18 @@
             if (Array.isArray(sublist) && sublist.length) {
                 var subslen = sublist.length;
                 sublist.forEach(function (item, index) {
+                    if (/backhost=/.test(item.uri)) {
+                        var originalHost = (item.uri.match(/^http(?:s)?:\/\/(.*?)\//) || [])[1];
+                        var backhosts, backhostParam = (decodeURIComponent(item.uri || "").match(/backhost=(\[.*\])/) || [])[1];
+                        if (backhostParam) {
+                            try {
+                                backhosts = JSON.parse(backhostParam);
+                            } catch (e) {}
+                            if (backhosts && backhosts.length) {
+                                item.uri = item.uri.replace(originalHost, backhosts[0]);
+                            }
+                        }
+                    }
                     obj.getSubtitleDataAI(item.uri, function (stext) {
                         var sarr = obj.subtitleParser(stext, "vtt");
                         if (Array.isArray(sarr)) {
@@ -1404,15 +1411,18 @@
     };
 
     obj.getSubtitleDataAI = function(url, callback) {
-        obj.ajax({
+        obj.getJquery().ajax({
+            type: "GET",
             url: url,
-            dataType: "text",
-            success: function(t) {
+            dataType: "text"
+        }).done(function(t) {
+            try {
                 callback && callback(t);
-            },
-            error: function(e) {
+            } catch (s) {
                 callback && callback("");
             }
+        }).fail(function() {
+            callback && callback("");
         });
     };
 
