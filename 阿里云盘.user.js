@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      4.2.4
+// @version      4.2.5
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），...
 // @author       You
 // @match        https://www.aliyundrive.com/*
+// @match        https://www.alipan.com/*
 // @connect      aliyundrive.com
 // @connect      aliyuncs.com
 // @connect      lc-cn-n1-shared.com
@@ -1058,11 +1059,11 @@
     /*******************************************************/
 
     obj.isHomePage = function () {
-        return location.href.indexOf(".aliyundrive.com/drive") > 0;
+        return location.href.indexOf(".aliyundrive.com/drive") > 0 || location.href.indexOf(".alipan.com/drive") > 0;
     };
 
     obj.isSharePage = function () {
-        return location.href.indexOf("aliyundrive.com/s/") > 0;
+        return location.href.indexOf("aliyundrive.com/s/") > 0 || location.href.indexOf("alipan.com/s/") > 0;
     };
 
     obj.getTokenExpires = function (file) {
@@ -1160,7 +1161,7 @@
     };
 
     obj.getShareId = function () {
-        var match = location.href.match(/aliyundrive\.com\/s\/([a-zA-Z\d]+)/);
+        var match = location.href.match(/aliyundrive\.com\/s\/([a-zA-Z\d]+)/) || location.href.match(/alipan\.com\/s\/([a-zA-Z\d]+)/);
         return match ? match[1] : null;
     };
 
