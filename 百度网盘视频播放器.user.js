@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.7.9
+// @version      0.8.0
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画质增强，画面模式调节，画中画，支持音质增强、音量无极调节，支持自动、手动添加字幕，支持快捷操作（鼠标长按3倍速，左侧区域双击快退30秒，右侧区域双击快进30秒），。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -497,6 +497,11 @@
         });
         player.on("quality_end", function () {
             localStorage.setItem("dplayer-quality", player.quality.name);
+            obj.addCueVideoSubtitle(player, function (textTracks) {
+                if (textTracks) {
+                    obj.selectSubtitles(textTracks);
+                }
+            });
         });
         if (localStorage.getItem("dplayer-isfullscreen") == "true") {
             player.fullScreen.request("web");
