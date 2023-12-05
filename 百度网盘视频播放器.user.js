@@ -277,6 +277,7 @@
                             maxBufferLength: 30 * 2 * 10,
                             xhrSetup: function (xhr, url) {
                                 var originalHost = (url.match(/^http(?:s)?:\/\/(.*?)\//) || [])[1];
+                                if (originalHost === location.host) return;
                                 if (/backhost=/.test(url)) {
                                     var backhosts, backhostParam = (decodeURIComponent(url || "").match(/backhost=(\[.*\])/) || [])[1];
                                     if (backhostParam) {
