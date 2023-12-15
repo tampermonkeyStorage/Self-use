@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      4.2.5
+// @version      4.2.6
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -480,8 +480,10 @@
     };
 
     obj.secp256k1Support = function () {
-        return obj.loadJs("https://unpkg.com/bn.js/lib/bn.js").then(() => {
-            return obj.loadJs("https://unpkg.com/@lionello/secp256k1-js/src/secp256k1.js");
+        return obj.loadJs("https://cdn.jsdelivr.net/npm/bn.js/lib/bn.min.js").then(() => {
+            return obj.loadJs("https://cdn.jsdelivr.net/npm/@lionello/secp256k1-js/src/secp256k1.min.js");
+        }).catch(() => {
+            return obj.loadJs("https://scriptcat.org/lib/1423/^1.0.0/Secp256k1.js");
         });
     };
 
