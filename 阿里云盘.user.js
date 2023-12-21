@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      4.2.6
+// @version      4.2.7
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -905,7 +905,7 @@
     obj.showBox = function (fileList) {
         $('<div class="ant-modal-root"><div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap" role="dialog" aria-labelledby="rcDialogTitle0"><div role="document" class="ant-modal modal-wrapper--2yJKO modal-wrapper--5SA7y" style="width: 60%;"><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle0">文件下载</div></div><div class="ant-modal-body"><div class="icon-wrapper--3dbbo icon-wrapper--TbIdu"><span data-role="icon" data-render-as="svg" data-icon-type="PDSClose" class="close-icon--33bP0 icon--d-ejA close-icon--KF5OX icon--D3kMk "><svg viewBox="0 0 1024 1024"><use xlink:href="#PDSClose"></use></svg></span></div><div class="container--1RqbN container--yXiG-"><div class="list--13IBL list--ypYX0"></div></div></div><div class="ant-modal-footer"><div class="footer--1r-ur footer--zErav"><div class="buttons--nBPeo buttons--u5Y-e"></div></div></div></div><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div></div></div></div>').appendTo(document.body).find(".list--13IBL,.list--ypYX0").append(
             fileList.map((item, index) => {
-                var isfile = item.type == "file", bc = isfile ? `bc://http/${btoa(unescape(encodeURIComponent(`AA/${encodeURIComponent(item.name)}/?url=${encodeURIComponent((item.download_url || item.url))}&refer=${encodeURIComponent('https://www.aliyundrive.com/')}ZZ`)))}` : ``;
+                var isfile = item.type == "file", bc = isfile ? `bc://http/${btoa(unescape(encodeURIComponent(`AA/${encodeURIComponent(item.name)}/?url=${encodeURIComponent((item.download_url || item.url))}&refer=${encodeURIComponent(location.protocol + "//" + location.host + "/")}ZZ`)))}` : ``;
                 return `<div class="item--18Z6t item--v0KyS" title="${ isfile ? `文件大小：${ obj.bytesToSize(item.size) }` : `请进入文件夹下载` }"><span style="width: 100%;">${++index}：${item.name}</span>${ isfile ? `<a title="${bc}" href="${bc}">BitComet</a>` : ``}</div>`
                          + (isfile ? `<div class="item--18Z6t item--v0KyS"><span style="width: 100%;"><a title=${(item.download_url || item.url)} href=${(item.download_url || item.url)}>${(item.download_url || item.url)}</a></span></div>` : ``);
             }).join("\n")
@@ -923,14 +923,14 @@
                 var $this = $(this), $text = $this.text(), index = $this.index();
                 switch(index) {
                     case 0:
-                        obj.downloadFile(singleList.map((item, index) => [`<`, (item.download_url || item.url), `referer: https://www.aliyundrive.com/`, `User-Agent: ${navigator.userAgent}`, `>`].join(`\r\n`)).join(`\r\n`) + `\r\n`, (folderName || "IDM 导出文件") + ".ef2");
+                        obj.downloadFile(singleList.map((item, index) => [`<`, (item.download_url || item.url), `referer: ${location.protocol + "//" + location.host + "/"}`, `User-Agent: ${navigator.userAgent}`, `>`].join(`\r\n`)).join(`\r\n`) + `\r\n`, (folderName || "IDM 导出文件") + ".ef2");
                         break;
                     case 1:
                         var videoList = singleList.filter(function (item) {
                             return item.category == "video";
                         });
                         if (videoList.length) {
-                            obj.downloadFile(`#EXTM3U\r\n#EXTVLCOPT:http-referrer=https://www.aliyundrive.com/\r\n` + singleList.map((item, index) => [ `#EXTINF:-1, ${item.name}`, (item.download_url || item.url) ].join(`\r\n`)).join(`\r\n`), (folderName || "M3U 导出文件") + ".m3u");
+                            obj.downloadFile(`#EXTM3U\r\n#EXTVLCOPT:http-referrer=${location.protocol + "//" + location.host + "/"}\r\n` + singleList.map((item, index) => [ `#EXTINF:-1, ${item.name}`, (item.download_url || item.url) ].join(`\r\n`)).join(`\r\n`), (folderName || "M3U 导出文件") + ".m3u");
                         }
                         else {
                             obj.showTipError("未找到有效视频文件");
@@ -949,7 +949,7 @@
                                     {
                                         out: item.name,
                                         dir: (obj.getItem("aria-dir") || "D:\/aliyundriveDownloads") + (folderName ? "\/" + folderName : ""),
-                                        referer: "https://www.aliyundrive.com/",
+                                        referer: location.protocol + "//" + location.host + "/",
                                         "user-agent": navigator.userAgent
                                     }
                                 ]
