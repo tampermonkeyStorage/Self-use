@@ -1,6 +1,6 @@
 window.dpPlugins = window.dpPlugins || function (t) {
     var obj = {
-        version: '1.1.3'
+        version: '1.1.4'
     };
 
     obj.init = function (player, option) {
@@ -11,7 +11,8 @@ window.dpPlugins = window.dpPlugins || function (t) {
 
         obj.ready(player).then(() => {
             t.forEach((k) => {
-                new k(player, obj);
+                const instance = new k(player, obj);
+                player.plugins[instance.constructor.name] = instance;
             });
         });
     };
@@ -99,6 +100,7 @@ window.dpPlugins = window.dpPlugins || function (t) {
             this.hls = this.player.plugins.hls;
             this.now = Date.now();
             this.currentTime = 0;
+            this.fragLoadError = 0;
 
             if (!this.player.events.type('video_end')) {
                 this.player.events.playerEvents.push('video_end');
@@ -111,8 +113,8 @@ window.dpPlugins = window.dpPlugins || function (t) {
                 if (this.hls) {
                     this.hls.destroy();
                     this.hls = this.player.plugins.hls;
-                    this.onEvents();
                     localStorage.setItem("dplayer-defaultQuality", this.player.quality.name);
+                    this.onEvents();
                 }
             });
 
@@ -125,95 +127,96 @@ window.dpPlugins = window.dpPlugins || function (t) {
             this.onEvents();
         }
 
+        onEvents() {
+            if (this.hls) {
+                const Hls = window.Hls || unsafeWindow.Hls;
+                this.hls.on(Hls.Events.ERROR, (event, data) => {
+                    if (this.hls.media.currentTime > 0) {
+                        this.currentTime = this.hls.media.currentTime;
+                    }
+
+                    if (data.fatal) {
+                        this.player.notice(`当前带宽: ${Math.round(this.hls.bandwidthEstimate / 1024 / 1024 / 8 * 100) / 100} MB/s`);
+
+                        switch(data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR || data.details === Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT || data.details === Hls.ErrorDetails.MANIFEST_PARSING_ERROR) {
+                                    this.hls.loadSource(this.hls.url)
+                                }
+                                else if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR) {
+                                    if (this.fragLoadError < 10) {
+                                        this.fragLoadError++;
+                                        this.hls.loadSource(this.hls.url);
+                                        this.hls.media.currentTime = this.currentTime;
+                                        this.hls.media.play();
+                                    }
+                                }
+                                else {
+                                    this.hls.startLoad();
+                                }
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                this.hls.recoverMediaError();
+                                break;
+                            default:
+                                this.player.notice('视频播放异常，请刷新重试');
+                                this.hls.destroy();
+                                break;
+                        }
+                    }
+                    else {
+                        switch(data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR) {
+                                    if (this.isUrlExpires(this.hls.url)) {
+                                        this.fragLoadError = 0;
+                                        this.now = Date.now();
+                                        this.hls.stopLoad();
+                                        return this.player.plugins?.Appreciation.isAppreciation().finally(() => {
+                                            this.player.events.trigger('video_start');
+                                        });
+                                    }
+                                }
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                });
+            }
+        }
+
         switchUrl() {
             if (this.hls && this.hls.hasOwnProperty('data') && this.hls.levelController && !this.hls.levelController.currentLevelIndex) {
-                const url = this.player.quality.url;
-                this.hls.url = this.hls.levelController.currentLevel.url[0] = url;
+                const url = this.hls.url = this.player.quality.url;
                 fetch(url).then((response) => {
                     return response.ok ? response.text() : Promise.reject();
                 }).then((data) => {
-                    window.m3u8Parser = window.m3u8Parser || unsafeWindow.m3u8Parser;
-                    const parser = new window.m3u8Parser.Parser();
+                    const m3u8Parser = window.m3u8Parser || unsafeWindow.m3u8Parser;
+                    const parser = new m3u8Parser.Parser();
                     parser.push(data);
                     parser.end();
 
-                    const vidUrl = url.replace(/media.m3u8.+/, "");
+                    const refurl = url.replace(/media.m3u8.+/, "");
                     const segments = parser.manifest.segments;
-                    const fragments = this.hls.levelController.currentLevel.details.fragments;
+                    const fragments = this.hls.bufferController.details.fragments;
                     fragments.forEach(function (item, index) {
                         const segment = segments[index];
                         Object.assign(item, {
                             baseurl: url,
                             relurl: segment.uri,
-                            url: vidUrl + segment.uri,
+                            url: refurl + segment.uri,
                         });
                     });
 
                     this.hls.startLoad(this.player.video.currentTime);
-                    this.onEvents();
                 });
             }
         }
 
-        onEvents() {
-            const Hls = window.Hls || unsafeWindow.Hls;
-            if (!this.hls) {
-                this.player = window.player || unsafeWindow.player;
-                this.hls = this.player.plugins.hls;
-            }
-            this.hls.once(Hls.Events.ERROR, (event, data) => {
-                if (this.hls.media.currentTime > 0) {
-                    this.currentTime = this.hls.media.currentTime;
-                }
-                if (data.fatal) {
-                    this.player.notice(`当前带宽: ${Math.round(this.hls.bandwidthEstimate / 1024 / 1024 / 8 * 100) / 100} MB/s`);
-                    setTimeout(this.onEvents, 3e3);
-                    switch (data.type) {
-                        case Hls.ErrorTypes.NETWORK_ERROR:
-                            if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR || data.details === Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT || data.details === Hls.ErrorDetails.MANIFEST_PARSING_ERROR) {
-                                this.hls.loadSource(this.hls.url)
-                            }
-                            else if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR) {
-                                this.hls.loadSource(this.hls.url);
-                                this.hls.media.currentTime = this.currentTime;
-                                this.hls.media.play();
-                            }
-                            else {
-                                this.hls.startLoad();
-                            }
-                            break;
-                        case Hls.ErrorTypes.MEDIA_ERROR:
-                            this.hls.recoverMediaError();
-                            break;
-                        default:
-                            this.player.notice('视频播放异常，请刷新重试');
-                            this.hls.destroy();
-                            break;
-                    }
-                }
-                else {
-                    switch (data.type) {
-                        case Hls.ErrorTypes.NETWORK_ERROR:
-                            if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR) {
-                                if (this.isUrlExpires(this.hls.url)) {
-                                    this.now = Date.now();
-                                    this.player.events.trigger('video_start');
-                                    return;
-                                }
-                            }
-                            this.onEvents();
-                            break;
-                        default:
-                            this.onEvents();
-                            break;
-                    }
-                }
-            });
-        }
-
         isUrlExpires(e) {
             var t = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : 6e3
-                , n = e.match(/&x-oss-expires=(\d+)&/);
+            , n = e.match(/&x-oss-expires=(\d+)&/);
             if (n) {
                 return +"".concat(n[1], "000") - t < Date.now();
             }
@@ -653,9 +656,9 @@ window.dpPlugins = window.dpPlugins || function (t) {
 
         formatTime(seconds) {
             var secondTotal = Math.round(seconds)
-                , hour = Math.floor(secondTotal / 3600)
-                , minute = Math.floor((secondTotal - hour * 3600) / 60)
-                , second = secondTotal - hour * 3600 - minute * 60;
+            , hour = Math.floor(secondTotal / 3600)
+            , minute = Math.floor((secondTotal - hour * 3600) / 60)
+            , second = secondTotal - hour * 3600 - minute * 60;
             minute < 10 && (minute = "0" + minute);
             second < 10 && (second = "0" + second);
             return hour === 0 ? minute + ":" + second : hour + ":" + minute + ":" + second;
@@ -1157,8 +1160,8 @@ window.dpPlugins = window.dpPlugins || function (t) {
 
             function parseTimestamp(e) {
                 var t = e.split(":")
-                    , n = parseFloat(t.length > 0 ? t.pop().replace(/,/g, ".") : "00.000") || 0
-                    , r = parseFloat(t.length > 0 ? t.pop() : "00") || 0;
+                , n = parseFloat(t.length > 0 ? t.pop().replace(/,/g, ".") : "00.000") || 0
+                , r = parseFloat(t.length > 0 ? t.pop() : "00") || 0;
                 return 3600 * (parseFloat(t.length > 0 ? t.pop() : "00") || 0) + 60 * r + n;
             }
         };
@@ -1171,7 +1174,7 @@ window.dpPlugins = window.dpPlugins || function (t) {
             ].join("").replace(/[<bi\/>\r?\n]*/g, "");
 
             var e = "eng"
-                , i = (t.match(/[\u4e00-\u9fa5]/g) || []).length / t.length;
+            , i = (t.match(/[\u4e00-\u9fa5]/g) || []).length / t.length;
             (t.match(/[\u3020-\u303F]|[\u3040-\u309F]|[\u30A0-\u30FF]|[\u31F0-\u31FF]/g) || []).length / t.length > .03 ? e = "jpn" : i > .1 && (e = "zho");
             return e;
         };
@@ -1583,20 +1586,29 @@ window.dpPlugins = window.dpPlugins || function (t) {
                 });
                 return this.loadLibass(options);
             }, () => {
-                Object.assign(options, {
-                    fallbackFont: Object.keys(options.availableFonts).pop(),
+                return this.getDbFonts().then(fontData => {
+                    (fontData || []).forEach(({ fullName, font }) => {
+                        options.availableFonts[fullName] = font;
+                    });
+                    const fallbackFont = Object.keys(options.availableFonts).find((fullName) => [
+                        '思源黑体 cn bold'
+                    ].some(name => name === fullName)) || Object.keys(options.availableFonts).filter((fullName) => fullName.match(/[\u4e00-\u9fa5]/)).filter(Boolean).sort(() => 0.5 - Math.random())[0];
+                    Object.assign(options, {
+                        fallbackFont,
+                    });
+                    return this.loadLibass(options);
                 });
-                return this.loadLibass(options);
             });
         }
 
         loadLibass(options) {
-            return this.loadJs('https://cdn.jsdelivr.net/npm/jassub/dist/jassub.umd.js').then(() => {
+            let jassubUrl = 'https://registry.npmmirror.com/jassub/1.7.15/files/dist/jassub.umd.js';
+            return this.loadJs(jassubUrl).then(() => {
                 Object.assign(options, {
-                    workerUrl: 'https://cdn.jsdelivr.net/npm/jassub/dist/jassub-worker.js',
-                    wasmUrl: 'https://cdn.jsdelivr.net/npm/jassub/dist/jassub-worker.wasm',
-                    legacyWorkerUrl: 'https://cdn.jsdelivr.net/npm/jassub/dist/jassub-worker.wasm.js',
-                    modernWasmUrl: 'https://cdn.jsdelivr.net/npm/jassub/dist/jassub-worker-modern.wasm'
+                    workerUrl: new URL('jassub-worker.js', jassubUrl).href,
+                    wasmUrl: new URL('jassub-worker.wasm', jassubUrl).href,
+                    legacyWorkerUrl: new URL('jassub-worker.wasm.js', jassubUrl).href,
+                    modernWasmUrl: new URL('jassub-worker-modern.wasm', jassubUrl).href
                 });
                 return this.loadWorker(options).then((workerUrl) => {
                     options.workerUrl = workerUrl;
@@ -1686,6 +1698,47 @@ window.dpPlugins = window.dpPlugins || function (t) {
             }
             console.warn('Not Local fonts API');
             return Promise.reject();
+        }
+
+        getDbFonts(postscriptNames) {
+            const localforage = window.localforage || unsafeWindow.localforage;
+            return localforage.getItem('local-fonts').then((fonts) => {
+                if (Array.isArray(fonts) && fonts.length) {
+                    if (Array.isArray(postscriptNames)) {
+                        return fonts.filter(({ fullName }) => {
+                            return postscriptNames.some(name => name === fullName);
+                        });
+                    }
+                    return fonts;
+                }
+
+                let webFonts = [{
+                    fullName: '思源黑体 cn bold',
+                    url: 'https://cdn.jsdelivr.net/gh/tampermonkeyStorage/Self-use@main/Fonts/SourceHanSansCN-Bold.woff2'
+                }];
+                if (Array.isArray(postscriptNames)) {
+                    webFonts = webFonts.filter(({ fullName }) => {
+                        return postscriptNames.some(name => name === fullName);
+                    });
+                }
+
+                const promises = [];
+                webFonts.forEach(({ url }) => {
+                    url && promises.push(fetch(url).then(result => {
+                        return result.ok ? result.arrayBuffer() : Promise.reject();
+                    }));
+                });
+                return Promise.allSettled(promises).then(results => {
+                    results.forEach(({ status, value }, index) => {
+                        if (status == "fulfilled" && value?.byteLength) {
+                            Object.assign(webFonts[index], {
+                                font: new Uint8Array(value)
+                            });
+                        }
+                    });
+                    return localforage.setItem('local-fonts', (fonts || []).concat(webFonts.filter(({ font }) => font)));
+                });
+            });
         }
 
         toAss(text, type) {
@@ -1866,15 +1919,15 @@ window.dpPlugins = window.dpPlugins || function (t) {
             this.localforage = window.localforage || unsafeWindow.localforage;
 
             const { contextmenu,
-                container: { offsetWidth, offsetHeight }
-            } = this.player;
+                   container: { offsetWidth, offsetHeight }
+                  } = this.player;
 
             this.player.template.menuItem[0].addEventListener('click', () => {
                 this.showDialog();
             });
 
             this.player.on('timeupdate', () => {
-                if (Date.now() - 1000 * 60 * 4 >= this.now) {
+                if (Date.now() - 1000 * 60 * 6 >= this.now) {
                     this.now = Date.now();
                     this.isAppreciation().then((data) => {
                         this.player.plugins.hls.data = !!data;
