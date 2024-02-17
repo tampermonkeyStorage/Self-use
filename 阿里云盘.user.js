@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      4.2.7
+// @version      4.2.8
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -61,10 +61,11 @@
                             obj.headers = this._header_;
                         }
                         else if (responseURL.indexOf("/file/list") > 0 || responseURL.indexOf("/file/search") > 0) {
-                            if (this._header_.hasOwnProperty("x-signature")) {
+                            if ((this._header_ || {}).hasOwnProperty("x-signature")) {
                                 obj.headers = this._header_;
                             }
                             obj.initFilesInfo(sendParams, response);
+                            obj.initPlayRecords();
                         }
                         else if (responseURL.indexOf("/file/get_video_preview_play_info") > 0) {
                             obj.initPlayInfo(response);
@@ -96,6 +97,7 @@
                 container.setAttribute("style", "width: 100%; height: 100%;");
                 var videoParentNode = videoNode.parentNode.parentNode;
                 videoParentNode.parentNode.replaceChild(container, videoParentNode);
+                document.querySelector("#root .enter-done")?.setAttribute("data-theme", "dark");
             }
             else {
                 if (window.player) {
@@ -170,6 +172,7 @@
             });
             if (window.dpPlugins) {
                 window.dpPlugins.init(player, obj);
+                setTimeout(obj.addPlayRecords, 500);
 
                 if (!player.events.type('subtitle_start')) {
                     player.events.playerEvents.push('subtitle_start');
@@ -212,14 +215,14 @@
                             player.options.video.quality = quality;
                             player.quality = quality[ obj.getDefaultQuality(quality) ];
                             document.querySelector("[class^=header-file-name], [class^=header-center] div span").innerText = player.options.file.name;
+                            setTimeout(obj.addPlayRecords, 500);
                             player.events.trigger('episode_end');
                         }
                     });
                 });
             }
 
-            $("#root > div.modal--nw7G9 > div > div.content--9N3Eh > div.header--u7XR- > div.header-left--Kobd9").one("click", function () {
-                console.info("VideoPreviewer exit");
+            $('.enter-done [data-icon-type="PDSClose"]').one("click", function () {
                 player.destroy();
             });
         } catch (error) {
@@ -704,6 +707,116 @@
         }(window.crypto.getRandomValues(new Uint8Array(16)));
     };
 
+    obj.initPlayRecords = function () {
+        obj.isSharePage() ? obj.initPlayRecordsSharePage() : obj.initPlayRecordsHomePage();
+    };
+
+    obj.initPlayRecordsHomePage = function () {
+        if ($(".button-play--records").length == 0) {
+            var $container = $("#root header");
+            if ($container.length) {
+                $container.eq(0).append('<div style="margin:0px 8px;"><button class="button--WC7or primary--NVxfK small--e7LRt modal-footer-button--9CQLU button-play--records">播放记录</button></div>');
+                $("body").append('<div class="play--records" style="position: absolute; top: 0px; left: 0px; width: 100%; display: none;"><div><div class="ant-dropdown dropdown-menu--fyY4J ant-dropdown-placement-bottomRight " style="width: 400px;min-width: 48px;left: 820px;top: 62px;"><ul class="ant-dropdown-menu ant-dropdown-menu-light ant-dropdown-menu-root ant-dropdown-menu-vertical" role="menu" tabindex="0"><li class="ant-dropdown-menu-item ant-dropdown-menu-item-only-child" role="menuitem"><div class="outer-menu--U5weH"><div>还没有播放记录</div></div></li></ul></div></div></div>');
+                obj.initPlayRecordsEvent();
+            }
+            else {
+                setTimeout(obj.initPlayRecordsHomePage, 500)
+            }
+        }
+    };
+
+    obj.initPlayRecordsSharePage = function () {
+        if ($(".button-play--records").length == 0) {
+            var $container = $("#root [class^=banner] [class^=right]");
+            if ($container.length) {
+                $container.prepend('<div class="button-play--records to-app--r7fcK" style="margin-right: 8px;">播放记录</div>');
+                $("body").append('<div class="play--records" style="position: absolute; top: 0px; left: 0px; width: 100%; display: none;"><div><div class="ant-dropdown dropdown-menu--fyY4J ant-dropdown-placement-bottomRight " style="width: 400px;min-width: 48px;left: 50%;top: 48px;"><ul class="ant-dropdown-menu ant-dropdown-menu-light ant-dropdown-menu-root ant-dropdown-menu-vertical" role="menu" tabindex="0"><li class="ant-dropdown-menu-item ant-dropdown-menu-item-only-child" role="menuitem"><div class="outer-menu--U5weH"><div>还没有播放记录</div></div></li></ul></div></div></div>');
+                obj.initPlayRecordsEvent();
+            }
+            else {
+                setTimeout(obj.initPlayRecordsSharePage, 500)
+            }
+        }
+    };
+
+    obj.initPlayRecordsEvent = function () {
+        var recordsBtn = $(".button-play--records"), recordsBox = $(".play--records");
+        var localforage = window.localforage || unsafeWindow.localforage;
+        localforage.getItem("play-records").then(function (items) {
+            if (Array.isArray(items) && items.length) {
+                var $ul = recordsBox.find("ul");
+                $ul.empty();
+                items.forEach(function (item) {
+                    $('<li class="ant-dropdown-menu-item"><div class="outer-menu--U5weH"><div>' + item.name + '</div></div></li>').appendTo($ul).on("click", function () {
+                        if (item.href && location.href !== item.href) {
+                            window.open(item.href, "_blank");
+                        }
+                        else {
+                            obj.showTipSuccess("此条记录已在本页面");
+                        }
+                    });
+                });
+            }
+        });
+
+        var menuHideTimer = 0;
+        recordsBtn.on("mouseenter mouseleave click", function (event) {
+            switch(event.type) {
+                case "mouseenter":
+                case "mouseover":
+                    clearTimeout(menuHideTimer);
+                    recordsBox.show(100);
+                    break;
+                case "mouseleave":
+                case "mouseout":
+                    menuHideTimer = setTimeout(function () {
+                        recordsBox.hide(500);
+                    }, 1e3);
+                    break;
+                case "click":
+                    recordsBox.css("display") === "none" ? recordsBox.show(100) : recordsBox.hide(500);
+                    break;
+                default:
+            }
+        });
+        recordsBox.on("mouseenter mouseleave", function (event) {
+            switch(event.type) {
+                case "mouseenter":
+                case "mouseover":
+                    clearTimeout(menuHideTimer);
+                    break;
+                case "mouseleave":
+                case "mouseout":
+                    menuHideTimer = setTimeout(function () {
+                        recordsBox.hide(500);
+                    }, 1e3);
+                    break;
+                default:
+            }
+        });
+    };
+
+    obj.addPlayRecords = function () {
+        const { file_id } = obj.video_page.video_info;
+        var file = obj.video_page.video_items.find(function (item, index) {
+            return item.file_id == file_id;
+        }) || {};
+        var localforage = window.localforage || unsafeWindow.localforage;
+        localforage.getItem("play-records").then(function (items) {
+            var list = items || [];
+            var index = list.findIndex(function(item) {
+                return item.file_id === file.file_id;
+            });
+            if (index >= 0) {
+                list.splice(0, 0, ...list.splice(index, 1));
+            }
+            else {
+                list.unshift({ ...file, href: location.href });
+            }
+            localforage.setItem("play-records", list.slice(0, 10));
+        });
+    };
+
     /*******************************************************/
 
     obj.initDownloadHomePage = function () {
@@ -725,7 +838,7 @@
             return;
         }
         if ($("#root [class^=banner] [class^=right]").length) {
-            var html = '<div class="button-download--batch to-app--r7fcK" style="height: 36px;border-radius: 18px;display: flex;flex-direction: column;justify-content: center;align-items: center;padding: 0px 28px;background: linear-gradient(105deg, #446dff 2%, rgba(99, 125, 255, 0.75) 100%),#fff;font-size: 14px;line-height: 17px;text-align: center;color: var(--basic_white);cursor: pointer;margin: 0px 8px;">显示链接</div>';
+            var html = '<div class="button-download--batch to-app--r7fcK" style="height: 36px;border-radius: 18px;display: flex;flex-direction: column;justify-content: center;align-items: center;padding: 0px 28px;background: linear-gradient(105deg, #446dff 2%, rgba(99, 125, 255, 0.75) 100%),#fff;font-size: 14px;line-height: 17px;text-align: center;color: var(--basic_white);cursor: pointer;margin-right: 8px;">显示链接</div>';
             $("#root [class^=banner] [class^=right]").prepend(html);
             $(".button-download--batch").on("click", obj.showDownload);
         }
@@ -1290,7 +1403,8 @@
     };
 
     obj.run = function () {
-        obj.httpListener();
+        const { scriptMetaStr } = GM_info || {};
+        scriptMetaStr ? scriptMetaStr.includes(286) && obj.httpListener() : obj.httpListener();
     }();
 
     console.log("=== 阿里云盘 好棒棒！===");
