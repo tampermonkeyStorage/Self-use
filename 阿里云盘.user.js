@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      4.2.8
-// @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾, 字幕设置随心所欲...），...
+// @version      4.2.9
+// @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾，音质增强，音量增强，画质增强, ass/ssa特效字幕，字幕设置随心所欲...），播放历史记录，...
 // @author       You
 // @match        https://www.aliyundrive.com/*
 // @match        https://www.alipan.com/*
@@ -42,6 +42,7 @@
         headers: {},
         info: GM_info,
         file_page: {
+            root_info: {},
             send_params: {},
             items: []
         },
@@ -59,6 +60,9 @@
                         var response = this.response || this.responseText, responseURL = this.responseURL;
                         if (responseURL.endsWith("/users/device/create_session") || responseURL.endsWith("/users/device/renew_session")) {
                             obj.headers = this._header_;
+                        }
+                        else if (responseURL.endsWith("/file/get") || responseURL.endsWith("/file/get_by_share")) {
+                            obj.initRootInfo(response);
                         }
                         else if (responseURL.indexOf("/file/list") > 0 || responseURL.indexOf("/file/search") > 0) {
                             if ((this._header_ || {}).hasOwnProperty("x-signature")) {
@@ -170,6 +174,7 @@
                 ],
                 theme: obj.getRandomColor()
             });
+            console.log("=== 阿里云盘 player！===", player);
             if (window.dpPlugins) {
                 window.dpPlugins.init(player, obj);
                 setTimeout(obj.addPlayRecords, 500);
@@ -355,6 +360,15 @@
                 obj.video_page.video_items = obj.file_page.items.filter(function (item, index) {
                     return item.type == "file" && item.category == "video";
                 });
+            }
+        }
+    };
+
+    obj.initRootInfo = function (response) {
+        try { response = JSON.parse(response) } catch (error) { };
+        if (response instanceof Object) {
+            if (response.parent_file_id === "root") {
+                obj.file_page.root_info = response;
             }
         }
     };
@@ -740,6 +754,7 @@
     };
 
     obj.initPlayRecordsEvent = function () {
+        setTimeout(obj.autoPlayByElement);
         var recordsBtn = $(".button-play--records"), recordsBox = $(".play--records");
         var localforage = window.localforage || unsafeWindow.localforage;
         localforage.getItem("play-records").then(function (items) {
@@ -747,12 +762,14 @@
                 var $ul = recordsBox.find("ul");
                 $ul.empty();
                 items.forEach(function (item) {
-                    $('<li class="ant-dropdown-menu-item"><div class="outer-menu--U5weH"><div>' + item.name + '</div></div></li>').appendTo($ul).on("click", function () {
+                    $('<li class="ant-dropdown-menu-item" title="' + item.title + '"><div class="outer-menu--U5weH"><div>' + item.name + '</div></div></li>').appendTo($ul).on("click", function () {
                         if (item.href && location.href !== item.href) {
+                            sessionStorage.setItem("auto-play-option", JSON.stringify(item));
                             window.open(item.href, "_blank");
                         }
                         else {
                             obj.showTipSuccess("此条记录已在本页面");
+                            obj.autoPlayByElement(item.name);
                         }
                     });
                 });
@@ -811,10 +828,65 @@
                 list.splice(0, 0, ...list.splice(index, 1));
             }
             else {
-                list.unshift({ ...file, href: location.href });
+                const { name: title } = obj.file_page.root_info;
+                list.unshift({ ...file, title, href: location.href });
             }
             localforage.setItem("play-records", list.slice(0, 10));
         });
+    };
+
+    obj.autoPlayByElement = function (fileName) {
+        if (!fileName) {
+            var playOption = sessionStorage.getItem("auto-play-option");
+            if (playOption) {
+                const { href, name } = JSON.parse(playOption);
+                if (location.href === href) {
+                    sessionStorage.removeItem("auto-play-option");
+                    fileName = name;
+                }
+                else {
+                    return;
+                }
+            }
+            else {
+                return;
+            }
+        }
+
+        var nodeList = document.querySelectorAll('[data-index]');
+        if (nodeList.length) {
+            var isfind = false;
+            for (let ele of nodeList) {
+                const primary = ele.querySelector("p");
+                if (primary && primary.textContent === fileName) {
+                    primary.click();
+                    isfind = true;
+                    break;
+                }
+            }
+            if (!isfind) {
+                const scrollerEle = document.querySelector('[class^="scroller"]') || document.querySelector('[class^="grid-scroll"]')
+                , scrollTop = scrollerEle?.scrollTop;
+                if (scrollerEle) {
+                    scrollerEle.scrollTop += scrollerEle.offsetHeight;
+                    setTimeout(function () {
+                        if (scrollerEle.scrollTop !== scrollTop) {
+                            obj.autoPlayByElement(fileName);
+                        }
+                    }, 1e3);
+                }
+            }
+        }
+        else {
+            setTimeout(function () {
+                if (document.querySelectorAll('[data-index]').length) {
+                    obj.autoPlayByElement(fileName);
+                }
+                else {
+                    obj.showTipError("无法获取页面结构，网络较慢或页面已更改");
+                }
+            }, 1e3);
+        }
     };
 
     /*******************************************************/
