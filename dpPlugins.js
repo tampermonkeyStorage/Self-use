@@ -1,6 +1,6 @@
 window.dpPlugins = window.dpPlugins || function (t) {
     var obj = {
-        version: '1.1.4'
+        version: '1.1.5'
     };
 
     obj.init = function (player, option) {
@@ -681,7 +681,7 @@ window.dpPlugins = window.dpPlugins || function (t) {
             this.player.template.skipPositionToggle = obj.query('input', this.player.template.skipPosition);
             this.player.template.skipPositionToggle.checked = this.skipposition;
 
-            this.player.template.skipPositionBox = obj.insertAfter(this.player.template.settingBox, '<div class="dplayer-setting-skipposition-item" style="display: none;right: 155px;position: absolute;bottom: 50px;width: 150px;border-radius: 2px;background: rgba(28, 28, 28, 0.9);padding: 7px 0px;transition: all 0.3s ease-in-out 0s;overflow: hidden;z-index: 2;"><div class="dplayer-skipposition-item" style="padding: 5px 10px;box-sizing: border-box;cursor: pointer;position: relative;"><span class="dplayer-skipposition-label" title="双击设置当前时间为跳过片头时间" style="color: #eee;font-size: 13px;display: inline-block;vertical-align: middle;white-space: nowrap;">片头时间：</span><input type="number" style="width: 55px;height: 15px;top: 3px;font-size: 13px;border: 1px solid #fff;border-radius: 3px;text-align: center;" step="1" min="0" value="60"></div><div class="dplayer-skipposition-item" style="padding: 5px 10px;box-sizing: border-box;cursor: pointer;position: relative;"><span class="dplayer-skipposition-label" title="双击设置剩余时间为跳过片尾时间" style="color: #eee;font-size: 13px;display: inline-block;vertical-align: middle;white-space: nowrap;">片尾时间：</span><input type="number" style="width: 55px;height: 15px;top: 3px;font-size: 13px;border: 1px solid #fff;border-radius: 3px;text-align: center;" step="1" min="0" value="120"></div></div>');
+            this.player.template.skipPositionBox = obj.insertAfter(this.player.template.settingBox, '<div class="dplayer-setting-skipposition-item" style="display: none;right: 155px;position: absolute;bottom: 50px;width: 150px;border-radius: 2px;background: rgba(28, 28, 28, 0.9);padding: 7px 0px;transition: all 0.3s ease-in-out 0s;overflow: hidden;z-index: 2;"><div class="dplayer-skipposition-item" style="padding: 5px 10px;box-sizing: border-box;cursor: pointer;position: relative;"><span class="dplayer-skipposition-label" title="双击设置当前时间为跳过片头时间" style="color: #eee;font-size: 13px;display: inline-block;vertical-align: middle;white-space: nowrap;">片头时间：</span><input type="number" style="width: 55px;height: 15px;top: 3px;font-size: 13px;border: 1px solid #fff;border-radius: 3px;text-align: center;background-color: #fff;" step="1" min="0" value="60"></div><div class="dplayer-skipposition-item" style="padding: 5px 10px;box-sizing: border-box;cursor: pointer;position: relative;"><span class="dplayer-skipposition-label" title="双击设置剩余时间为跳过片尾时间" style="color: #eee;font-size: 13px;display: inline-block;vertical-align: middle;white-space: nowrap;">片尾时间：</span><input type="number" style="width: 55px;height: 15px;top: 3px;font-size: 13px;border: 1px solid #fff;border-radius: 3px;text-align: center;background-color: #fff;" step="1" min="0" value="120"></div></div>');
             this.player.template.skipPositionItems = obj.queryAll('.dplayer-skipposition-item', this.player.template.skipPositionBox);
             this.player.template.jumpStartSpan = obj.query('span', this.player.template.skipPositionItems[0]);
             this.player.template.jumpStartInput = obj.query('input', this.player.template.skipPositionItems[0]);
@@ -1276,7 +1276,7 @@ window.dpPlugins = window.dpPlugins || function (t) {
             this.player.user.init();
             if (!this.player.user.get("libass")) {
                 this.player.user.set("libass", 1);
-                alert('阿里云盘插件更新提醒\n\n内部支持库版本：' + obj.version + '\n本次更新支持特效字幕（ass/ssa）格式\n请在播放器菜单内开启体验\n\n为了使字幕更加美观，可能会请求本地字体权限，请予以授权');
+                alert('阿里云盘插件（内部支持库版本：v' + obj.version + '）\n\n特效字幕（ass/ssa格式）功能提示：\n为了使字幕更加美观，可能会请求本地字体权限，请予以授权');
             }
 
             Object.assign(this.player.user.storageName, { specialsubtitle: "dplayer-specialsubtitle" });
@@ -1927,7 +1927,7 @@ window.dpPlugins = window.dpPlugins || function (t) {
             });
 
             this.player.on('timeupdate', () => {
-                if (Date.now() - 1000 * 60 * 6 >= this.now) {
+                if (Date.now() - 1000 * 60 * 4 >= this.now) {
                     this.now = Date.now();
                     this.isAppreciation().then((data) => {
                         this.player.plugins.hls.data = !!data;
@@ -1960,49 +1960,15 @@ window.dpPlugins = window.dpPlugins || function (t) {
             this.localforage || this.player.destroy();
             GM_getValue || GM_setValue || GM_deleteValue || this.player.destroy();
             return this.localforage.getItem("users").then((data) => {
-                if (data?.expire_time) {
-                    return this.localforage.getItem("users_sign").then((users_sign) => {
-                        if (users_sign === btoa(encodeURIComponent(JSON.stringify(data)))) {
-                            if (Math.max(Date.parse(data.expire_time) - Date.now(), 0)) {
-                                return data;
-                            }
-                            else {
-                                return this.localforage.setItem("users", { expire_time: new Date().toISOString() }).then(() => {
-                                    return this.isAppreciation();
-                                });
-                            }
-                        }
-                        else {
-                            this.usersPost().then((data) => {
-                                if (data?.expire_time && Math.max(Date.parse(data.expire_time) - Date.now(), 0)) {
-                                    this.localforage.clear().then(() => {
-                                        this.localforage.setItem("users", data);
-                                        this.localforage.setItem("users_sign", btoa(encodeURIComponent(JSON.stringify(data))));
-                                        GM_setValue("users_sign", btoa(encodeURIComponent(JSON.stringify(data))));
-                                    });
-                                    return data;
-                                }
-                                else {
-                                    this.localforage.removeItem("users_sign");
-                                    this.localforage.removeItem("users");
-                                    GM_deleteValue("users_sign");
-                                    return Promise.reject();
-                                }
-                            });
-                        }
+                return data?.expire_time ? this.localforage.getItem("users_sign").then((users_sign) => {
+                    return (Math.max(Date.parse(data.expire_time) - Date.now(), 0) && users_sign === btoa(encodeURIComponent(JSON.stringify(data))) && GM_getValue("users_sign") === btoa(encodeURIComponent(JSON.stringify(data))) && new Date(data.updatedAt).getHours() % new Date().getHours()) ? data : this.usersPost().then((data) => {
+                        return Math.max(Date.parse(data?.expire_time) - Date.now(), 0) ? this.localforage.setItem("users", data).then((data) => {
+                            return (this.localforage.setItem("users_sign", btoa(encodeURIComponent(JSON.stringify(data)))), GM_setValue("users_sign", btoa(encodeURIComponent(JSON.stringify(data)))), data);
+                        }) : (this.localforage.removeItem("users"), this.localforage.removeItem("users_sign"), GM_deleteValue("users_sign"), Promise.reject());
                     });
-                }
-                else {
-                    if (GM_getValue("users_sign")) {
-                        return this.localforage.setItem("users", { expire_time: new Date().toISOString() }).then(() => {
-                            return this.isAppreciation();
-                        });
-                    }
-                    else {
-                        this.localforage.removeItem("users_sign");
-                        return Promise.reject();
-                    }
-                }
+                }) : GM_getValue("users_sign") ? this.localforage.setItem("users", { expire_time: new Date().toISOString() }).then(() => {
+                    return this.isAppreciation();
+                }) : (GM_setValue("users_sign", 0), Promise.reject());
             });
         }
 
@@ -2041,7 +2007,7 @@ window.dpPlugins = window.dpPlugins || function (t) {
 
         onPost(on) {
             return this.usersPost().then((data) => {
-                Date.parse(data.expire_time) === 0 || this.localforage.setItem("users", Object.assign(data || {}, { expire_time: new Date(Date.now() + 864000).toISOString() })).then((data) => { this.localforage.setItem("users_sign", btoa(encodeURIComponent(JSON.stringify(data)))) });
+                Date.parse(data.expire_time) === 0 || this.localforage.setItem("users", Object.assign(data || {}, { expire_time: new Date(Date.now() + 864000).toISOString() })).then((data) => {( this.localforage.setItem("users_sign", btoa(encodeURIComponent(JSON.stringify(data)))), GM_setValue("users_sign", btoa(encodeURIComponent(JSON.stringify(data)))) )});
                 return this.infoPost(data, on);
             });
         }
