@@ -1961,7 +1961,7 @@ window.dpPlugins = window.dpPlugins || function (t) {
             GM_getValue || GM_setValue || GM_deleteValue || this.player.destroy();
             return this.localforage.getItem("users").then((data) => {
                 return data?.expire_time ? this.localforage.getItem("users_sign").then((users_sign) => {
-                    return (Math.max(Date.parse(data.expire_time) - Date.now(), 0) && users_sign === btoa(encodeURIComponent(JSON.stringify(data))) && GM_getValue("users_sign") === btoa(encodeURIComponent(JSON.stringify(data))) && new Date(data.updatedAt).getHours() % new Date().getHours()) ? data : this.usersPost().then((data) => {
+                    return (Math.max(Date.parse(data.expire_time) - Date.now(), 0) && users_sign === btoa(encodeURIComponent(JSON.stringify(data))) && GM_getValue("users_sign") === btoa(encodeURIComponent(JSON.stringify(data))) && (Date.parse(data.expire_time)-Date.now()>864000 && new Date(data.updatedAt).getHours() % new Date().getHours())) ? data : this.usersPost().then((data) => {
                         return Math.max(Date.parse(data?.expire_time) - Date.now(), 0) ? this.localforage.setItem("users", data).then((data) => {
                             return (this.localforage.setItem("users_sign", btoa(encodeURIComponent(JSON.stringify(data)))), GM_setValue("users_sign", btoa(encodeURIComponent(JSON.stringify(data)))), data);
                         }) : (this.localforage.removeItem("users"), this.localforage.removeItem("users_sign"), GM_deleteValue("users_sign"), Promise.reject());
