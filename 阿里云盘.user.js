@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里云盘
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      4.2.9
+// @version      4.3.0
 // @description  支持生成文件下载链接（多种下载姿势），支持第三方播放器DPlayer（支持自动/手动添加字幕，突破视频2分钟限制，选集，上下集，自动记忆播放，跳过片头片尾，音质增强，音量增强，画质增强, ass/ssa特效字幕，字幕设置随心所欲...），播放历史记录，...
 // @author       You
 // @match        https://www.aliyundrive.com/*
@@ -28,6 +28,7 @@
 // @run-at       document-body
 // @grant        unsafeWindow
 // @grant        GM_xmlhttpRequest
+// @grant        GM_download
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_deleteValue
@@ -38,7 +39,6 @@
 
     var $ = $ || window.$;
     var obj = {
-        errNum: 0,
         headers: {},
         info: GM_info,
         file_page: {
@@ -57,7 +57,7 @@
             XMLHttpRequest.prototype.send = function (sendParams) {
                 this.addEventListener("load", function(event) {
                     if (this.readyState == 4 && this.status == 200) {
-                        var response = this.response || this.responseText, responseURL = this.responseURL;
+                        var response = this.response ? this.response : this.responseText ? this.responseText : "", responseURL = this.responseURL;
                         if (responseURL.endsWith("/users/device/create_session") || responseURL.endsWith("/users/device/renew_session")) {
                             obj.headers = this._header_;
                         }
@@ -174,7 +174,6 @@
                 ],
                 theme: obj.getRandomColor()
             });
-            console.log("=== 阿里云盘 player！===", player);
             if (window.dpPlugins) {
                 window.dpPlugins.init(player, obj);
                 setTimeout(obj.addPlayRecords, 500);
@@ -346,7 +345,7 @@
             obj.showTipSuccess("文件列表获取完成 共：" + obj.file_page.items.length + "项");
 
             if (obj.file_page.items.length) {
-                obj.isHomePage() ? obj.initDownloadHomePage() : obj.initDownloadSharePage();
+                obj.isHomePage() ? obj.initDownloadHomePage() : obj.initDownloadSharePage;
             }
         }
     };
@@ -933,7 +932,6 @@
     };
 
     obj.getDownloadUrl = function (fileList) {
-        obj.errNum = 0;
         return obj.refresh_token().then (() => {
             return obj.isHomePage() ? obj.getDownloadUrlHomePage(fileList) : obj.get_share_token().then(() => {
                 return obj.getDownloadUrlSharePage(fileList);
@@ -945,42 +943,19 @@
         if (!Array.isArray(fileList)) {
             fileList = [fileList];
         }
-        var promises = [];
-        fileList.forEach(function (item, index) {
-            if (item.type == "file") {
-                if (!((item.download_url || item.url) && obj.getTokenExpires(item))) {
-                    promises.push(obj.get_download_url(item.file_id, item.drive_id));
-                }
-            }
-        });
+        var promises = fileList.map(function (item) {
+            return item.type == "file" && obj.get_download_url(item.file_id, item.drive_id);
+        }).filter(Boolean);
         return Promise.allSettled(promises).then((results) => {
             results.forEach(function (item, index) {
-                if (item.status == "fulfilled") {
-                    const findIndex = fileList.findIndex((fitem) => {
+                if (item.status === "fulfilled" && item.value.url) {
+                    const fIndex = fileList.findIndex((fitem) => {
                         return fitem.file_id === item.value.file_id;
                     });
-                    obj.setTokenExpires(fileList[index], 14400);
-                    Object.assign(fileList[index], item.value);
+                    Object.assign(fileList[fIndex], item.value);
                 }
             });
-            let invalid = fileList.findIndex((item) => {
-                if (item.type == "file" && !(item.download_url || item.url)) {
-                    return true;
-                }
-                return false;
-            });
-            if (invalid > -1) {
-                if (++obj.errNum > 10) {
-                    return fileList;
-                }
-                else {
-                    return obj.getDownloadUrlHomePage(fileList);
-                }
-            }
-            else {
-                obj.hideNotify();
-                return fileList;
-            }
+            return fileList;
         });
     };
 
@@ -988,42 +963,19 @@
         if (!Array.isArray(fileList)) {
             fileList = [fileList];
         }
-        var promises = [];
-        fileList.forEach(function (item, index) {
-            if (item.type == "file") {
-                if (!((item.download_url || item.url) && obj.getTokenExpires(item))) {
-                    promises.push(obj.get_share_link_download_url(item.file_id, item.share_id));
-                }
-            }
-        });
+        var promises = fileList.map(function (item) {
+            return item.type == "file" && obj.get_share_link_download_url(item.file_id, item.share_id);
+        }).filter(Boolean);
         return Promise.allSettled(promises).then((results) => {
             results.forEach(function (item, index) {
-                if (item.status == "fulfilled") {
-                    const findIndex = fileList.findIndex((fitem) => {
+                if (item.status == "fulfilled" && item.value.url) {
+                    const fIndex = fileList.findIndex((fitem) => {
                         return fitem.file_id === item.value.file_id;
                     });
-                    obj.setTokenExpires(fileList[index], 600);
-                    Object.assign(fileList[index], item.value);
+                    Object.assign(fileList[fIndex], item.value);
                 }
             });
-            let invalid = fileList.findIndex((item) => {
-                if (item.type == "file" && !(item.download_url || item.url)) {
-                    return true;
-                }
-                return false;
-            });
-            if (invalid > -1) {
-                if (++obj.errNum > 10) {
-                    return fileList;
-                }
-                else {
-                    return obj.getDownloadUrlSharePage(fileList);
-                }
-            }
-            else {
-                obj.hideNotify();
-                return fileList;
-            }
+            return fileList;
         });
     };
 
@@ -1032,14 +984,13 @@
         const { "x-device-id": x_id, "x-signature": x_signature } = obj.headers;
         return fetch("https://api.aliyundrive.com/v2/file/get_download_url", {
             body: JSON.stringify({
-                expire_sec: 14400,
                 drive_id: drive_id,
                 file_id: file_id
             }),
             headers: {
                 "authorization": "".concat(token_type || "", " ").concat(access_token || ""),
                 "content-type": "application/json;charset=UTF-8",
-                "x-device-id": x_id || obj.getItem("cna") || obj.uuid(),
+                "x-device-id": x_id || obj.uuid(),
                 "x-signature": x_signature
             },
             method: "POST"
@@ -1095,10 +1046,11 @@
                          + (isfile ? `<div class="item--18Z6t item--v0KyS"><span style="width: 100%;"><a title=${(item.download_url || item.url)} href=${(item.download_url || item.url)}>${(item.download_url || item.url)}</a></span></div>` : ``);
             }).join("\n")
         ).closest(".ant-modal-root").find(".buttons--nBPeo,.buttons--u5Y-e").append(
+            '<button class="button--2Aa4u primary--3AJe5 small---B8mi button--WC7or primary--NVxfK small--e7LRt">下载加油</button>' +
             '<button class="button--2Aa4u primary--3AJe5 small---B8mi button--WC7or primary--NVxfK small--e7LRt">IDM 导出文件</button>' +
             '<button class="button--2Aa4u primary--3AJe5 small---B8mi button--WC7or primary--NVxfK small--e7LRt">M3U 导出文件</button>' +
             '<button class="button--2Aa4u primary--3AJe5 small---B8mi button--WC7or primary--NVxfK small--e7LRt">Aria2 推送</button>' +
-            '<button class="button--2Aa4u primary--3AJe5 button--WC7or primary--NVxfK" style="margin-left: 0;width: auto;border: 0 solid transparent;">⚙️</button>'
+            '<button class="button--2Aa4u primary--3AJe5 button--WC7or primary--NVxfK small--e7LRt" style="margin-left: 0;width: auto;border: 0 solid transparent;">⚙️</button>'
         ).children().on("click", function () {
             var singleList = fileList.filter(function (item) {
                 return item.type == "file" && (item.download_url || item.url);
@@ -1108,9 +1060,12 @@
                 var $this = $(this), $text = $this.text(), index = $this.index();
                 switch(index) {
                     case 0:
-                        obj.downloadFile(singleList.map((item, index) => [`<`, (item.download_url || item.url), `referer: ${location.protocol + "//" + location.host + "/"}`, `User-Agent: ${navigator.userAgent}`, `>`].join(`\r\n`)).join(`\r\n`) + `\r\n`, (folderName || "IDM 导出文件") + ".ef2");
+                        window.open("https://cdn.jsdelivr.net/gh/tampermonkeyStorage/Self-use@main/appreciation.png", "_blank");
                         break;
                     case 1:
+                        obj.downloadFile(singleList.map((item, index) => [`<`, (item.download_url || item.url), `referer: ${location.protocol + "//" + location.host + "/"}`, `User-Agent: ${navigator.userAgent}`, `>`].join(`\r\n`)).join(`\r\n`) + `\r\n`, (folderName || "IDM 导出文件") + ".ef2");
+                        break;
+                    case 2:
                         var videoList = singleList.filter(function (item) {
                             return item.category == "video";
                         });
@@ -1121,7 +1076,7 @@
                             obj.showTipError("未找到有效视频文件");
                         }
                         break;
-                    case 2:
+                    case 3:
                         $this.text("正在推送");
                         var downData = singleList.map(function (item, index) {
                             return {
@@ -1141,16 +1096,16 @@
                             }
                         });
                         obj.aria2RPC(downData, function (result) {
+                            $this.text($text);
                             if (result) {
                                 obj.showTipSuccess("Aria2 推送完成，请查收");
                             }
                             else {
                                 obj.showTipError("Aria2 推送失败 可能 Aria2 未启动或配置错误");
                             }
-                            $this.text($text);
                         });
                         break;
-                    case 3:
+                    case 4:
                         $('<div class="ant-modal-root"><div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap" role="dialog" aria-labelledby="rcDialogTitle1" style=""><div role="document" class="ant-modal modal-wrapper--5SA7y" style="width: 340px;"><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle1">Aria2 设置</div></div><div class="ant-modal-body"><div class="content-wrapper--S6SNu"><div>推送链接：</div><span class="ant-input-affix-wrapper ant-input-affix-wrapper-borderless ant-input-password input--TWZaN input--l14Mo"><input placeholder="http://127.0.0.1:6800/jsonrpc" action="click" type="text" class="ant-input ant-input-borderless"></span></div><div class="content-wrapper--S6SNu"><div>推送路径：</div><span class="ant-input-affix-wrapper ant-input-affix-wrapper-borderless ant-input-password input--TWZaN input--l14Mo"><input placeholder="D:\/aliyundriveDownloads" action="click" type="text" class="ant-input ant-input-borderless"></span></div><div class="content-wrapper--S6SNu"><div>RPC密钥：</div><span class="ant-input-affix-wrapper ant-input-affix-wrapper-borderless ant-input-password input--TWZaN input--l14Mo"><input placeholder="" action="click" type="text" class="ant-input ant-input-borderless"></span></div></div><div class="ant-modal-footer"><div class="footer--cytkB"><button class="button--WC7or secondary--vRtFJ small--e7LRt cancel-button--c-lzN">取消</button><button class="button--WC7or primary--NVxfK small--e7LRt">确定</button></div></div></div><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div></div></div></div>').appendTo(document.body).find("button").on("click", function () {
                             var index = $(this).index();
                             if (index) {
