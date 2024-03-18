@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.8.0
+// @version      0.8.1
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画质增强，画面模式调节，画中画，支持音质增强、音量无极调节，支持自动、手动添加字幕，支持快捷操作（鼠标长按3倍速，左侧区域双击快退30秒，右侧区域双击快进30秒），。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -1395,7 +1395,33 @@
             }
             callback && callback(o);
         }).fail(function(e) {
-            callback && callback("");
+            obj.video_page.flag == "pfilevideo" ? (function(open) {
+                XMLHttpRequest.prototype.open = function () {
+                    this.addEventListener("load", function() {
+                        if (this.readyState == 4 && this.status == 200) {
+                            if (this.responseURL.indexOf("/api/streaming") > 0) {
+                                if (obj.video_page.sub_info.length < 1 && typeof this.response === "string" && this.response.indexOf("SUBTITLES") > 0) {
+                                    var i = g(this.response);
+                                    var o = [];
+                                    if (0 !== i.length) {
+                                        i.forEach(function(t) {
+                                            o.push({
+                                                icon: i ? "https://staticsns.cdn.bcebos.com/amis/2022-11/1669376964136/Ai.png" : void 0,
+                                                text: t.name,
+                                                value: t.video_lan,
+                                                badge: "https://staticsns.cdn.bcebos.com/amis/2022-11/" + (obj.getVip() ? "1669792379583/svipbadge.png" : "1669792379145/trial.png"),
+                                                uri: t.uri,
+                                            })
+                                        });
+                                    }
+                                    callback && callback(o);
+                                }
+                            }
+                        }
+                    }, false);
+                    open.apply(this, arguments);
+                };
+            })(XMLHttpRequest.prototype.open) : callback && callback("");
         });
         function g(t) {
             var e = t.split("\n"), i = [];
