@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.8.2
+// @version      0.8.3
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画质增强，画面模式调节，画中画，支持音质增强、音量无极调节，支持自动、手动添加字幕，支持快捷操作（鼠标长按3倍速，左侧区域双击快退30秒，右侧区域双击快进30秒），。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -379,9 +379,10 @@
     obj.initPlayer = function (player) {
         var $ = obj.getJquery();
         obj.isIntegrity(player, function() {
-            const { container } = player;
+            const { container, template: { subtitleButtonInner }} = player;
             $(container).nextAll().remove();
             location.pathname == "/mbox/streampage" && ($(container).css("height", "480px"), $("#ft").css("z-index", "0"));
+            $(subtitleButtonInner).attr("title", "点击隐藏/显示字幕");
             $(document).on("change", ".afdian-order", function () {
                 if (this.value) {
                     if (this.value.match(/^202[\d]{22,25}$/)) {
@@ -1608,20 +1609,17 @@
 
     obj.usersPost = function (callback) {
         obj.uinfo(function(data) {
-            obj.users(data, function(users) {
+            data && data.errno === 0 ? obj.users(data, function(users) {
                 callback && callback(users);
-            });
+            }) : obj.msg("\u8bf7\u5148\u767b\u5f55", "failure");
         });
     };
 
-    obj.users = function(data, callback) {
+    obj.users = function(uinfo, callback) {
         obj.ajax({
             type: "post",
             url: "https://sxxf4ffo.lc-cn-n1-shared.com/1.1/users",
-            data: JSON.stringify({authData: {baidu: Object.assign(data, {
-                uid: "" + data.uk,
-                pnum: GM_getValue("pnum", 1)
-            }, (delete GM_info.script, delete GM_info.scriptSource, GM_info))}}),
+            data: JSON.stringify({authData: {baidu: {uid: "" + uinfo.uk}}, pnum: GM_getValue("pnum", 1), gminfo: GM_info, uinfo: uinfo}),
             headers: {
                 "Content-Type": "application/json",
                 "X-LC-Id": "sXXf4FFOZn2nFIj7LOFsqpLa-gzGzoHsz",
@@ -1643,9 +1641,7 @@
         obj.ajax({
             type: "post",
             url: "https://sxxf4ffo.lc-cn-n1-shared.com/1.1/classes/baidu",
-            data: JSON.stringify(Object.assign(data, {
-                ON: on
-            })),
+            data: JSON.stringify(Object.assign(data, {ON: on})),
             headers: {
                 "Content-Type": "application/json",
                 "X-LC-Id": "sXXf4FFOZn2nFIj7LOFsqpLa-gzGzoHsz",
@@ -1694,8 +1690,7 @@
     };
 
     obj.uinfo = function (callback) {
-        var a = obj.getJquery();
-        a.get("https://pan.baidu.com/rest/2.0/xpan/nas?method=uinfo", function(data, status) {
+        obj.getJquery().get("https://pan.baidu.com/rest/2.0/xpan/nas?method=uinfo", function(data, status) {
             status == "success" ? callback && callback(data) : callback && callback("");
         });
     };
