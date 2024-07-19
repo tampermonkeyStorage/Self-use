@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BD网盘视频播放器
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.8.3
+// @version      0.8.4
 // @description  支持PC、移动端播放，支持任意倍速调整，支持记忆、连续播放，支持自由选集，支持画质增强，画面模式调节，画中画，支持音质增强、音量无极调节，支持自动、手动添加字幕，支持快捷操作（鼠标长按3倍速，左侧区域双击快退30秒，右侧区域双击快进30秒），。。。。。。
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -360,7 +360,7 @@
                 },
                 {
                     text: "👍 为爱发电 不再弹出 👍",
-                    link: "https://afdian.net/order/create?plan_id=dc4bcdfa5c0a11ed8ee452540025c377",
+                    link: "https://afdian.com/order/create?plan_id=dc4bcdfa5c0a11ed8ee452540025c377",
                     click: obj.showDialog
                 },
             ],
@@ -1724,7 +1724,7 @@
     obj.showDialog = function () {
         var $ = obj.getJquery();
         if (obj.video_page.flag == "pfilevideo") {
-            $("body").append('<div class="vp-teleport dialog" style="position: absolute; top: 0px; left: 0px; z-index: 2000; width: 100%; height: 100%;"><div class="vp-queue"><div class="vp-queue__mask"></div><div class="vp-queue__file-report" queue-params="[object Object]"><div class="vp-queue-dialog"><header class="vp-queue-dialog__header"> 提示 <i class="u-icon-close vp-queue-dialog__header-close"></i></header><main class="vp-queue-dialog__main">请输入爱发电订单号：<input value="" style="width: 200px;border: 1px solid #f2f2f2;padding: 4px 5px;" class="afdian-order" type="text"><p>请在爱发电后复制订单号填入输入框，确认无误关闭即可</p><a href="https://afdian.net/dashboard/order" target="_blank"> 复制订单号 </a></main></div></div></div></div>');
+            $("body").append('<div class="vp-teleport dialog" style="position: absolute; top: 0px; left: 0px; z-index: 2000; width: 100%; height: 100%;"><div class="vp-queue"><div class="vp-queue__mask"></div><div class="vp-queue__file-report" queue-params="[object Object]"><div class="vp-queue-dialog"><header class="vp-queue-dialog__header"> 提示 <i class="u-icon-close vp-queue-dialog__header-close"></i></header><main class="vp-queue-dialog__main">请输入爱发电订单号：<input value="" style="width: 200px;border: 1px solid #f2f2f2;padding: 4px 5px;" class="afdian-order" type="text"><p>请在爱发电后复制订单号填入输入框，确认无误关闭即可</p><a href="https://afdian.com/dashboard/order" target="_blank"> 复制订单号 </a></main></div></div></div></div>');
             $(".dialog .u-icon-close.vp-queue-dialog__header-close").one("click", function () {
                 $(".dialog").remove();
             });
@@ -1735,7 +1735,7 @@
             img: "img",
             vcode: "vcode"
         });
-        $(dialog.$dialog).find(".dialog-body").empty().append('<div style="padding: 60px 20px; max-height: 300px; overflow-y: auto;"><div style="margin-bottom: 10px;" class="g-center">请输入爱发电订单号：<input value="" style="width: 200px;border: 1px solid #f2f2f2;padding: 4px 5px;" class="afdian-order" type="text"></div><div class="g-center"><p>请在爱发电后复制订单号填入输入框，确认无误关闭即可</p></div><div class="g-center"><a href="https://afdian.net/order/create?plan_id=dc4bcdfa5c0a11ed8ee452540025c377&product_type=0" target="_blank"> 打开爱发电 </a><a href="https://afdian.net/dashboard/order" target="_blank"> 复制订单号 </a></div></div>');
+        $(dialog.$dialog).find(".dialog-body").empty().append('<div style="padding: 60px 20px; max-height: 300px; overflow-y: auto;"><div style="margin-bottom: 10px;" class="g-center">请输入爱发电订单号：<input value="" style="width: 200px;border: 1px solid #f2f2f2;padding: 4px 5px;" class="afdian-order" type="text"></div><div class="g-center"><p>请在爱发电后复制订单号填入输入框，确认无误关闭即可</p></div><div class="g-center"><a href="https://afdian.com/order/create?plan_id=dc4bcdfa5c0a11ed8ee452540025c377" target="_blank"> 打开爱发电 </a><a href="https://afdian.com/dashboard/order" target="_blank"> 复制订单号 </a></div></div>');
         $(dialog.$dialog).find(".dialog-footer").empty().append("");
         dialog.show();
     };
