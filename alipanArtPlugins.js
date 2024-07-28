@@ -421,7 +421,7 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
                 if (!option.subtitle.url) {
                     let subtitleOption = sublist.find((element) => element.default) || sublist[0] || {};
                     subtitleOption = Object.assign({}, option.subtitle, subtitleOption);
-                    subtitle.init({
+                    subtitleOption.url && subtitle.init({
                         ...subtitleOption
                     }).then(() => {
                         notice.show = '添加字幕成功';
@@ -694,7 +694,7 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
                 const sublist = option.subtitle.subtitle || [];
                 const subtitleDefault = sublist.find((item) => item.default) || sublist[0] || {};
                 subtitle.url = subtitleDefault.url;
-                subtitle.switch(subtitle.url);
+                subtitle.url && subtitle.switch(subtitle.url);
             });
 
             return {
