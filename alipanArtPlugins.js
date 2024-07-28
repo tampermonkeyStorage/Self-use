@@ -256,6 +256,8 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
         return window.instances[src];
     };
 
+   console.info(`%c alipanArtPlugins %c ${obj.version} %c https://scriptcat.org/zh-CN/users/13895`, "color: #fff; background: #5f5f5f", "color: #fff; background: #4bc729", "")
+
     return obj;
 }([
     function Sound() {
@@ -363,7 +365,7 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
             function changeVideo(index) {
                 if (!options.playlist[index]) {
                     if (index >= options.playlist.length) {
-                        this.notice.show = '没有下一集了';
+                        art.notice.show = '没有下一集了';
                     }
                     return;
                 }
@@ -372,12 +374,12 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
                 }
             };
 
-            var currentEp = options.playlist.findIndex(function (videoInfo) {
-                return videoInfo.default || videoInfo.url === art.option.url;
+            var currentEp = options.playlist.findIndex((videoInfo) => {
+                return videoInfo.default;
             });
             if (options.autonext && currentEp < options.playlist.length) {
                 art.on('video:ended', () => {
-                    changeVideo(currentEp + 1);
+                    changeVideo(currentEp += 1);
                 });
             }
 
@@ -401,7 +403,7 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
                     };
                 }),
                 onSelect: (item) => {
-                    changeVideo(item.index);
+                    changeVideo(currentEp = item.index);
                     return options.showtext ? '播放列表' : icon;
                 }
             });
@@ -714,7 +716,7 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
                 onSwitch: function (item) {
                     item.tooltip = item.switch ? '关闭' : '开启';
                     art.storage.set('auto-next', !item.switch);
-                    this.notice.show = "自动连续播放：" + (item.switch ? '关闭' : '开启');
+                    art.notice.show = "自动连续播放：" + (item.switch ? '关闭' : '开启');
                     return !item.switch;
                 }
             });
