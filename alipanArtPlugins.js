@@ -4,8 +4,6 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
     };
 
     obj.init = (options) => {
-        //obj = Object.assign(options || {}, obj);
-
         return obj.readyHls().then(() => {
             return obj.readyArtplayer().then(() => {
                 return obj.initArtplayer(options);
@@ -128,13 +126,13 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
         };
 
         const { video_info, video_items } = options || {};
-        const { file_id, name, video_preview_play_info } = video_info || {};
+        const { file_id, video_preview_play_info } = video_info || {};
         const { live_transcoding_subtitle_task_list, live_transcoding_task_list } = video_preview_play_info || {};
         const quality = obj.getQuality(live_transcoding_task_list);
         if (quality.length > 0) {
             const qualityDefault = quality.find((item) => item.default) || quality[0] || {};
             const playlist = video_items.map((fileInfo) => {
-                if (fileInfo.file_id === file_id || (name && (fileInfo.name === name))) {
+                if (fileInfo.file_id === file_id) {
                     fileInfo.default = !0;
                 }
                 return fileInfo;
@@ -151,8 +149,6 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
             const subtitleDefault = subtitle.find((item) => item.default) || subtitle[0] || {};
             Object.assign(details.subtitle, { subtitle: subtitle, url: subtitleDefault.url, type: subtitleDefault.type });
         }
-
-        console.log("details", details);
 
         const Artplayer = window.Artplayer || unsafeWindow.Artplayer;
         Object.assign(Artplayer, {
@@ -193,7 +189,6 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
             }
         });
 
-        console.log("artplayer", art);
         return Promise.resolve(art);
     };
 
@@ -710,6 +705,7 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
     function AutoNext() {
         return function (art) {
             const autoNext = art.storage.get('auto-next');
+
             art.setting.add({
                 html: '自动连播',
                 name: 'auto-next',
