@@ -693,8 +693,7 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
             art.on('restart', (url) => {
                 const sublist = option.subtitle.subtitle || [];
                 const subtitleDefault = sublist.find((item) => item.default) || sublist[0] || {};
-                subtitle.url = subtitleDefault.url;
-                subtitle.url && subtitle.switch(subtitle.url);
+                subtitleDefault.url && subtitle.switch(subtitleDefault.url);
             });
 
             return {
