@@ -4,11 +4,23 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
     };
 
     obj.init = (options) => {
-        return obj.readyHls().then(() => {
-            return obj.readyArtplayer().then(() => {
-                return obj.initArtplayer(options);
-            });
+        return Promise.all([
+            obj.readyM3u8Parser(),
+            obj.readyHls(),
+            obj.readyArtplayer(),
+        ]).then(() => {
+            return obj.initArtplayer(options);
         });
+    };
+
+    obj.readyM3u8Parser = function () {
+        const m3u8Parser = window.m3u8Parser || unsafeWindow.m3u8Parser;
+        if (m3u8Parser) {
+            return Promise.resolve();
+        }
+        else {
+            return obj.loadJs("https://unpkg.com/m3u8-parser/dist/m3u8-parser.min.js");
+        }
     };
 
     obj.readyHls = function () {
@@ -61,35 +73,6 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
                         hls.attachMedia(video);
                         art.hls = hls;
                         art.on('destroy', () => hls.destroy());
-
-                        hls.on(Hls.Events.ERROR, function (event, data) {
-                            if (data.fatal) {
-                                art.notice.show = `ERROR: ${data.type}`;
-                                switch(data.type) {
-                                    case Hls.ErrorTypes.NETWORK_ERROR:
-                                        if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR) {
-                                            hls.loadSource(hls.url);
-                                        }
-                                        else if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT) {
-                                            hls.loadSource(hls.url);
-                                        }
-                                        else if (data.details === Hls.ErrorDetails.MANIFEST_PARSING_ERROR) {
-                                            location.reload();
-                                        }
-                                        else {
-                                            hls.startLoad();
-                                        }
-                                        break;
-                                    case Hls.ErrorTypes.MEDIA_ERROR:
-                                        hls.recoverMediaError();
-                                        break;
-                                    default:
-                                        art.notice.show = '视频无法正常播放，请刷新重试';
-                                        hls.destroy();
-                                        break;
-                                }
-                            }
-                        });
                     }
                     else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                         video.src = url;
@@ -128,7 +111,7 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
         const { video_info, video_items } = options || {};
         const { file_id, video_preview_play_info } = video_info || {};
         const { live_transcoding_subtitle_task_list, live_transcoding_task_list } = video_preview_play_info || {};
-        const quality = obj.getQuality(live_transcoding_task_list);
+        const quality = getQuality(live_transcoding_task_list);
         if (quality.length > 0) {
             const qualityDefault = quality.find((item) => item.default) || quality[0] || {};
             const playlist = video_items.map((fileInfo) => {
@@ -144,7 +127,7 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
             return Promise.reject('获取播放信息失败');
         }
 
-        const subtitle = obj.getSubtitle(live_transcoding_subtitle_task_list);
+        const subtitle = getSubtitle(live_transcoding_subtitle_task_list);
         if (subtitle.length > 0) {
             const subtitleDefault = subtitle.find((item) => item.default) || subtitle[0] || {};
             Object.assign(details.subtitle, { subtitle: subtitle, url: subtitleDefault.url, type: subtitleDefault.type });
@@ -153,7 +136,7 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
         const Artplayer = window.Artplayer || unsafeWindow.Artplayer;
         Object.assign(Artplayer, {
             PLAYBACK_RATE: [0.5, 0.75, 1, 1.25, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0],
-            ASPECT_RATIO: ["default", "4:3", "16:9", "17:9", "18:9", "19:9", "20:9"],
+            ASPECT_RATIO: ["default", "4:3", "16:9", "17:9", "18:9", '自动拉伸'],
         });
 
         const art = new Artplayer(details, (art) => {
@@ -162,81 +145,54 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
             });
         });
 
-        art.on('video_changed_end', (playOption) => {
-            const { file_id, video_preview_play_info } = playOption || {};
-            const { live_transcoding_subtitle_task_list, live_transcoding_task_list } = video_preview_play_info || {};
-            const quality = obj.getQuality(live_transcoding_task_list);
-            if (quality.length > 0) {
-                const qualityDefault = quality.find((item) => item.default) || quality[0] || {};
-                Object.assign(art.option, { id: file_id, quality: quality, url: qualityDefault.url, type: qualityDefault.type });
+        function getQuality(task_list) {
+            if (Array.isArray(task_list) && task_list.length) {
+                task_list = task_list.reverse();
+                task_list.find(item => item.url).default = !0;
+                task_list = task_list.reverse();
 
-                art.switchUrl(qualityDefault.url).then(() => {
-                    document.querySelector("[class^=header-file-name], [class^=header-center] div span").innerText = playOption.name;
-                    art.notice.show = `切换视频: ${playOption.name}`;
-                }).catch(() => {
-                    art.notice.show = `视频地址不可用: ${playOption.name}`;
+                let templates = {
+                    UHD: "4K 超清",
+                    QHD: "2K 超清",
+                    FHD: "1080 全高清",
+                    HD: "720 高清",
+                    SD: "540 标清",
+                    LD: "360 流畅"
+                };
+                task_list.forEach(function (item, index) {
+                    Object.assign(item, {
+                        html: templates[item.template_id] + (item.description ? "（三方会员）" : ""),
+                        type: "hls"
+                    });
                 });
+                return task_list;
             }
-            else {
-                return alert('获取播放信息失败，无法切换视频');
-            }
+            return [];
+        }
 
-            const subtitle = obj.getSubtitle(live_transcoding_subtitle_task_list);
-            if (subtitle.length > 0) {
-                const subtitleDefault = subtitle.find((item) => item.default) || subtitle[0] || {};
-                Object.assign(art.option.subtitle, { subtitle: subtitle, url: subtitleDefault.url, type: subtitleDefault.type });
-                art.emit('subtitle_changed');
+        function getSubtitle(task_list) {
+            if (Array.isArray(task_list) && task_list.length) {
+                task_list = task_list.reverse();
+                task_list.find(item => ['cho', 'chi'].includes(item.language)).default = !0;
+                task_list = task_list.reverse();
+
+                let templates = {
+                    jpn: "日文字幕",
+                    chi: "中文字幕",
+                    eng: "英文字幕"
+                };
+                task_list.forEach(function (item, index) {
+                    Object.assign(item, {
+                        html: templates[item.language] || item.language || "未知语言",
+                        type: "vtt"
+                    });
+                });
+                return task_list;
             }
-        });
+            return [];
+        }
 
         return Promise.resolve(art);
-    };
-
-    obj.getQuality = function (task_list) {
-        if (Array.isArray(task_list) && task_list.length) {
-            task_list = task_list.reverse();
-            task_list.find(item => item.url).default = !0;
-            task_list = task_list.reverse();
-
-            let templates = {
-                UHD: "4K 超清",
-                QHD: "2K 超清",
-                FHD: "1080 全高清",
-                HD: "720 高清",
-                SD: "540 标清",
-                LD: "360 流畅"
-            };
-            task_list.forEach(function (item, index) {
-                Object.assign(item, {
-                    html: templates[item.template_id] + (item.description ? "（三方会员）" : ""),
-                    type: "hls"
-                });
-            });
-            return task_list;
-        }
-        return [];
-    };
-
-    obj.getSubtitle = function (task_list) {
-        if (Array.isArray(task_list) && task_list.length) {
-            task_list = task_list.reverse();
-            task_list.find(item => ['cho', 'chi'].includes(item.language)).default = !0;
-            task_list = task_list.reverse();
-
-            let templates = {
-                jpn: "日文字幕",
-                chi: "中文字幕",
-                eng: "英文字幕"
-            };
-            task_list.forEach(function (item, index) {
-                Object.assign(item, {
-                    html: templates[item.language] || item.language || "未知语言",
-                    type: "vtt"
-                });
-            });
-            return task_list;
-        }
-        return [];
     };
 
     obj.loadJs = function (src) {
@@ -256,13 +212,137 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
         return window.instances[src];
     };
 
-   console.info(`%c alipanArtPlugins %c ${obj.version} %c https://scriptcat.org/zh-CN/users/13895`, "color: #fff; background: #5f5f5f", "color: #fff; background: #4bc729", "")
+    console.info(`%c alipanArtPlugins %c ${obj.version} %c https://scriptcat.org/zh-CN/users/13895`, "color: #fff; background: #5f5f5f", "color: #fff; background: #4bc729", "")
 
     return obj;
 }([
+    function HlsEvents() {
+        return (art) => {
+            const Hls = window.Hls || unsafeWindow.Hls;
+            const { hls, option, notice } = art;
+            var now = Date.now()
+            , fragLoadError = 0;
+
+            hls.on(Hls.Events.ERROR, (event, data) => {
+                if (data.fatal) {
+                    notice.show = `当前带宽: ${Math.round(hls.bandwidthEstimate / 1024 / 1024 / 8 * 100) / 100} MB/s`;
+
+                    switch(data.type) {
+                        case Hls.ErrorTypes.NETWORK_ERROR:
+                            if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR || data.details === Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT || data.details === Hls.ErrorDetails.MANIFEST_PARSING_ERROR) {
+                                hls.loadSource(hls.url);
+                            }
+                            else if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR) {
+                                if (fragLoadError < 10) {
+                                    fragLoadError++;
+                                    hls.loadSource(hls.url);
+                                    hls.media.currentTime = art.currentTime;
+                                    hls.media.play();
+                                }
+                            }
+                            else {
+                                hls.startLoad();
+                            }
+                            break;
+                        case Hls.ErrorTypes.MEDIA_ERROR:
+                            hls.recoverMediaError();
+                            break;
+                        default:
+                            notice.show = '视频播放异常，请刷新重试';
+                            hls.destroy();
+                            break;
+                    }
+                }
+                else {
+                    switch(data.type) {
+                        case Hls.ErrorTypes.NETWORK_ERROR:
+                            if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR) {
+                                if (isUrlExpires(hls.url)) {
+                                    fragLoadError = 0;
+                                    now = Date.now();
+                                    hls.stopLoad();
+                                    art.emit('video_reload_start', option.quality);
+                                }
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            });
+
+            art.on('video_reload_end', (quality) => {
+                switchUrl(quality);
+            });
+
+            function isUrlExpires(e) {
+                var t = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : 6e3
+                , n = e.match(/&x-oss-expires=(\d+)&/);
+                if (n) {
+                    return +"".concat(n[1], "000") - t < Date.now();
+                }
+                else {
+                    return Date.now() - now > 300 * 1000 - t;
+                }
+            }
+
+            function switchUrl(quality) {
+                option.quality = quality;
+
+                const url = hls.url = (quality.find((item) => {
+                    return item.default;
+                }) || option.quality[0] || {}).url;
+
+                fetch(url).then((response) => {
+                    return response.ok ? response.text() : Promise.reject();
+                }).then((data) => {
+                    const m3u8Parser = window.m3u8Parser || unsafeWindow.m3u8Parser;
+                    const parser = new m3u8Parser.Parser();
+                    parser.push(data);
+                    parser.end();
+
+                    const refurl = url.replace(/media.m3u8.+/, "");
+                    const segments = parser.manifest.segments;
+                    const fragments = hls.bufferController.details.fragments;
+                    fragments.forEach(function (item, index) {
+                        const segment = segments[index];
+                        Object.assign(item, {
+                            baseurl: url,
+                            relurl: segment.uri,
+                            url: refurl + segment.uri,
+                        });
+                    });
+
+                    hls.startLoad(art.currentTime);
+                });
+            }
+
+            return {
+                name: 'hlsevents'
+            };
+        }
+    },
+    function AspectRatio() {
+        return function (art) {
+            art.setting.update({
+                name: 'aspect-ratio',
+                onSelect(item) {
+                    if (item.value === '自动拉伸') {
+                        art.video.style['object-fit'] = 'fill';
+                    }
+                    art.aspectRatio = item.value;
+                    return item.html;
+                },
+            });
+
+            return {
+                name: 'aspectRatio'
+            };
+        };
+    },
     function Sound() {
         return (art) => {
-            function init () {
+            function init() {
                 const Joysound = window.Joysound || unsafeWindow.Joysound;
                 if (Joysound && Joysound.isSupport()) {
                     art.joySound = art.joySound || new Joysound();
@@ -358,19 +438,7 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
                 showtext: true,
                 autonext: art.storage.get('auto-next'),
                 onchanged: (playOption) => {
-                    art.emit('video_changed_start', playOption);
-                }
-            };
-
-            function changeVideo(index) {
-                if (!options.playlist[index]) {
-                    if (index >= options.playlist.length) {
-                        art.notice.show = '没有下一集了';
-                    }
-                    return;
-                }
-                if (typeof options.onchanged === 'function') {
-                    options.onchanged(options.playlist[index]);
+                    art.emit('video_switch_start', playOption);
                 }
             };
 
@@ -407,6 +475,92 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
                     return options.showtext ? '播放列表' : icon;
                 }
             });
+
+            art.on('video_switch_end', (playOption) => {
+                const { file_id, video_preview_play_info } = playOption || {};
+                const { live_transcoding_subtitle_task_list, live_transcoding_task_list } = video_preview_play_info || {};
+                const quality = getQuality(live_transcoding_task_list);
+                if (quality.length > 0) {
+                    const qualityDefault = quality.find((item) => item.default) || quality[0] || {};
+                    Object.assign(art.option, { id: file_id, quality: quality, url: qualityDefault.url, type: qualityDefault.type });
+
+                    art.switchUrl(qualityDefault.url).then(() => {
+                        document.querySelector("[class^=header-file-name], [class^=header-center] div span").innerText = playOption.name;
+                        art.notice.show = `切换视频: ${playOption.name}`;
+                    }).catch(() => {
+                        art.notice.show = `视频地址不可用: ${playOption.name}`;
+                    });
+                }
+                else {
+                    return alert('获取播放信息失败，无法切换视频');
+                }
+
+                const subtitle = getSubtitle(live_transcoding_subtitle_task_list);
+                if (subtitle.length > 0) {
+                    const subtitleDefault = subtitle.find((item) => item.default) || subtitle[0] || {};
+                    Object.assign(art.option.subtitle, { subtitle: subtitle, url: subtitleDefault.url, type: subtitleDefault.type });
+                    art.emit('subtitle_changed');
+                }
+            });
+
+            function changeVideo(index) {
+                if (!options.playlist[index]) {
+                    if (index >= options.playlist.length) {
+                        art.notice.show = '没有下一集了';
+                    }
+                    return;
+                }
+                if (typeof options.onchanged === 'function') {
+                    options.onchanged(options.playlist[index]);
+                }
+            }
+
+            function getQuality(task_list) {
+                if (Array.isArray(task_list) && task_list.length) {
+                    task_list = task_list.reverse();
+                    task_list.find(item => item.url).default = !0;
+                    task_list = task_list.reverse();
+
+                    let templates = {
+                        UHD: "4K 超清",
+                        QHD: "2K 超清",
+                        FHD: "1080 全高清",
+                        HD: "720 高清",
+                        SD: "540 标清",
+                        LD: "360 流畅"
+                    };
+                    task_list.forEach(function (item, index) {
+                        Object.assign(item, {
+                            html: templates[item.template_id] + (item.description ? "（三方会员）" : ""),
+                            type: "hls"
+                        });
+                    });
+                    return task_list;
+                }
+                return [];
+            };
+
+            function getSubtitle(task_list) {
+                if (Array.isArray(task_list) && task_list.length) {
+                    task_list = task_list.reverse();
+                    task_list.find(item => ['cho', 'chi'].includes(item.language)).default = !0;
+                    task_list = task_list.reverse();
+
+                    let templates = {
+                        jpn: "日文字幕",
+                        chi: "中文字幕",
+                        eng: "英文字幕"
+                    };
+                    task_list.forEach(function (item, index) {
+                        Object.assign(item, {
+                            html: templates[item.language] || item.language || "未知语言",
+                            type: "vtt"
+                        });
+                    });
+                    return task_list;
+                }
+                return [];
+            };
 
             return {
                 name: 'playlist'
