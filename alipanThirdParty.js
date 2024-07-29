@@ -2,7 +2,7 @@ window.alipanThirdParty = window.alipanThirdParty || (function () {
     (function(pushState) {
         history.pushState = function (state, unused, url) {
             if (url.indexOf("/membership") > 0) {
-                location.href = location.protocol + "//" + location.host + "/cpx/member?userCode=MjAxOTcy&disableNav=YES&skuCode=thirdParty"
+                location.href = location.protocol + "//" + location.host + "/cpx/member?userCode=MjAxOTcy&disableNav=YES&skuCode=thirdParty&customExtra=byScript001"
             }
             pushState.apply(this, arguments);
         };
@@ -79,7 +79,7 @@ window.alipanThirdParty = window.alipanThirdParty || (function () {
         }).then((response) => {
             return response.ok ? response.json() : Promise.reject();
         }).then((response) => {
-            setItem("openToken", Object.assign(response, { expire_time: Math.floor(Date.now() / 1000) }));
+            setItem("openToken", Object.assign(response, { expire_time: new Date(Date.now() + 1e3 * response.expires_in - 6e5).toISOString() }));
             return response;
         });
     }
