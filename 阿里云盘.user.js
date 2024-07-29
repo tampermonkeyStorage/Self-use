@@ -8,11 +8,12 @@
 // @match        https://www.alipan.com/*
 // @connect      *
 // @require      https://scriptcat.org/lib/950/^1.0.1/Joysound.js
-// @require      https://scriptcat.org/lib/2163/^1.0.0/alipanThirdParty.js
-// @require      https://scriptcat.org/lib/2164/^1.0.0/alipanArtPlugins.js
 // @require      https://cdn.staticfile.org/hls.js/1.5.13/hls.min.js
 // @require      https://cdn.staticfile.org/artplayer/5.1.6/artplayer.min.js
 // @require      https://cdn.staticfile.org/jquery/3.6.0/jquery.min.js
+// @require      https://scriptcat.org/lib/2163/^1.0.0/alipanThirdParty.js
+// @require      https://scriptcat.org/lib/2164/^1.0.0/alipanArtPlugins.js
+// @require      https://cdn.staticfile.org/m3u8-parser/7.1.0/m3u8-parser.min.js
 // @require      https://cdn.staticfile.org/localforage/1.10.0/localforage.min.js
 // @icon         https://gw.alicdn.com/imgextra/i3/O1CN01aj9rdD1GS0E8io11t_!!6000000000620-73-tps-16-16.ico
 // @antifeature  ads
@@ -102,15 +103,31 @@
             obj.replaceVideoPlayer().then(() => {
                 const options = Object.assign({}, obj.video_page);
                 window.alipanArtPlugins.init(options).then((art) => {
-                    art.on('video_changed_start', (fileOption) => {
+                    art.on('video_switch_start', (fileOption) => {
                         obj.initPlayInfo(fileOption);
                         obj.getVideoPreviewPlayInfo().then((response) => {
                             delete response.file_id;
                             Object.assign(obj.video_page.video_info, response);
                             const playOption = Object.assign({}, fileOption, response);
-                            art.emit('video_changed_end', playOption);
+                            art.emit('video_switch_end', playOption);
                         });
                     });
+
+                    art.on('video_reload_start', (quality) => {
+                        const defaultIndex = quality.findIndex((item) => {
+                            return item.default;
+                        });
+                        obj.getVideoPreviewPlayInfo().then((response) => {
+                            const { video_preview_play_info } = response || {};
+                            const { live_transcoding_subtitle_task_list, live_transcoding_task_list } = video_preview_play_info || {};
+                            live_transcoding_task_list[defaultIndex].default = !0;
+                            quality = live_transcoding_task_list;
+                            art.emit('video_reload_end', quality);
+                        });
+                    });
+
+                    const closeNode = document.querySelector('[class^="header-left"] [data-icon-type="PDSClose"]');
+                    closeNode && closeNode.addEventListener('click', art.destroy, {once: true});
                 });
             });
         });
