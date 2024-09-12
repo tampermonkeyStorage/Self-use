@@ -1,26 +1,16 @@
 window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
     var obj = {
-        version: '1.0.1'
+        version: '1.0.2'
     };
 
     obj.init = (options) => {
         return Promise.all([
-            obj.readyM3u8Parser(),
             obj.readyHls(),
             obj.readyArtplayer(),
+            obj.readyM3u8Parser(),
         ]).then(() => {
             return obj.initArtplayer(options);
         });
-    };
-
-    obj.readyM3u8Parser = function () {
-        const m3u8Parser = window.m3u8Parser || unsafeWindow.m3u8Parser;
-        if (m3u8Parser) {
-            return Promise.resolve();
-        }
-        else {
-            return obj.loadJs("https://unpkg.com/m3u8-parser/dist/m3u8-parser.min.js");
-        }
     };
 
     obj.readyHls = function () {
@@ -43,7 +33,39 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
         }
     };
 
+    obj.readyM3u8Parser = function () {
+        const m3u8Parser = window.m3u8Parser || unsafeWindow.m3u8Parser;
+        if (m3u8Parser) {
+            return Promise.resolve();
+        }
+        else {
+            return obj.loadJs("https://unpkg.com/m3u8-parser/dist/m3u8-parser.min.js");
+        }
+    };
+
     obj.initArtplayer = function (options) {
+        options = obj.initOption(options);
+        if (!(Array.isArray(options.quality) && options.quality.find(item => item?.url))) {
+            alert('获取播放信息失败，请刷新网页重试');
+            return Promise.reject('No available playUrl');
+        }
+
+        const Artplayer = window.Artplayer || unsafeWindow.Artplayer;
+        Object.assign(Artplayer, {
+            PLAYBACK_RATE: [0.5, 0.75, 1, 1.25, 1.5, 2.0, 3.0, 4.0, 5.0],
+            ASPECT_RATIO: ['default', '4:3', '16:9', '自动拉伸'],
+        });
+        const art = new Artplayer(options, (art) => {
+            if (t.length % 8 !== t.length) {
+                t.forEach((k) => {
+                    art.plugins.add(k());
+                });
+            }
+        });
+        return Promise.resolve(art);
+    };
+
+    obj.initOption = function (options) {
         const details = {
             container: '#artplayer',
             url: '',
@@ -57,6 +79,13 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
                     html: '检查更新',
                     click: function (contextmenu, event) {
                         window.open('https://scriptcat.org/zh-CN/script-show-page/162', '_blank');
+                        contextmenu.show = false;
+                    },
+                },
+                {
+                    html: '加油作者',
+                    click: function (contextmenu, event) {
+                        this?.plugins?.aifadian.show();
                         contextmenu.show = false;
                     },
                 },
@@ -108,91 +137,77 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
             fullscreenWeb: true,
         };
 
-        const { video_info, video_items } = options || {};
-        const { file_id, video_preview_play_info } = video_info || {};
-        const { live_transcoding_subtitle_task_list, live_transcoding_task_list } = video_preview_play_info || {};
-        const quality = getQuality(live_transcoding_task_list);
-        if (quality.length > 0) {
-            const qualityDefault = quality.find((item) => item.default) || quality[0] || {};
-            const playlist = video_items.map((fileInfo) => {
-                if (fileInfo.file_id === file_id) {
-                    fileInfo.default = !0;
-                }
-                return fileInfo;
+        const { video_info, video_file, video_items } = options || {};
+        const file = video_file || {}, id = file.file_id;
+        if (id) {
+            Object.assign(details, { file, id });
+        }
+
+        const {
+            live_transcoding_subtitle_task_list,
+            live_transcoding_task_list,
+            meta,
+            quick_video_list,
+            quick_video_subtitle_list,
+        } = video_info?.video_preview_play_info || {};
+
+        const quality = quick_video_list || live_transcoding_task_list;
+        if (Array.isArray(quality) && quality.length) {
+            const templates = {
+                QHD: "2K 超清",
+                QHD: '1440 超清',
+                FHD: '1080 全高清',
+                HD: '720 高清',
+                SD: '540 标清',
+                LD: '360 流畅'
+            };
+            quality.forEach((item, index) => {
+                Object.assign(item, {
+                    html: templates[item.template_id] + (item.description ? '（三方VIP）' : !item.url ? '（VIP）' : ''),
+                    type: 'hls'
+                });
             });
-            Object.assign(details, { id: file_id, quality: quality, playlist: playlist, url: qualityDefault.url, type: qualityDefault.type });
+            quality.sort((a, b) => a.template_height - b.template_height);
+            quality.findLast(item => item.url).default = !0;
+            Object.assign(details, { quality });
         }
         else {
-            alert('获取播放信息失败，请刷新网页重试');
-            return Promise.reject('获取播放信息失败');
+            return details;
         }
 
-        const subtitle = getSubtitle(live_transcoding_subtitle_task_list);
-        if (subtitle.length > 0) {
-            const subtitleDefault = subtitle.find((item) => item.default) || subtitle[0] || {};
-            Object.assign(details.subtitle, { subtitle: subtitle, url: subtitleDefault.url, type: subtitleDefault.type });
+        const { url, type } = quality.find((item) => item.default) || quality[0] || {};
+        if (url && type) {
+            Object.assign(details, { url, type });
+        }
+        else {
+            return details;
         }
 
-        const Artplayer = window.Artplayer || unsafeWindow.Artplayer;
-        Object.assign(Artplayer, {
-            PLAYBACK_RATE: [0.5, 0.75, 1, 1.25, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0],
-            ASPECT_RATIO: ["default", "4:3", "16:9", "17:9", "18:9", '自动拉伸'],
-        });
-
-        const art = new Artplayer(details, (art) => {
-            t.forEach((k) => {
-                art.plugins.add(k());
+        const subtitlelist = quick_video_subtitle_list || live_transcoding_subtitle_task_list;
+        if (Array.isArray(subtitlelist) && subtitlelist.length) {
+            const templates = {
+                chi: '中文字幕',
+                eng: '英文字幕',
+                jpn: '日文字幕'
+            };
+            subtitlelist.forEach(function (item, index) {
+                Object.assign(item, {
+                    html: (templates[item.language] || item.language || '未知语言') + '（vtt）',
+                    name: '内置字幕',
+                    type: "vtt"
+                });
             });
-        });
-
-        function getQuality(task_list) {
-            if (Array.isArray(task_list) && task_list.length) {
-                task_list = task_list.reverse();
-                task_list.find(item => item.url).default = !0;
-                task_list = task_list.reverse();
-
-                let templates = {
-                    UHD: "4K 超清",
-                    QHD: "2K 超清",
-                    FHD: "1080 全高清",
-                    HD: "720 高清",
-                    SD: "540 标清",
-                    LD: "360 流畅"
-                };
-                task_list.forEach(function (item, index) {
-                    Object.assign(item, {
-                        html: templates[item.template_id] + (item.description ? "（三方会员）" : ""),
-                        type: "hls"
-                    });
-                });
-                return task_list;
-            }
-            return [];
+            (subtitlelist.find(item => ['chi'].includes(item.language)) || subtitlelist.find(item => item.url) || {}).default = !0;
+            Object.assign(details, { subtitlelist });
         }
 
-        function getSubtitle(task_list) {
-            if (Array.isArray(task_list) && task_list.length) {
-                task_list = task_list.reverse();
-                task_list.find(item => ['cho', 'chi'].includes(item.language)).default = !0;
-                task_list = task_list.reverse();
-
-                let templates = {
-                    jpn: "日文字幕",
-                    chi: "中文字幕",
-                    eng: "英文字幕"
-                };
-                task_list.forEach(function (item, index) {
-                    Object.assign(item, {
-                        html: templates[item.language] || item.language || "未知语言",
-                        type: "vtt"
-                    });
-                });
-                return task_list;
-            }
-            return [];
+        const playlist = video_items || [];
+        if (Array.isArray(playlist) && playlist.length) {
+            (playlist.find(item => item.file_id === id) || {}).default = !0;
+            Object.assign(details, { playlist });
         }
 
-        return Promise.resolve(art);
+        return details;
     };
 
     obj.loadJs = function (src) {
@@ -233,8 +248,7 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
                                 hls.loadSource(hls.url);
                             }
                             else if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR) {
-                                if (fragLoadError < 10) {
-                                    fragLoadError++;
+                                if (++fragLoadError < 10) {
                                     hls.loadSource(hls.url);
                                     hls.media.currentTime = art.currentTime;
                                     hls.media.play();
@@ -261,7 +275,7 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
                                     fragLoadError = 0;
                                     now = Date.now();
                                     hls.stopLoad();
-                                    art.emit('video_reload_start', option.quality);
+                                    art.emit('reload-start', option.quality);
                                 }
                             }
                             break;
@@ -269,10 +283,6 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
                             break;
                     }
                 }
-            });
-
-            art.on('video_reload_end', (quality) => {
-                switchUrl(quality);
             });
 
             function isUrlExpires(e) {
@@ -286,12 +296,12 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
                 }
             }
 
-            function switchUrl(quality) {
+            function loadStreaming(quality) {
                 option.quality = quality;
 
                 const url = hls.url = (quality.find((item) => {
                     return item.default;
-                }) || option.quality[0] || {}).url;
+                }) || quality.findLast(item => item.url) || {}).url;
 
                 fetch(url).then((response) => {
                     return response.ok ? response.text() : Promise.reject();
@@ -314,114 +324,49 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
                     });
 
                     hls.startLoad(art.currentTime);
+                }).catch((err) => {
+                    notice.show = err;
+                    throw err;
                 });
             }
+
+            art.on('reload-can', (quality) => {
+                loadStreaming(quality);
+            });
 
             return {
                 name: 'hlsevents'
             };
         }
     },
-    function AspectRatio() {
-        return function (art) {
-            art.setting.update({
-                name: 'aspect-ratio',
-                onSelect(item) {
-                    if (item.value === '自动拉伸') {
-                        art.video.style['object-fit'] = 'fill';
-                    }
-                    art.aspectRatio = item.value;
-                    return item.html;
-                },
-            });
-
-            return {
-                name: 'aspectRatio'
-            };
-        };
-    },
-    function Sound() {
-        return (art) => {
-            function init() {
-                const Joysound = window.Joysound || unsafeWindow.Joysound;
-                if (Joysound && Joysound.isSupport()) {
-                    art.joySound = art.joySound || new Joysound();
-                    art.joySound.hasSource() || art.joySound.init(art.video);
-                    if (art.storage.get('sound-enhancer')) {
-                        art.joySound.setEnabled(!0);
-                        art.setting.update({
-                            name: 'sound-enhancer',
-                            html: '音质增强',
-                            switch: true,
-                        });
-                    }
-                }
-            }
-
-            const soundEnhancer = art.storage.get('sound-enhancer');
-            art.setting.add({
-                width: 220,
-                html: '声音设置',
-                name: 'sound-setting',
-                tooltip: '正常',
-                icon: '<svg xmlns="http://www.w3.org/2000/svg" height="22" width="22" data-spm-anchor-id="0.0.0.i11.83206c7554HZzm"><path d="M10.188 4.65 6 8H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h1l4.188 3.35a.5.5 0 0 0 .812-.39V5.04a.498.498 0 0 0-.812-.39zm4.258-.872a1 1 0 0 0-.862 1.804 6.002 6.002 0 0 1-.007 10.838 1 1 0 0 0 .86 1.806A8.001 8.001 0 0 0 19 11a8.001 8.001 0 0 0-4.554-7.222z"></path><path d="M15 11a3.998 3.998 0 0 0-2-3.465v6.93A3.998 3.998 0 0 0 15 11z"></path></svg>',
-                selector: [
-                    {
-                        html: '音质增强',
-                        name: 'sound-enhancer',
-                        tooltip: !soundEnhancer ? '关闭' : '开启',
-                        switch: !!soundEnhancer,
-                        onSwitch: function (item) {
-                            item.tooltip = item.switch ? '关闭' : '开启';
-                            art.storage.set('sound-enhancer', !item.switch);
-                            art.joySound && art.joySound.setEnabled(!item.switch);
-                            art.notice.show = "音质增强：" + (item.switch ? '关闭' : '开启');
-                            return !item.switch;
-                        }
-                    },
-                    {
-                        html: '音量增强',
-                        name: 'volume-enhancer',
-                        tooltip: '0x',
-                        range: [0, 0, 10, .1],
-                        onRange: function (item) {
-                            const range = item.range / 10;
-                            art.joySound && art.joySound.setVolume(range);
-                            art.notice.show = "音量增强：" + (100 + range * 100) + "%";
-                            return item.range + 'x';
-                        },
-                    },
-                ]
-            });
-
-            art.once('video:playing', init);
-
-            return {
-                name: 'sound'
-            };
-        }
-    },
     function Quality() {
         return function (art) {
-            const { option, notice, i18n } = art;
+            const { controls, option, notice, i18n } = art;
 
-            art.controls.update({
-                name: 'quality',
-                onSelect: function (item) {
-                    if (!item.url) {
-                        notice.show = item.description || '视频地址不可用';
-                        return;
-                    }
-                    art.switchQuality(item.url);
-                    notice.show = `${i18n.get('Switch Video')}: ${item.html}`;
-                }
-            });
-
-            art.on('restart', () => {
-                art.controls.update({
+            function update() {
+                const qualityDefault = option.quality.find((item) => item.default) || option.quality.findLast(item => item.url);
+                controls.update({
                     name: 'quality',
-                    selector: option.quality
+                    html: qualityDefault ? qualityDefault.html : '',
+                    selector: option.quality,
+                    onSelect: function (item) {
+                        if (item.url) {
+                            art.switchQuality(item.url);
+                            notice.show = `${i18n.get('Switch Video')}: ${item.html}`;
+                        }
+                        else {
+                            notice.show = item.description || '视频地址不可用';
+                        }
+                    }
                 });
+            }
+
+            update();
+            art.on('playlist-switch-can', () => {
+                setTimeout(update, 1e3);
+            });
+            art.on('reload-can', () => {
+                setTimeout(update, 1e3);
             });
 
             return {
@@ -431,36 +376,29 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
     },
     function Playlist() {
         return function (art) {
-            if (!(art.option.playlist && art.option.playlist.length > 1)) return;
+            const { option, notice } = art;
+            if (!(option.playlist && option.playlist.length > 1)) return;
 
             const options = {
-                playlist: art.option.playlist,
                 showtext: true,
-                autonext: art.storage.get('auto-next'),
-                onchanged: (playOption) => {
-                    art.emit('video_switch_start', playOption);
+                icon: '<i class="art-icon"><svg class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" width="22" height="22"><path d="M810.666667 384H85.333333v85.333333h725.333334V384z m0-170.666667H85.333333v85.333334h725.333334v-85.333334zM85.333333 640h554.666667v-85.333333H85.333333v85.333333z m640-85.333333v256l213.333334-128-213.333334-128z" fill="#ffffff"></path></svg></i>',
+                onchanged: (fileOption) => {
+                    option.file = fileOption;
+                    art.emit('playlist-switch-start', fileOption);
                 }
             };
 
-            var currentEp = options.playlist.findIndex((videoInfo) => {
-                return videoInfo.default;
-            });
-            if (options.autonext && currentEp < options.playlist.length) {
-                art.on('video:ended', () => {
-                    changeVideo(currentEp += 1);
-                });
-            }
+            var currentEp = option.playlist.findIndex((playinfo) => playinfo.default);
 
-            const icon = '<i class="art-icon"><svg class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" width="22" height="22"><path d="M810.666667 384H85.333333v85.333333h725.333334V384z m0-170.666667H85.333333v85.333334h725.333334v-85.333334zM85.333333 640h554.666667v-85.333333H85.333333v85.333333z m640-85.333333v256l213.333334-128-213.333334-128z" fill="#ffffff"></path></svg></i>';
             art.controls.add({
-                html: options.showtext ? '播放列表' : icon,
+                html: options.showtext ? '播放列表' : options.icon,
                 name: 'play-list',
                 position: 'right',
                 style: {
                     paddingLeft: '10px',
                     paddingRight: '10px',
                 },
-                selector: options.playlist.map((videoInfo, index) => {
+                selector: option.playlist.map((videoInfo, index) => {
                     return {
                         html: videoInfo.name,
                         style: {
@@ -472,69 +410,39 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
                 }),
                 onSelect: (item) => {
                     changeVideo(currentEp = item.index);
-                    return options.showtext ? '播放列表' : icon;
-                }
-            });
-
-            art.on('video_switch_end', (playOption) => {
-                const { file_id, video_preview_play_info } = playOption || {};
-                const { live_transcoding_subtitle_task_list, live_transcoding_task_list } = video_preview_play_info || {};
-                const quality = getQuality(live_transcoding_task_list);
-                if (quality.length > 0) {
-                    const qualityDefault = quality.find((item) => item.default) || quality[0] || {};
-                    Object.assign(art.option, { id: file_id, quality: quality, url: qualityDefault.url, type: qualityDefault.type });
-
-                    art.switchUrl(qualityDefault.url).then(() => {
-                        document.querySelector("[class^=header-file-name], [class^=header-center] div span").innerText = playOption.name;
-                        art.notice.show = `切换视频: ${playOption.name}`;
-                    }).catch(() => {
-                        art.notice.show = `视频地址不可用: ${playOption.name}`;
-                    });
-                }
-                else {
-                    return alert('获取播放信息失败，无法切换视频');
-                }
-
-                const subtitle = getSubtitle(live_transcoding_subtitle_task_list);
-                if (subtitle.length > 0) {
-                    const subtitleDefault = subtitle.find((item) => item.default) || subtitle[0] || {};
-                    Object.assign(art.option.subtitle, { subtitle: subtitle, url: subtitleDefault.url, type: subtitleDefault.type });
-                    art.emit('subtitle_changed');
+                    return options.showtext ? '播放列表' : options.icon;
                 }
             });
 
             function changeVideo(index) {
-                if (!options.playlist[index]) {
-                    if (index >= options.playlist.length) {
+                if (!option.playlist[index]) {
+                    if (index >= option.playlist.length) {
                         art.notice.show = '没有下一集了';
                     }
                     return;
                 }
                 if (typeof options.onchanged === 'function') {
-                    options.onchanged(options.playlist[index]);
+                    options.onchanged(option.playlist[index]);
                 }
             }
 
             function getQuality(task_list) {
                 if (Array.isArray(task_list) && task_list.length) {
-                    task_list = task_list.reverse();
-                    task_list.find(item => item.url).default = !0;
-                    task_list = task_list.reverse();
-
                     let templates = {
-                        UHD: "4K 超清",
                         QHD: "2K 超清",
                         FHD: "1080 全高清",
                         HD: "720 高清",
                         SD: "540 标清",
                         LD: "360 流畅"
                     };
-                    task_list.forEach(function (item, index) {
+                    task_list.forEach((item, index) => {
                         Object.assign(item, {
-                            html: templates[item.template_id] + (item.description ? "（三方会员）" : ""),
-                            type: "hls"
+                            html: templates[item.template_id] + (item.description ? '（三方VIP）' : !item.url ? '（VIP）' : ''),
+                            type: 'hls'
                         });
                     });
+                    task_list.sort((a, b) => a.template_height - b.template_height);
+                    task_list.findLast(item => item.url).default = !0;
                     return task_list;
                 }
                 return [];
@@ -542,68 +450,199 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
 
             function getSubtitle(task_list) {
                 if (Array.isArray(task_list) && task_list.length) {
-                    task_list = task_list.reverse();
-                    task_list.find(item => ['cho', 'chi'].includes(item.language)).default = !0;
-                    task_list = task_list.reverse();
-
-                    let templates = {
-                        jpn: "日文字幕",
-                        chi: "中文字幕",
-                        eng: "英文字幕"
+                    const templates = {
+                        chi: '中文字幕',
+                        eng: '英文字幕',
+                        jpn: '日文字幕'
                     };
                     task_list.forEach(function (item, index) {
                         Object.assign(item, {
-                            html: templates[item.language] || item.language || "未知语言",
+                            html: (templates[item.language] || item.language || '未知语言') + '（vtt）',
+                            name: '内置字幕',
                             type: "vtt"
                         });
                     });
+                    (task_list.find(item => ['chi'].includes(item.language)) || task_list[0] || {}).default = !0;
                     return task_list;
                 }
                 return [];
             };
+
+            art.on('playlist-switch-can', (playOption) => {
+                const { file_id: id, name } = option.file || {};
+                const {
+                    live_transcoding_subtitle_task_list,
+                    live_transcoding_task_list,
+                    meta,
+                    quick_video_list,
+                    quick_video_subtitle_list,
+                } = playOption?.video_preview_play_info || {};
+
+                const quality = getQuality(quick_video_list || live_transcoding_task_list);
+                if (quality.length) {
+                    const { url, type } = quality.find((item) => item.default) || quality[0] || {};
+                    Object.assign(option, { id, quality, url, type });
+
+                    art.switchUrl(url).then(() => {
+                        (document.querySelector("[class^=header-file-name], [class^=header-center] div span") || {}).innerText = name;
+                        notice.show = `切换视频: ${name}`;
+                    }).catch(() => {
+                        notice.show = `视频地址不可用: ${name}`;
+                    });
+                }
+                else {
+                    return alert('获取播放信息失败，无法切换视频');
+                }
+
+                option.subtitlelist = getSubtitle(live_transcoding_subtitle_task_list);
+            });
+
+            art.on('video:ended', () => {
+                if (art.storage.get('auto-next') && currentEp < options.playlist.length) {
+                    changeVideo(currentEp += 1);
+                }
+            });
 
             return {
                 name: 'playlist'
             };
         };
     },
+    function AutoNext() {
+        return function (art) {
+            const autoNext = art.storage.get('auto-next');
+
+            art.setting.add({
+                html: '自动连播',
+                name: 'auto-next',
+                icon: '<img width="22" heigth="22" src="https://artplayer.org/assets/img/state.svg">',
+                tooltip: !autoNext ? '关闭' : '开启',
+                switch: !!autoNext,
+                onSwitch: function (item) {
+                    item.tooltip = item.switch ? '关闭' : '开启';
+                    art.storage.set('auto-next', !item.switch);
+                    art.notice.show = "自动连续播放：" + (item.switch ? '关闭' : '开启');
+                    return !item.switch;
+                }
+            });
+
+            return {
+                name: 'autonext'
+            };
+        };
+    },
     function Subtitle() {
         return (art) => {
-            const { subtitle, template, option, notice } = art;
+            const { controls, subtitle, template, option, notice } = art;
 
-            function update(sublist) {
-                if (!(Array.isArray(sublist) && sublist.length)) return;
+            const options = {
+                showtext: true,
+                icon: '<i class="art-icon"><svg xmlns="http://www.w3.org/2000/svg" height="24" width="24" viewBox="0 0 48 48"><path d="M0 0h48v48H0z" fill="none"/><path fill="#ffffff" d="M40 8H8c-2.21 0-4 1.79-4 4v24c0 2.21 1.79 4 4 4h32c2.21 0 4-1.79 4-4V12c0-2.21-1.79-4-4-4zM8 24h8v4H8v-4zm20 12H8v-4h20v4zm12 0h-8v-4h8v4zm0-8H20v-4h20v4z"/></svg></i>'
+            };
 
-                if (!option.subtitle.url) {
-                    let subtitleOption = sublist.find((element) => element.default) || sublist[0] || {};
-                    subtitleOption = Object.assign({}, option.subtitle, subtitleOption);
-                    subtitleOption.url && subtitle.init({
-                        ...subtitleOption
-                    }).then(() => {
-                        notice.show = '添加字幕成功';
-                    });
-                }
+            function update(sublist = []) {
+                const subtitleOption = Object.assign({}, option.subtitle, sublist.find((element) => element.default) || sublist[0] || {});
+                const { url, type } = subtitleOption;
+                Object.assign(option.subtitle, { url, type });
+                subtitle.init({
+                    ...subtitleOption
+                }).then(() => {
+                    notice.show = '加载字幕成功';
+                });
 
-                art.controls.update({
-                    html: '字幕列表',
+                controls.update({
+                    html: options.showtext ? '字幕列表' : options.icon,
                     name: 'subtitle-list',
                     position: 'right',
                     style: {
                         paddingLeft: '10px',
                         paddingRight: '10px',
                     },
-                    selector: sublist.map(function (item, index) {
+                    selector: sublist.map((item, index) => {
                         return {
-                            style: {
-                                textAlign: 'left'
-                            },
                             ...item
                         };
                     }),
                     onSelect: function (item, $dom) {
+                        const { url, type } = item;
+                        Object.assign(option.subtitle, { url, type });
                         subtitle.switch(item.url, item);
                         return item.html;
                     }
+                });
+            }
+
+            function toObjectURL(url) {
+                if (url instanceof File || url instanceof Blob) {
+                    return blobToUrl(url);
+                }
+                else {
+                    return fetch(url, {
+                        referrer: location.protocol + "//" + location.host + "/",
+                        referrerPolicy: "origin",
+                        body: null,
+                        method: "GET",
+                        mode: "cors",
+                        credentials: "omit"
+                    }).then(data => data.blob()).then(blob => {
+                        return blobToUrl(blob);
+                    });
+                }
+            }
+
+            function blobToUrl(blob) {
+                return blobToText(blob).then(text => {
+                    const blob = new Blob([text], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    return url;
+                });
+            }
+
+            function blobToText(blob) {
+                return new Promise((resolve, reject) => {
+                    var reader = new FileReader();
+                    reader.readAsText(blob, "UTF-8");
+                    reader.onload = function (e) {
+                        var result = reader.result;
+                        if (result.indexOf("�") > -1 && !reader.markGBK) {
+                            reader.markGBK = true;
+                            return reader.readAsText(blob, "GBK");
+                        }
+                        else if (result.indexOf("") > -1 && !reader.markBIG5) {
+                            reader.markBIG5 = true;
+                            return reader.readAsText(blob, "BIG5");
+                        }
+                        resolve(result);
+                    };
+                    reader.onerror = function (error) {
+                        reject(error);
+                    };
+                });
+            }
+
+            function ajax(url, options = {}) {
+                Object.assign(options, {
+                    responseType: options.responseType || 'json',
+                    data: options.data instanceof Object ? Object.keys(options.data).map((k) => {
+                        return encodeURIComponent(k) + "=" + encodeURIComponent(options.data[k]).replace("%20", "+");
+                    }).join("&") : options.data
+                });
+                return new Promise(function (resolve, reject) {
+                    GM_xmlhttpRequest({
+                        url,
+                        ...options,
+                        onload: function (result) {
+                            if (parseInt(result.status / 100) === 2) {
+                                resolve(result.response);
+                            }
+                            else {
+                                reject(result.response);
+                            }
+                        },
+                        onerror: function (result) {
+                            reject(result.error);
+                        }
+                    });
                 });
             }
 
@@ -613,12 +652,16 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
                     node.onchange = (event) => {
                         if (event.target.files.length) {
                             const file = event.target.files[0];
-                            const subtitleOption = {};
-                            subtitleOption.url = URL.createObjectURL(file);
-                            subtitleOption.type = file.name.split(".").pop().toLowerCase();
-                            subtitleOption.name = file.name;
-                            subtitleOption.html = '本地字幕';
-                            resolve(subtitleOption);
+                            const type = file.name.split(".").pop().toLowerCase();
+                            blobToUrl(file).then(url => {
+                                const subtitleOption = {
+                                    url,
+                                    type,
+                                    name: file.name,
+                                    html: '本地字幕（' + type + '）',
+                                };
+                                resolve(subtitleOption);
+                            });
                         }
                         event.target.value = "";
                     }
@@ -635,7 +678,7 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
                 return parent.lastElementChild || parent.lastChild;
             }
 
-            template.$subtitleLocalFile = append(art.template.$container, '<input class="subtitleLocalFile" type="file" accept="webvtt,.vtt,.srt,.ssa,.ass" style="display: none;">');
+            template.$subtitleLocalFile = append(template.$container, '<input class="subtitleLocalFile" type="file" accept="webvtt,.vtt,.srt,.ssa,.ass" style="display: none;">');
             art.setting.add({
                 width: 220,
                 html: '字幕设置',
@@ -834,8 +877,8 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
                         onSelect: function (item, $dom, event) {
                             if (item.name === 'file') {
                                 localFile(template.$subtitleLocalFile).then((subtitleOption) => {
-                                    option.subtitle.subtitle = (option.subtitle.subtitle || []).concat([ subtitleOption ]);
-                                    update(option.subtitle.subtitle);
+                                    option.subtitlelist = (option.subtitlelist || []).concat([ subtitleOption ]);
+                                    update(option.subtitlelist);
                                 });
                             }
 
@@ -845,11 +888,22 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
                 ]
             });
 
-            update(option.subtitle.subtitle);
-            art.on('restart', (url) => {
-                const sublist = option.subtitle.subtitle || [];
-                const subtitleDefault = sublist.find((item) => item.default) || sublist[0] || {};
-                subtitleDefault.url && subtitle.switch(subtitleDefault.url);
+            if ((option.subtitlelist || []).length) {
+                update(option.subtitlelist);
+            }
+            art.on('restart', () => {
+                if ((option.subtitlelist || []).length) {
+                    update(option.subtitlelist);
+                }
+                else {
+                    controls['subtitle-list'] && controls.remove('subtitle-list');
+                }
+            });
+            art.on('subtitlelist-add', (sublist) => {
+                option.subtitlelist = (option.subtitlelist || []).concat(sublist);
+                if ((option.subtitlelist || []).length) {
+                    update(option.subtitlelist);
+                }
             });
 
             return {
@@ -857,27 +911,402 @@ window.alipanArtPlugins = window.alipanArtPlugins || function(t) {
             };
         }
     },
-    function AutoNext() {
-        return function (art) {
-            const autoNext = art.storage.get('auto-next');
+    function Libass() {
+        return (art) => {
+            function switchTrack() {
+                return initLibass().then(() => {
+                    const { url, type } = art?.option?.subtitle || {};
+                    if (url && (type === 'ass' || type === 'ssa')) {
+                        setTrackByUrl(url);
+                        show();
+                    }
+                    else {
+                        hide();
+                        art.libass.freeTrack();
+                    }
+                }).catch((error) => {
+                    console.error("加载特效字幕组件 错误！", error);
+                });
+            }
 
-            art.setting.add({
-                html: '自动连播',
-                name: 'auto-next',
-                icon: '<img width="22" heigth="22" src="https://artplayer.org/assets/img/state.svg">',
-                tooltip: !autoNext ? '关闭' : '开启',
-                switch: !!autoNext,
-                onSwitch: function (item) {
-                    item.tooltip = item.switch ? '关闭' : '开启';
-                    art.storage.set('auto-next', !item.switch);
-                    art.notice.show = "自动连续播放：" + (item.switch ? '关闭' : '开启');
-                    return !item.switch;
+            function setTrackByUrl(url) {
+                if (art.libass && url) {
+                    art.libass.freeTrack();
+                    art.libass.setTrackByUrl(url);
                 }
+            }
+
+            function setTrack(content) {
+                if (art.libass && content) {
+                    art.libass.freeTrack();
+                    art.libass.setTrack(content);
+                }
+            }
+
+            function setOffset(timeOffset) {
+                if (art.libass) {
+                    art.libass.timeOffset = timeOffset;
+                }
+            }
+
+            function show() {
+                if (art.libass && art.subtitle.show) {
+                    art.template.$subtitle.style.display = 'none';
+                    (art.libass.canvasParent || art.libass._canvasParent).style.display = 'block';
+                    art.libass.resize();
+                }
+            }
+
+            function hide() {
+                if (art.libass) {
+                    art.template.$subtitle.style.display = art.subtitle.show ? 'block' : 'none';
+                    (art.libass.canvasParent || art.libass._canvasParent).style.display = 'none';
+                }
+            }
+
+            function destroy() {
+                if (art.libass) {
+                    art.libass.destroy && art.libass.destroy();
+                    art.libass.dispose && art.libass.dispose();
+                    art.libass = null;
+                }
+            }
+
+            function initLibass() {
+                if (art.libass) return Promise.resolve(art.libass);
+
+                const options = {
+                    video: art.template.$video,
+                    subContent: `[Script Info]\nScriptType: v4.00+`,
+                    subUrl: '',
+                    availableFonts: {
+                        '思源黑体': 'https://artplayer.org/assets/misc/SourceHanSansCN-Bold.woff2',
+                    }
+                };
+
+                return getLocalFonts().then(fontData => {
+                    const fonts = fontData.filter(item => item.fullName.match(/[\u4e00-\u9fa5]/));
+                    const fallbackFont = fonts.find(font => [
+                        '微软雅黑',
+                    ].some(name => font?.fullName === name))?.fullName || fonts.sort(() => 0.5 - Math.random())[0]?.fullName;
+                    Object.assign(options, {
+                        useLocalFonts: true,
+                        fallbackFont: fallbackFont,
+                    });
+                    return loadLibass(options);
+                }, () => {
+                    Object.assign(options, {
+                        fallbackFont: Object.keys(options.availableFonts)[0]
+                    });
+                    return loadLibass(options);
+                });
+            }
+
+            function loadLibass(options) {
+                let jassubUrl = 'https://unpkg.com/jassub@1.7.17/dist/jassub.umd.js';
+                return loadJs(jassubUrl).then(() => {
+                    Object.assign(options, {
+                        workerUrl: new URL('jassub-worker.js', jassubUrl).href,
+                        wasmUrl: new URL('jassub-worker.wasm', jassubUrl).href,
+                        legacyWorkerUrl: new URL('jassub-worker.wasm.js', jassubUrl).href,
+                        modernWasmUrl: new URL('jassub-worker-modern.wasm', jassubUrl).href
+                    });
+
+                    return loadWorker(options).then((workerUrl) => {
+                        options.workerUrl = workerUrl;
+                        art.libass = new unsafeWindow.JASSUB(options);
+                        const canvasParent = art.libass.canvasParent || art.libass._canvasParent;
+                        canvasParent.style.cssText = `position: absolute;top: 0;left: 0;width: 100%;height: 100%;user-select: none;pointer-events: none;z-index: 20;`;
+                        return art.libass;
+                    });
+                });
+            }
+
+            function loadWorker({ workerUrl }) {
+                return fetch(workerUrl).then(res => res.text()).then(text => {
+                    const workerBlob = new Blob([text], { type: 'text/javascript' });
+                    const workerScriptUrl = URL.createObjectURL(workerBlob);
+                    setTimeout(() => {
+                        URL.revokeObjectURL(workerScriptUrl);
+                    });
+                    return workerScriptUrl;
+                });
+            }
+
+            function getLocalFonts(postscriptNames) {
+                if (unsafeWindow.queryLocalFonts) {
+                    const options = {};
+                    if (postscriptNames) {
+                        options.postscriptNames = Array.isArray(postscriptNames) ? postscriptNames : [postscriptNames]
+                    }
+                    return unsafeWindow.queryLocalFonts(options).then(fontData => {
+                        return fontData && fontData.length ? fontData : Promise.reject();
+                    });
+                }
+                console.warn('Not Local fonts API');
+                return Promise.reject();
+            }
+
+            function loadJs(src) {
+                if (!window.instances) {
+                    window.instances = {};
+                }
+                if (!window.instances[src]) {
+                    window.instances[src] = new Promise((resolve, reject) => {
+                        const script = document.createElement("script")
+                        script.src = src;
+                        script.type = "text/javascript";
+                        script.onload = resolve;
+                        script.onerror = reject;
+                        Node.prototype.appendChild.call(document.head, script);
+                    });
+                }
+                return window.instances[src];
+            };
+
+            art.on('subtitle', (state) => {
+                state ? show() : hide();
+            });
+            art.on('subtitleLoad', switchTrack);
+            art.on('subtitleOffset', (timeOffset) => {
+                setOffset(timeOffset);
+            });
+            art.on('restart', () => {
+                art.libass && art.libass.freeTrack();
             });
 
+            art.once('destroy', destroy);
+
             return {
-                name: 'autonext'
+                name: 'libass'
             };
-        };
+        }
+    },
+    function Sound() {
+        return (art) => {
+            const { template, setting, storage, notice } = art;
+
+            function init() {
+                const Joysound = window.Joysound || unsafeWindow.Joysound;
+                if (Joysound && Joysound.isSupport()) {
+                    art.joySound = art.joySound || new Joysound();
+                    art.joySound.hasSource() || art.joySound.init(template.$video);
+                    if (art.storage.get('sound-enhancer')) {
+                        art.joySound.setEnabled(!0);
+                        setting.update({
+                            name: 'sound-enhancer',
+                            html: '音质增强',
+                            switch: true,
+                        });
+                    }
+                }
+            }
+
+            const soundEnhancer = art.storage.get('sound-enhancer');
+            setting.add({
+                width: 220,
+                html: '声音设置',
+                name: 'sound-setting',
+                tooltip: '正常',
+                icon: '<svg xmlns="http://www.w3.org/2000/svg" height="22" width="22" data-spm-anchor-id="0.0.0.i11.83206c7554HZzm"><path d="M10.188 4.65 6 8H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h1l4.188 3.35a.5.5 0 0 0 .812-.39V5.04a.498.498 0 0 0-.812-.39zm4.258-.872a1 1 0 0 0-.862 1.804 6.002 6.002 0 0 1-.007 10.838 1 1 0 0 0 .86 1.806A8.001 8.001 0 0 0 19 11a8.001 8.001 0 0 0-4.554-7.222z"></path><path d="M15 11a3.998 3.998 0 0 0-2-3.465v6.93A3.998 3.998 0 0 0 15 11z"></path></svg>',
+                selector: [
+                    {
+                        html: '音质增强',
+                        name: 'sound-enhancer',
+                        tooltip: !soundEnhancer ? '关闭' : '开启',
+                        switch: !!soundEnhancer,
+                        onSwitch: function (item) {
+                            item.tooltip = item.switch ? '关闭' : '开启';
+                            art.storage.set('sound-enhancer', !item.switch);
+                            art.joySound && art.joySound.setEnabled(!item.switch);
+                            notice.show = "音质增强：" + (item.switch ? '关闭' : '开启');
+                            return !item.switch;
+                        }
+                    },
+                    {
+                        html: '音量增强',
+                        name: 'volume-enhancer',
+                        tooltip: '0x',
+                        range: [0, 0, 10, .1],
+                        onRange: function (item) {
+                            const range = item.range / 10;
+                            art.joySound && art.joySound.setVolume(range);
+                            notice.show = "音量增强：" + (100 + range * 100) + "%";
+                            return item.range + 'x';
+                        },
+                    },
+                ]
+            });
+
+            art.once('video:playing', init);
+
+            return {
+                name: 'sound'
+            };
+        }
+    },
+    function Aifadian() {
+        return (art) => {
+            const localforage = window.localforage || unsafeWindow.localforage;
+            let timer;
+
+            function init() {
+                const startTime = new Date();
+                timer = setInterval(() => {
+                    const currentTime = new Date();
+                    const timeDiff = currentTime - startTime;
+                    const elapsedMinutes = Math.floor((timeDiff / 1000 / 60) % 60);
+                    if (!(elapsedMinutes % 9) && art.playing) {
+                        sponsor().catch((error) => {
+                            art.pause();
+                            show();
+                        });
+                    }
+                }, 6e3);
+            }
+
+            function destroy() {
+                clearInterval(timer);
+            }
+
+            function show() {
+                let dialog = document.createElement('div');
+                dialog.innerHTML = '<div class="ant-modal-mask"></div><div tabindex="-1" class="ant-modal-wrap" role="dialog" aria-labelledby="rcDialogTitle1" style=""><div role="document" class="ant-modal modal-wrapper--5SA7y" style="width: 340px;"><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div><div class="ant-modal-content"><div class="ant-modal-header"><div class="ant-modal-title" id="rcDialogTitle1">请少量赞助以支持我更好的创作</div></div><div class="ant-modal-body"><div class="content-wrapper--S6SNu"><div>爱发电订单号：</div><span class="ant-input-affix-wrapper ant-input-affix-wrapper-borderless ant-input-password input--TWZaN input--l14Mo"><input placeholder="" action="click" type="text" class="ifdian-order ant-input ant-input-borderless" style="background-color: var(--divider_tertiary);"></span></div><div class="content-wrapper--S6SNu"><div>请输入爱发电订单号，确认即可</div><a href="https://ifdian.net/order/create?plan_id=be4f4d0a972811eda14a5254001e7c00" target="_blank"> 前往爱发电 </a><a href="https://ifdian.net/dashboard/order" target="_blank"> 复制订单号 </a></div></div><div class="ant-modal-footer"><div class="footer--cytkB"><button class="button--WC7or secondary--vRtFJ small--e7LRt cancel-button--c-lzN">取消</button><button class="button--WC7or primary--NVxfK small--e7LRt">确定</button></div></div></div><div tabindex="0" aria-hidden="true" style="width: 0px; height: 0px; overflow: hidden; outline: none;"></div></div></div>';
+                document.body.insertBefore(dialog, null);
+                dialog.querySelectorAll('button').forEach((element, index) => {
+                    element.addEventListener('click', () => {
+                        if (index == 0) {
+                            document.body.removeChild(dialog);
+                        }
+                        else {
+                            let value = dialog.querySelector('input').value;
+                            if (value) {
+                                if (value.match(/^202[\d]{22,25}$/)) {
+                                    if (value.match(/(\d)\1{8,}/g)) return;
+                                    localforage.getItem('users').then((data) => {
+                                        (data && data.ON == value) || onPost(value).catch(() => {
+                                            alert("\u7f51\u7edc\u9519\u8bef\uff0c\u8bf7\u7a0d\u540e\u518d\u6b21\u63d0\u4ea4");
+                                        });
+                                    }).catch(function (error) {
+                                        alert(error);
+                                    });
+                                }
+                                else {
+                                    alert("\u8ba2\u5355\u53f7\u4e0d\u5408\u89c4\u8303\uff0c\u8bf7\u91cd\u8bd5");
+                                }
+                            }
+                            document.body.removeChild(dialog);
+                        }
+                    });
+                });
+            }
+
+            function sponsor() {
+                return localforage.getItem("users").then((data) => {
+                    return data?.expire_time ? localforage.getItem("users_sign").then((users_sign) => {
+                        return (Math.max(Date.parse(data.expire_time) - Date.now(), 0) && users_sign === btoa(encodeURIComponent(JSON.stringify(data))) && GM_getValue("users_sign") === btoa(encodeURIComponent(JSON.stringify(data)))) ? data : usersPost().then((data) => {
+                            return Math.max(Date.parse(data?.expire_time) - Date.now(), 0) ? localforage.setItem("users", data).then((data) => {
+                                return (localforage.setItem("users_sign", btoa(encodeURIComponent(JSON.stringify(data)))), GM_setValue("users_sign", btoa(encodeURIComponent(JSON.stringify(data)))), data);
+                            }) : (localforage.removeItem("users"), localforage.removeItem("users_sign"), GM_deleteValue("users_sign"), Promise.reject());
+                        });
+                    }) : GM_getValue("users_sign") ? localforage.setItem("users", { expire_time: new Date().toISOString() }).then(() => {
+                        return sponsor();
+                    }) : (GM_setValue("users_sign", 0), Promise.reject());
+                });
+            }
+
+            function onPost(on) {
+                return usersPost().then((data) => {
+                    Date.parse(data.expire_time) === 0 || localforage.setItem("users", Object.assign(data || {}, { expire_time: new Date(Date.now() + 864000).toISOString() })).then((data) => {( localforage.setItem("users_sign", btoa(encodeURIComponent(JSON.stringify(data)))), GM_setValue("users_sign", btoa(encodeURIComponent(JSON.stringify(data)))) )});
+                    return infoPost(data, on);
+                });
+            }
+
+            function usersPost() {
+                return users(getItem("token"));
+            }
+
+            function users(data) {
+                return ajax({
+                    url: "https://sxxf4ffo.lc-cn-n1-shared.com/1.1/users",
+                    data: JSON.stringify({
+                        authData: {
+                            aliyundrive: Object.assign(data, {
+                                uid: data?.user_id,
+                                scriptHandler: GM_info?.scriptHandler,
+                                version: GM_info?.script?.version
+                            })
+                        }
+                    })
+                });
+            }
+
+            function infoPost(data, on) {
+                delete data.createdAt;
+                delete data.updatedAt;
+                delete data.objectId;
+                return ajax({
+                    url: "https://sxxf4ffo.lc-cn-n1-shared.com/1.1/classes/aliyundrive",
+                    data: JSON.stringify(Object.assign(data, {
+                        ON: on
+                    }))
+                });
+            }
+
+            function ajax(option) {
+                return new Promise(function (resolve, reject) {
+                    GM_xmlhttpRequest ? GM_xmlhttpRequest({
+                        method: "post",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-LC-Id": "sXXf4FFOZn2nFIj7LOFsqpLa-gzGzoHsz",
+                            "X-LC-Key": "16s3qYecpVJXtVahasVxxq1V"
+                        },
+                        responseType: "json",
+                        onload: function (result) {
+                            if (parseInt(result.status / 100) == 2) {
+                                var response = result.response || result.responseText;
+                                resolve(response);
+                            }
+                            else {
+                                reject(result);
+                            }
+                        },
+                        onerror: function (error) {
+                            reject(error);
+                        },
+                        ...option
+                    }) : reject();
+                });
+            }
+
+            function getItem(n) {
+                n = localStorage.getItem(n);
+                if (!n) {
+                    return null;
+                }
+                try {
+                    return JSON.parse(n);
+                } catch (e) {
+                    return n;
+                }
+            }
+
+            function setItem(n, t) {
+                n && t != undefined && localStorage.setItem(n, t instanceof Object ? JSON.stringify(t) : t);
+            }
+
+            function removeItem(n) {
+                n != undefined && localStorage.removeItem(n);
+            }
+
+            art.once('video:playing', init);
+            art.once('destroy', destroy);
+
+            return {
+                name: 'aifadian',
+                show
+            };
+        }
     },
 ]);
