@@ -8,7 +8,8 @@ window.alipanThirdParty = window.alipanThirdParty || (function () {
         };
     })(history.pushState);
 
-    var client_id = "10bb67a9549846038fcbdc348477f59d";
+    var domain_name = 'https://openapi.alipan.com';
+    var client_id = '10bb67a9549846038fcbdc348477f59d';
     var code_challenge = function (arr) {
         var text = "";
         for (var i = 0; i < arr.length; i++) {
@@ -16,6 +17,36 @@ window.alipanThirdParty = window.alipanThirdParty || (function () {
         }
         return text;
     }(window.crypto.getRandomValues(new Uint8Array(32)));
+    var obj = {
+        version: '1.0.2',
+        vipInfo: {},
+    };
+
+    function ajax(url, options = {}) {
+        Object.assign(options, {
+            responseType: options.responseType || 'json',
+            data: options.data instanceof Object ? Object.keys(options.data).map((k) => {
+                return encodeURIComponent(k) + "=" + encodeURIComponent(options.data[k]).replace("%20", "+");
+            }).join("&") : options.data
+        });
+        return new Promise(function (resolve, reject) {
+            GM_xmlhttpRequest({
+                url,
+                ...options,
+                onload: function (result) {
+                    if (parseInt(result.status / 100) === 2) {
+                        resolve(result.response);
+                    }
+                    else {
+                        reject(result.response);
+                    }
+                },
+                onerror: function (result) {
+                    reject(result.error);
+                }
+            });
+        });
+    }
 
     function getItem(n) {
         n = localStorage.getItem(n);
@@ -40,8 +71,8 @@ window.alipanThirdParty = window.alipanThirdParty || (function () {
 
     function authorize() {
         const { token_type, access_token } = getItem("token");
-        return fetch("https://open.aliyundrive.com/oauth/users/authorize?client_id=" + client_id + "&redirect_uri=oob&scope=user:base,file:all:read,file:all:write&code_challenge=" + code_challenge + "&code_challenge_method=plain", {
-            body: JSON.stringify({
+        return ajax("https://open.aliyundrive.com/oauth/users/authorize?client_id=" + client_id + "&redirect_uri=oob&scope=user:base,file:all:read,file:all:write&code_challenge=" + code_challenge + "&code_challenge_method=plain", {
+            data: JSON.stringify({
                 authorize: 1,
                 drives: ["backup", "resource"],
                 scope: "user:base,file:all:read,file:all:write"
@@ -51,8 +82,6 @@ window.alipanThirdParty = window.alipanThirdParty || (function () {
                 "content-type": "application/json;charset=UTF-8"
             },
             method: "POST"
-        }).then((response) => {
-            return response.ok ? response.json() : Promise.reject();
         }).then((response) => {
             if (response && response.redirectUri) {
                 const code = response.redirectUri.split("=")[1];
@@ -65,7 +94,7 @@ window.alipanThirdParty = window.alipanThirdParty || (function () {
 
     function access_token() {
         const { code, code_verifier } = getItem("openToken") || {};
-        return fetch("https://openapi.aliyundrive.com/oauth/access_token", {
+        return ajax(domain_name + "/oauth/access_token", {
             body: JSON.stringify({
                 client_id: client_id,
                 code: code,
@@ -77,16 +106,10 @@ window.alipanThirdParty = window.alipanThirdParty || (function () {
             },
             method: "POST"
         }).then((response) => {
-            return response.ok ? response.json() : Promise.reject();
-        }).then((response) => {
             setItem("openToken", Object.assign(response, { expire_time: new Date(Date.now() + 1e3 * response.expires_in - 6e5).toISOString() }));
             return response;
         });
     }
-
-    var obj = {
-        version: '1.0.1'
-    };
 
     obj.init = function () {
         const openToken = getItem("openToken");
@@ -98,18 +121,108 @@ window.alipanThirdParty = window.alipanThirdParty || (function () {
         });
     };
 
-    obj.getVipInfo = function () {
+    obj.getUsersInfo = function () {
         return obj.init().then(() => {
             const { token_type, access_token } = getItem("openToken") || {};
-            return fetch("https://openapi.aliyundrive.com/business/v1.0/user/getVipInfo", {
-                body: null,
+            return ajax(domain_name + "/oauth/users/info", {
+                data: null,
+                headers: {
+                    "authorization": "".concat(token_type || "", " ").concat(access_token || ""),
+                    "content-type": "application/json;charset=UTF-8"
+                },
+                method: "GET"
+            });
+        });
+    };
+
+    obj.getDriveInfo = function () {
+        return obj.init().then(() => {
+            const { token_type, access_token } = getItem("openToken") || {};
+            return ajax(domain_name + "/adrive/v1.0/user/getDriveInfo", {
+                data: null,
+                headers: {
+                    "authorization": "".concat(token_type || "", " ").concat(access_token || ""),
+                    "content-type": "application/json;charset=UTF-8"
+                },
+                method: "POST"
+            });
+        });
+    };
+
+    obj.getSpaceInfo = function () {
+        return obj.init().then(() => {
+            const { token_type, access_token } = getItem("openToken") || {};
+            return ajax(domain_name + "/adrive/v1.0/user/getSpaceInfo", {
+                data: null,
+                headers: {
+                    "authorization": "".concat(token_type || "", " ").concat(access_token || ""),
+                    "content-type": "application/json;charset=UTF-8"
+                },
+                method: "POST"
+            });
+        });
+    };
+
+    obj.getVipInfo = function () {
+        if (Object.keys(obj.vipInfo).length) {
+            return Promise.resolve(obj.vipInfo);
+        }
+        return obj.init().then(() => {
+            const { token_type, access_token } = getItem("openToken") || {};
+            return ajax(domain_name + "/business/v1.0/user/getVipInfo", {
+                data: null,
                 headers: {
                     "authorization": "".concat(token_type || "", " ").concat(access_token || ""),
                     "content-type": "application/json;charset=UTF-8"
                 },
                 method: "POST"
             }).then((response) => {
-                return response.ok ? response.json() : Promise.reject();
+                Object.assign(obj.vipInfo, response);
+                return response;
+            });
+        });
+    };
+
+    obj.getUsersScopes = function () {
+        return obj.init().then(() => {
+            const { token_type, access_token } = getItem("openToken") || {};
+            return ajax(domain_name + "/oauth/users/scopes", {
+                data: null,
+                headers: {
+                    "authorization": "".concat(token_type || "", " ").concat(access_token || ""),
+                    "content-type": "application/json;charset=UTF-8"
+                },
+                method: "GET"
+            });
+        });
+    };
+
+    obj.featureList = function () {
+        return obj.init().then(() => {
+            const { token_type, access_token } = getItem("openToken") || {};
+            return ajax(domain_name + "/business/v1.0/vip/feature/list", {
+                data: null,
+                headers: {
+                    "authorization": "".concat(token_type || "", " ").concat(access_token || ""),
+                    "content-type": "application/json;charset=UTF-8"
+                },
+                method: "GET"
+            });
+        });
+    };
+
+    obj.featureTrial = function (featureCode) {
+        return obj.init().then(() => {
+            const { token_type, access_token } = getItem("openToken") || {};
+            return ajax(domain_name + "/business/v1.0/vip/feature/trial", {
+                data: JSON.stringify({
+                    featureCode: featureCode || "hd.1080p|hd.1080p.plus"
+                }),
+                headers: {
+                    "authorization": "".concat(token_type || "", " ").concat(access_token || ""),
+                    "content-type": "application/json;charset=UTF-8"
+                },
+                method: "POST"
             });
         });
     };
@@ -117,8 +230,8 @@ window.alipanThirdParty = window.alipanThirdParty || (function () {
     obj.getVideoPreviewPlayInfo = function (drive_id, file_id) {
         return obj.init().then(() => {
             const { token_type, access_token } = getItem("openToken") || {};
-            return fetch("https://openapi.aliyundrive.com/adrive/v1.0/openFile/getVideoPreviewPlayInfo", {
-                body: JSON.stringify({
+            return ajax(domain_name + "/adrive/v1.0/openFile/getVideoPreviewPlayInfo", {
+                data: JSON.stringify({
                     drive_id: drive_id,
                     file_id: file_id,
                     category: "live_transcoding",
@@ -132,35 +245,6 @@ window.alipanThirdParty = window.alipanThirdParty || (function () {
                     "content-type": "application/json;charset=UTF-8"
                 },
                 method: "POST"
-            }).then((response) => {
-                return response.ok ? response.json() : Promise.reject();
-            });
-        });
-    };
-
-    obj.erase = function (drive_id, file_id) {
-        return obj.recyclebin(drive_id, file_id).then(() => {
-            return obj.delay(5000).then(() => {
-                return obj.delete(drive_id, file_id);
-            });
-        });
-    };
-
-    obj.recyclebin = function (drive_id, file_id) {
-        return obj.init().then(() => {
-            const { token_type, access_token } = getItem("openToken") || {};
-            return fetch("https://openapi.aliyundrive.com/adrive/v1.0/openFile/recyclebin/trash", {
-                body: JSON.stringify({
-                    drive_id: drive_id,
-                    file_id: file_id
-                }),
-                headers: {
-                    "authorization": "".concat(token_type || "", " ").concat(access_token || ""),
-                    "content-type": "application/json;charset=UTF-8"
-                },
-                method: "POST"
-            }).then((response) => {
-                return response.ok ? response.json() : Promise.reject();
             });
         });
     };
@@ -168,8 +252,8 @@ window.alipanThirdParty = window.alipanThirdParty || (function () {
     obj.delete = function (drive_id, file_id) {
         return obj.init().then(() => {
             const { token_type, access_token } = getItem("openToken") || {};
-            return fetch("https://openapi.aliyundrive.com/adrive/v1.0/openFile/delete", {
-                body: JSON.stringify({
+            return ajax(domain_name + "/adrive/v1.0/openFile/delete", {
+                data: JSON.stringify({
                     drive_id: drive_id,
                     file_id: file_id
                 }),
@@ -178,26 +262,6 @@ window.alipanThirdParty = window.alipanThirdParty || (function () {
                     "content-type": "application/json;charset=UTF-8"
                 },
                 method: "POST"
-            }).then((response) => {
-                return response.ok ? response.json() : Promise.reject();
-            });
-        });
-    };
-
-    obj.async_task = function (async_task_id) {
-        return obj.init().then(() => {
-            const { token_type, access_token } = getItem("openToken") || {};
-            return fetch("https://openapi.aliyundrive.com/adrive/v1.0/openFile/async_task/get", {
-                body: JSON.stringify({
-                    async_task_id: async_task_id
-                }),
-                headers: {
-                    "authorization": "".concat(token_type || "", " ").concat(access_token || ""),
-                    "content-type": "application/json;charset=UTF-8"
-                },
-                method: "POST"
-            }).then((response) => {
-                return response.ok ? response.json() : Promise.reject();
             });
         });
     };
@@ -206,5 +270,5 @@ window.alipanThirdParty = window.alipanThirdParty || (function () {
         return new Promise(resolve => setTimeout(resolve, ms));
     };
 
-    return (obj.init(), obj);
+    return (obj.getVipInfo(), obj);
 })();
