@@ -199,17 +199,8 @@
                     const { responses: [{ body, status }] } = response;
                     if (status === 201) {
                         const { drive_id, file_id } = body;
-                        return obj.get_video_preview_play_info(drive_id, file_id).catch(() => {
-                            return obj.create_session().then(() => {
-                                return obj.delay().then(() => {
-                                    return obj.get_video_preview_play_info(drive_id, file_id).finally(() => {
-                                        obj.deleteFile(drive_id, file_id);
-                                    });
-                                });
-                            });
-                        }).then((response) => {
+                        return obj.get_video_preview_play_info(drive_id, file_id).finally(() => {
                             obj.deleteFile(drive_id, file_id);
-                            return response;
                         });
                     }
                     else {
@@ -218,13 +209,7 @@
                     }
                 });
             }
-            return obj.get_video_preview_play_info(drive_id, file_id).catch(() => {
-                return obj.create_session().then(() => {
-                    return obj.delay().then(() => {
-                        return obj.get_video_preview_play_info(drive_id, file_id);
-                    });
-                });
-            });
+            return obj.get_video_preview_play_info(drive_id, file_id);
         });
     };
 
