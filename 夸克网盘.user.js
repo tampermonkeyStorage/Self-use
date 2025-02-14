@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         夸克网盘
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.1.5
+// @version      0.1.6
 // @description  你手捏一片金黄，像一个归来的王
 // @author       You
 // @match        https://pan.quark.cn/s/*
@@ -145,8 +145,8 @@
         if ($(".btn-show-link").length) {
             return;
         }
-        if ($(".file-info-share-buttom").length) {
-            $(".file-info-share-buttom").prepend('<div class="share-downloa btn-show-link" title="自动过滤不可下载文件"><span class="share-downloa-ico"></span><span class="share-downloa-text">显示链接</span></div>');
+        if ($(".share-btns").length) {
+            $(".share-btns").prepend('<button type="button" class="ant-btn btn-file btn-show-link" title="自动过滤不可下载文件"><img class="btn-icon" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGcgZmlsbC1ydWxlPSJub256ZXJvIiBzdHJva2U9IiM1NTUiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSI+PHBhdGggc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBkPSJNNiA5bDIgMiAyLTJ6Ii8+PHBhdGggZD0iTTExIDVoMS41NTNjLjg1IDAgMS4xNi4wOTMgMS40Ny4yNjcuMzExLjE3NC41NTYuNDMuNzIyLjc1Ni4xNjYuMzI2LjI1NS42NS4yNTUgMS41NHY0Ljg3M2MwIC44OTItLjA4OSAxLjIxNS0uMjU1IDEuNTQtLjE2Ni4zMjctLjQxLjU4My0uNzIyLjc1Ny0uMzEuMTc0LS42Mi4yNjctMS40Ny4yNjdIMy40NDdjLS44NSAwLTEuMTYtLjA5My0xLjQ3LS4yNjdhMS43NzggMS43NzggMCAwMS0uNzIyLS43NTZjLS4xNjYtLjMyNi0uMjU1LS42NS0uMjU1LTEuNTRWNy41NjNjMC0uODkyLjA4OS0xLjIxNS4yNTUtMS41NC4xNjYtLjMyNy40MS0uNTgzLjcyMi0uNzU3LjMxLS4xNzQuNjItLjI2NyAxLjQ3LS4yNjdIOCIvPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTggMXY5Ii8+PC9nPjwvc3ZnPg=="><span>显示链接</span></button>');
             $(".btn-show-link").on("click", obj.showDownloadSharePage);
         }
         else if ($(".btn-main").length) {
@@ -193,10 +193,10 @@
         $(".show-link-list .buttons-wrap").prepend('<button type="button" class="ant-btn btn-file"><span>👍一天不点赞浑身难受👍</span></button>');
         $(".show-link-list .buttons-wrap").prepend('<button type="button" class="ant-btn btn-file"><span>Aria2 推送</span></button>');
         $(".show-link-list .buttons-wrap button:eq(-1)").on("click", function () {
-            window.open("https://afdian.net/a/vpannice", "_blank");
+            window.open("https://ifdian.net/a/vpannice", "_blank");
         });
         $(".show-link-list .buttons-wrap button:eq(-2)").on("click", function () {
-            window.open("https://cdn.jsdelivr.net/gh/tampermonkeyStorage/Self-use@main/appreciation.png", "_blank");
+            window.open("https://gcore.jsdelivr.net/gh/tampermonkeyStorage/Self-use@main/appreciation.png", "_blank");
         });
         $(".show-link-list .buttons-wrap button:eq(-3)").on("click", function () {
             var $this = $(this), $text = $this.text();
@@ -300,6 +300,8 @@
                         });
                     });
                 });
+            }).catch(function (error) {
+                obj.showTipError('文件缓存失败，可能网盘空间不足或一次缓存文件过多');
             });
         });
     };
