@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         百度网盘视频播放器
+// @name         百度网盘视频播放器-金丝雀
 // @namespace    https://scriptcat.org/zh-CN/users/13895
-// @version      0.9.0-beta
-// @description  找回播放器应该有的那个样子，想你所想，全面提升播放体验！特色功能主要有：倍速随意设置自动记忆倍速，分辨率切换、选集，自动下一集、多字幕切换，字幕精细设置可加载本地字幕，画面调整消除黑边，声音音质增强音量增大，色彩饱和度、亮度、对比度，自动网页全屏，跳过片头片尾，支持移动端网页播放（网盘主页），更多功能正在开发中...
+// @version      0.9.0-beta.1
+// @description  功能更全，播放更流畅，界面更好看！特色功能主要有: 倍速任意调整，分辨率任意切换，自动加载播放列表，自动加载字幕可加载本地字幕可精细设置字幕样式，声音音质增强音量增大，画面比例调整，色彩饱和度、亮度、对比度调整，......，对常用设置自动记忆，支持移动端网页播放（网盘主页），想你所想，极致播放体验 ...
 // @author       You
 // @match        http*://yun.baidu.com/s/*
 // @match        https://pan.baidu.com/s/*
@@ -10,8 +10,9 @@
 // @match        https://pan.baidu.com/play/video*
 // @match        https://pan.baidu.com/pfile/video*
 // @match        https://pan.baidu.com/pfile/mboxvideo*
+// @match        https://pan.baidu.com/mbox/streampage*
 // @require      https://scriptcat.org/lib/950/^1.0.0/Joysound.js
-// @require      https://scriptcat.org/lib/1348/^1.0.2/artPlugins.js
+// @require      https://scriptcat.org/lib/1348/^1.0.3/artPlugins.js
 // @require      https://unpkg.com/hls.js@1.5.20/dist/hls.min.js
 // @require      https://unpkg.com/artplayer@5.2.2/dist/artplayer.js
 // @require      https://unpkg.com/leancloud-storage@4.15.2/dist/av-min.js
@@ -77,7 +78,7 @@
         });
     };
 
-    obj.initSharePage = function () {
+    obj.playSharePage = function () {
         if (unsafeWindow.require) {
             unsafeWindow.locals.get("file_list", "share_uk", "shareid", "sign", "timestamp", function (file_list, share_uk, shareid, sign, timestamp) {
                 if (file_list.length == 1 && file_list[0].category == 1) {
@@ -105,7 +106,7 @@
         }
     };
 
-    obj.initHomePage = function () {
+    obj.playHomePage = function () {
         unsafeWindow.jQuery(document).ajaxComplete(function (event, xhr, options) {
             var response, requestUrl = options.url;
             if (requestUrl.indexOf("/api/categorylist") >= 0) {
@@ -203,6 +204,9 @@
                 obj.showTip("初始化中，等待页面加载 ...");
                 setTimeout(obj.playWapVideoPage, 500);
             }
+        }
+        else {
+            obj.showTip("未找到页面元素，请刷新网页 ...");
         }
     };
 
@@ -365,7 +369,7 @@
     };
 
     obj.getAdToken = function () {
-        if (obj.video_page.adToken || obj.getVip() > 1) {
+        if (obj.getVip() > 1) {
             return Promise.resolve(obj.video_page.adToken);
         }
         const { getUrl } = obj.video_page;
@@ -458,6 +462,7 @@
                 }, 0);
                 return lobjls ? lobjls === length ? obj : {} : (GM_setValue(version, length), obj);
             }
+            return obj;
         });
     };
 
@@ -539,12 +544,12 @@
         var url = location.href;
         if (url.indexOf(".baidu.com/s/") > 0) {
             obj.ready().then(function () {
-                obj.initSharePage();
+                obj.playSharePage();
             });
         }
         else if (url.indexOf(".baidu.com/play/video#/video") > 0) {
             obj.ready().then(function () {
-                obj.initHomePage();
+                obj.playHomePage();
             });
             window.onhashchange = function (e) {
                 location.reload();
@@ -567,7 +572,9 @@
                 document.getElementById("app").__vue__.$router.afterEach(function (to, from) {
                     if (to.name !== from.name) {
                         if (to.name === "videoView") {
-                            setTimeout(obj.playWapVideoPage, 500);
+                            obj.ready(4).then(function () {
+                                setTimeout(obj.playWapVideoPage, 500);
+                            });
                         }
                         else {
                             obj.video_page.flag = "";
