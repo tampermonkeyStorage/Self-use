@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    https://scriptcat.org/zh-CN/users/13895
-// @version      0.9.0-beta.2
+// @version      0.9.0-beta.4
 // @description  功能更全，播放更流畅，界面更好看！特色功能主要有: 倍速任意调整，分辨率任意切换，自动加载播放列表，自动加载字幕可加载本地字幕可精细设置字幕样式，声音音质增强音量增大，画面比例调整，色彩饱和度、亮度、对比度调整，......，对常用设置自动记忆，支持移动端网页播放（网盘主页），想你所想，极致播放体验 ...
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -12,7 +12,7 @@
 // @match        https://pan.baidu.com/pfile/mboxvideo*
 // @match        https://pan.baidu.com/mbox/streampage*
 // @require      https://scriptcat.org/lib/950/^1.0.0/Joysound.js
-// @require      https://scriptcat.org/lib/1348/^1.0.3/artPlugins.js
+// @require      https://scriptcat.org/lib/1348/^1.0.4/artPlugins.js
 // @require      https://unpkg.com/hls.js@1.5.20/dist/hls.min.js
 // @require      https://unpkg.com/artplayer@5.2.2/dist/artplayer.js
 // @require      https://unpkg.com/leancloud-storage@4.15.2/dist/av-min.js
@@ -158,7 +158,7 @@
                                 if (Object.keys(obj.video_page.file).length && obj.video_page.filelist.length) {
                                     XMLHttpRequest.prototype.open = open;
                                     obj.startObj().then(function (obj) {
-                                        obj.video_page.flag = "pfilevideo";
+                                        obj.video_page.flag = "video";
                                         const { path } = obj.video_page.file
                                         , vip = obj.getVip();
                                         obj.video_page.getUrl = function (type) {
@@ -187,7 +187,6 @@
             const { videoFile } = __vue__;
             if (videoFile) {
                 obj.startObj().then(function (obj) {
-                    obj.video_page.flag = "wapvideo";
                     const { path } = obj.video_page.file = videoFile;
                     obj.video_page.getUrl = function (type) {
                         if (type.includes(1080)) +unsafeWindow.locals?.isVip > 1 || (type = type.replace(1080, 720));
@@ -297,7 +296,7 @@
             if (!container) {
                 container = document.createElement("div");
                 container.setAttribute("id", "artplayer");
-                if ([ "wapvideo", "wapsharevideo" ].includes(flag)) {
+                if ([ "videoView" ].includes(flag)) {
                     container.setAttribute("style", "width: 100%; height: 3.75rem;");
                 }
                 else {
@@ -334,7 +333,7 @@
                 }, 500);
             });
         }
-        else if ([ "pfilevideo", "mboxvideo" ].includes(flag)) {
+        else if ([ "video", "mboxvideo" ].includes(flag)) {
             id = count = setInterval(function() {
                 var playerInstance = obj.videoNode?.firstChild;
                 if (playerInstance && playerInstance.player) {
@@ -438,7 +437,7 @@
                 }
             });
         }
-        else if ([ "pfilevideo", "mboxvideo" ].includes(flag)) {
+        else if ([ "video", "mboxvideo" ].includes(flag)) {
             filelist.forEach(function (item) {
                 item.name = item.server_filename;
                 item.open = function () {
@@ -558,36 +557,41 @@
         else if (url.indexOf(".baidu.com/pfile/video") > 0) {
             obj.playPfilePage();
             obj.ready(4).then(function () {
-                document.getElementById("app").__vue_app__.config.globalProperties.$router.afterEach(function (to, from) {
-                    from.fullPath === "/" || from.fullPath === to.fullPath || location.reload();
+                const { $router } = document.getElementById("app").__vue_app__.config.globalProperties;
+                $router.isReady().then(function () {
+                    $router.afterEach(function (to, from) {
+                        from.fullPath === "/" || from.fullPath === to.fullPath || location.reload();
+                    });
                 });
             });
         }
         else if (url.indexOf(".baidu.com/wap") > 0) {
             obj.ready(4).then(function () {
-                const { currentRoute } = document.getElementById("app").__vue__.$router;
-                if (currentRoute && currentRoute.name === "videoView") {
-                    obj.playWapVideoPage();
-                }
-                document.getElementById("app").__vue__.$router.afterEach(function (to, from) {
-                    if (to.name !== from.name) {
-                        if (to.name === "videoView") {
-                            obj.ready(4).then(function () {
-                                setTimeout(obj.playWapVideoPage, 500);
-                            });
-                        }
-                        else {
-                            obj.video_page.flag = "";
-                        }
+                const { $router } = document.getElementById("app").__vue__;
+                $router.onReady(function () {
+                    const { currentRoute } = $router;
+                    if (currentRoute && currentRoute.name === "videoView") {
+                        obj.playWapVideoPage();
                     }
+                    $router.afterEach(function (to, from) {
+                        if (to.name !== from.name) {
+                            obj.video_page.flag = to.name;
+                            if (to.name === "videoView") {
+                                location.reload();
+                            }
+                        }
+                    });
                 });
             });
         }
         else if (url.indexOf(".baidu.com/pfile/mboxvideo") > 0) {
             obj.playIMPage();
             obj.ready(4).then(function () {
-                document.getElementById("app").__vue_app__.config.globalProperties.$router.afterEach(function (to, from) {
-                    from.fullPath === "/" || from.fullPath === to.fullPath || location.reload();
+                const { $router } = document.getElementById("app").__vue_app__.config.globalProperties;
+                $router.isReady().then(function () {
+                    $router.afterEach(function (to, from) {
+                        from.fullPath === "/" || from.fullPath === to.fullPath || location.reload();
+                    });
                 });
             });
         }
