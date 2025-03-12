@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         百度网盘视频播放器-金丝雀
+// @name         百度网盘视频播放器
 // @namespace    https://scriptcat.org/zh-CN/users/13895
-// @version      0.9.0-beta.1
+// @version      0.9.0-beta.2
 // @description  功能更全，播放更流畅，界面更好看！特色功能主要有: 倍速任意调整，分辨率任意切换，自动加载播放列表，自动加载字幕可加载本地字幕可精细设置字幕样式，声音音质增强音量增大，画面比例调整，色彩饱和度、亮度、对比度调整，......，对常用设置自动记忆，支持移动端网页播放（网盘主页），想你所想，极致播放体验 ...
 // @author       You
 // @match        http*://yun.baidu.com/s/*
