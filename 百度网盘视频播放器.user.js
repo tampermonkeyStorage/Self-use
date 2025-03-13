@@ -425,6 +425,7 @@
                 }, 0);
                 return lobjls ? lobjls === length ? obj : {} : (GM_setValue(version, length), obj);
             }
+            return obj;
         });
     };
 
