@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    https://scriptcat.org/zh-CN/users/13895
-// @version      0.9.0-beta.6
+// @version      0.9.0-beta.7
 // @description  功能更全，播放更流畅，界面更好看！特色功能主要有: 倍速任意调整，分辨率任意切换，自动加载播放列表，自动加载字幕可加载本地字幕可精细设置字幕样式，声音音质增强音量增大，画面比例调整，色彩饱和度、亮度、对比度调整，......，对常用设置自动记忆，支持移动端网页播放（网盘主页），想你所想，极致播放体验 ...
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -12,7 +12,7 @@
 // @match        https://pan.baidu.com/pfile/mboxvideo*
 // @match        https://pan.baidu.com/mbox/streampage*
 // @require      https://scriptcat.org/lib/950/^1.0.0/Joysound.js
-// @require      https://scriptcat.org/lib/1348/^1.0.6/artPlugins.js
+// @require      https://scriptcat.org/lib/1348/^1.0.7/artPlugins.js
 // @require      https://unpkg.com/hls.js@1.5.20/dist/hls.min.js
 // @require      https://unpkg.com/artplayer@5.2.2/dist/artplayer.js
 // @require      https://unpkg.com/leancloud-storage@4.15.2/dist/av-min.js
@@ -78,7 +78,7 @@
         });
     };
 
-    obj.playSharePage = function () {
+    obj.sharevideo = function () {
         if (unsafeWindow.require) {
             unsafeWindow.locals.get("file_list", "share_uk", "shareid", "sign", "timestamp", function (file_list, share_uk, shareid, sign, timestamp) {
                 if (file_list.length == 1 && file_list[0].category == 1) {
@@ -106,7 +106,7 @@
         }
     };
 
-    obj.playHomePage = function () {
+    obj.playvideo = function () {
         unsafeWindow.jQuery(document).ajaxComplete(function (event, xhr, options) {
             var response, requestUrl = options.url;
             if (requestUrl.indexOf("/api/categorylist") >= 0) {
@@ -135,132 +135,96 @@
         });
     };
 
-    obj.playPfilePage = function () {
-        (function(open) {
-            XMLHttpRequest.prototype.open = function () {
-                this.addEventListener("load", function(event) {
-                    if (this.readyState == 4 && this.status == 200) {
-                        var responseURL = this.responseURL;
-                        if (responseURL.indexOf("/api/filemetas") > 0) {
-                            var response = JSON.parse(this.response);
-                            if (response.errno == 0 && Array.isArray(response.info) && response.info.length) {
-                                if (response.info.length == 1) {
-                                    if (Object.keys(obj.video_page.file).length === 0) {
-                                        obj.video_page.file = response.info[0];
-                                    }
-                                    else {
-                                        obj.video_page.filelist = response.info;
-                                    }
-                                }
-                                else {
-                                    obj.video_page.filelist = response.info;
-                                }
-                                if (Object.keys(obj.video_page.file).length && obj.video_page.filelist.length) {
-                                    XMLHttpRequest.prototype.open = open;
-                                    obj.startObj().then(function (obj) {
-                                        obj.video_page.flag = "video";
-                                        const { path } = obj.video_page.file
-                                        , vip = obj.getVip();
-                                        obj.video_page.getUrl = function (type) {
-                                            if (type.includes(1080)) vip > 1 || (type = type.replace(1080, 720));
-                                            return "/api/streaming?path=" + encodeURIComponent(path) + "&app_id=250528&clienttype=0&type=" + type + "&vip=" + vip + "&jsToken=" + unsafeWindow.jsToken
-                                        }
-                                        obj.getAdToken().then(function () {
-                                            obj.addQuality();
-                                            obj.addFilelist();
-                                            obj.initVideoPlayer();
-                                        });
-                                    });
-                                }
-                            }
+    obj.video = function () {
+        const { $pinia, $router } = document.querySelector("#app")?.__vue_app__?.config?.globalProperties || {};
+        if ($pinia && $router && Object.keys($pinia.state._rawValue.videoinfo?.videoinfo || {}).length) {
+            obj.startObj().then(function (obj) {
+                obj.video_page.flag = "video";
+                const { recommendListInfo, videoinfo: { videoinfo } } = $pinia.state._rawValue;
+                const { selectionVideoList } = recommendListInfo;
+                if (Array.isArray(selectionVideoList) && selectionVideoList.length) {
+                    obj.video_page.filelist = selectionVideoList;
+                }
+                else {
+                    Object.defineProperty(recommendListInfo, "selectionVideoList", {
+                        enumerable: true,
+                        set(selectionVideoList) {
+                            obj.video_page.filelist = selectionVideoList;
                         }
-                    }
-                }, false);
-                open.apply(this, arguments);
-            };
-        })(XMLHttpRequest.prototype.open);
-    };
-
-    obj.playWapVideoPage = function () {
-        const { __vue__ } = document.querySelector(".preview-video") || {};
-        if (__vue__) {
-            const { videoFile } = __vue__;
-            if (videoFile) {
-                obj.startObj().then(function (obj) {
-                    obj.video_page.flag = "videoView";
-                    const { path } = obj.video_page.file = videoFile;
-                    obj.video_page.getUrl = function (type) {
-                        if (type.includes(1080)) +unsafeWindow.locals?.isVip > 1 || (type = type.replace(1080, 720));
-                        return "/rest/2.0/xpan/file?method=streaming&path=" + encodeURIComponent(path) + "&type=" + type;
-                    }
-                    obj.getAdToken().then(function () {
-                        obj.addQuality();
-                        obj.addFilelist();
-                        obj.initVideoPlayer();
                     });
+                }
+                const { path } = obj.video_page.file = videoinfo
+                , vip = obj.getVip();
+                obj.video_page.getUrl = function (type) {
+                    if (type.includes(1080)) vip > 1 || (type = type.replace(1080, 720));
+                    return "/api/streaming?path=" + encodeURIComponent(path) + "&app_id=250528&clienttype=0&type=" + type + "&vip=" + vip + "&jsToken=" + unsafeWindow.jsToken
+                }
+                obj.getAdToken().then(function () {
+                    obj.addQuality();
+                    obj.addFilelist();
+                    obj.initVideoPlayer();
                 });
-            }
-            else {
-                obj.showTip("初始化中，等待页面加载 ...");
-                setTimeout(obj.playWapVideoPage, 500);
-            }
+            });
+
+            $router.isReady().then(function () {
+                $router.afterEach(function (to, from) {
+                    from.fullPath === "/" || from.fullPath === to.fullPath || location.reload();
+                });
+            });
         }
         else {
-            obj.showTip("未找到页面元素，请刷新网页 ...");
+            obj.delay().then(obj.video);
         }
     };
 
-    obj.playIMPage = function () {
-        (function(open) {
-            XMLHttpRequest.prototype.open = function () {
-                this.addEventListener("load", function(event) {
-                    if (this.readyState == 4 && this.status == 200) {
-                        var response, responseURL = this.responseURL;
-                        if (responseURL.indexOf("/mbox/msg/mediainfo") > 0) {
-                            response = JSON.parse(this.response);
-                            if ((response.errno == 0 || response.errno == 133) && response.info) {
-                                obj.video_page.adToken = response.adToken;
-                                var getParam = function(e, t) {
-                                    var o = new RegExp("(?:^|\\?|#|&)" + e + "=([^&#]*)(?:$|&|#)","i"), n = o.exec(t || location.href);
-                                    return n ? encodeURI(n[1]) : "";
-                                };
-                                obj.video_page.file = Object.assign({
-                                    to: getParam("to"),
-                                    from_uk: getParam("from_uk"),
-                                    msg_id: getParam("msg_id"),
-                                    fs_id: getParam("fs_id"),
-                                    type: getParam("type"),
-                                    trans: "",
-                                    ltime: response.ltime,
-                                }, response.info);
-                            }
-                        }
-                        else if (responseURL.indexOf("/api/filemetas") > 0) {
-                            response = JSON.parse(this.response);
-                            if (response.errno == 0 && Array.isArray(response.info) && response.info.length) {
-                                obj.video_page.filelist = response.info;
-                            }
-                        }
-                        if (Object.keys(obj.video_page.file).length && obj.video_page.filelist.length) {
-                            XMLHttpRequest.prototype.open = open;
-                            obj.startObj().then(function (obj) {
-                                obj.video_page.flag = "mboxvideo";
-                                const { to, from_uk, msg_id, fs_id, type, trans, ltime, resolution } = obj.video_page.file;
-                                obj.video_page.getUrl = function (stream_type) {
-                                    return "/mbox/msg/streaming?to=" + to + "&from_uk=" + from_uk + "&msg_id=" + msg_id + "&fs_id=" + fs_id + "&type=" + type + "&stream_type=" + stream_type + "&trans=" + trans + "&ltime=" + ltime;
-                                }
-                                obj.getAdToken().then(function () {
-                                    obj.addQuality();
-                                    obj.addFilelist();
-                                    obj.initVideoPlayer();
-                                });
-                            });
-                        }
-                    }
-                }, false);
-                open.apply(this, arguments);
-            };
-        })(XMLHttpRequest.prototype.open);
+    obj.mboxvideo = function () {
+        const { $pinia, $router } = document.querySelector("#app")?.__vue_app__?.config?.globalProperties || {};
+        if ($pinia && $router && Object.keys($pinia.state._rawValue.videoinfo?.videoinfo || {}).length) {
+            obj.startObj().then(function (obj) {
+                obj.video_page.flag = "mboxvideo";
+                const { to, from_uk, msg_id, fs_id, type, trans, ltime, adToken } = obj.video_page.file = $pinia.state._rawValue.videoinfo.videoinfo;
+                obj.video_page.getUrl = function (stream_type) {
+                    return "/mbox/msg/streaming?to=" + to + "&from_uk=" + from_uk + "&msg_id=" + msg_id + "&fs_id=" + fs_id + "&type=" + type + "&stream_type=" + stream_type + "&trans=" + (trans || "") + "&ltime=" + ltime;
+                }
+                obj.video_page.adToken = adToken || "";
+                obj.getAdToken().then(function () {
+                    obj.addQuality();
+                    obj.addFilelist();
+                    obj.initVideoPlayer();
+                });
+            });
+
+            $router.isReady().then(function () {
+                $router.afterEach(function (to, from) {
+                    from.fullPath === "/" || from.fullPath === to.fullPath || location.reload();
+                });
+            });
+        }
+        else {
+            obj.delay().then(obj.mboxvideo);
+        }
+    };
+
+    obj.videoView = function () {
+        const { videoFile } = document.querySelector(".preview-video")?.__vue__ || {};
+        if (videoFile) {
+            obj.startObj().then(function (obj) {
+                obj.video_page.flag = "videoView";
+                const { path } = obj.video_page.file = videoFile;
+                obj.video_page.getUrl = function (type) {
+                    if (type.includes(1080)) +unsafeWindow.locals?.isVip > 1 || (type = type.replace(1080, 720));
+                    return "/rest/2.0/xpan/file?method=streaming&path=" + encodeURIComponent(path) + "&type=" + type;
+                }
+                obj.getAdToken().then(function () {
+                    obj.addQuality();
+                    obj.addFilelist();
+                    obj.initVideoPlayer();
+                });
+            });
+        }
+        else {
+            obj.delay().then(obj.videoView);
+        }
     };
 
     obj.initVideoPlayer = function () {
@@ -309,7 +273,6 @@
             }
         }
         else {
-            obj.showTip("正在替换视频播放器 ...", "loading", 1e3);
             return obj.delay().then(function () {
                 return obj.replaceVideoPlayer();
             });
@@ -369,13 +332,13 @@
     };
 
     obj.getAdToken = function () {
-        if (obj.getVip() > 1) {
+        if (obj.video_page.adToken || obj.getVip() > 1) {
             return Promise.resolve(obj.video_page.adToken);
         }
         const { getUrl } = obj.video_page;
         const url = getUrl("M3U8_AUTO_480");
         return fetch(url).then(function (response) {
-            return response.ok ? response.text() : Promise.reject();
+            return response.text();
         }).then(function (response) {
             try { response = JSON.parse(response) } catch (e) { }
             if (response && 133 === response.errno && 0 !== response.adTime) {
@@ -438,9 +401,9 @@
                 }
             });
         }
-        else if ([ "video", "mboxvideo" ].includes(flag)) {
+        else if ([ "video" ].includes(flag)) {
             filelist.forEach(function (item) {
-                item.name = item.server_filename;
+                item.name = item.name || item.server_filename;
                 item.open = function () {
                     location.href = "https://pan.baidu.com/pfile/video?path=" + encodeURIComponent(item.path);
                 }
@@ -462,7 +425,6 @@
                 }, 0);
                 return lobjls ? lobjls === length ? obj : {} : (GM_setValue(version, length), obj);
             }
-            return obj;
         });
     };
 
@@ -484,7 +446,7 @@
         });
     };
 
-    obj.delay = function (ms = 200) {
+    obj.delay = function (ms = 500) {
         return new Promise(resolve => setTimeout(resolve, ms));
     };
 
@@ -544,27 +506,22 @@
         var url = location.href;
         if (url.indexOf(".baidu.com/s/") > 0) {
             obj.ready().then(function () {
-                obj.playSharePage();
+                obj.sharevideo();
             });
         }
         else if (url.indexOf(".baidu.com/play/video#/video") > 0) {
             obj.ready().then(function () {
-                obj.playHomePage();
+                obj.playvideo();
             });
             window.onhashchange = function (e) {
                 location.reload();
             };
         }
         else if (url.indexOf(".baidu.com/pfile/video") > 0) {
-            obj.playPfilePage();
-            obj.ready(4).then(function () {
-                const { $router } = document.getElementById("app").__vue_app__.config.globalProperties;
-                $router.isReady().then(function () {
-                    $router.afterEach(function (to, from) {
-                        from.fullPath === "/" || from.fullPath === to.fullPath || location.reload();
-                    });
-                });
-            });
+            obj.ready().then(obj.video);
+        }
+        else if (url.indexOf(".baidu.com/pfile/mboxvideo") > 0) {
+            obj.ready().then(obj.mboxvideo);
         }
         else if (url.indexOf(".baidu.com/wap") > 0) {
             obj.ready(4).then(function () {
@@ -572,7 +529,7 @@
                 $router.onReady(function () {
                     const { currentRoute } = $router;
                     if (currentRoute && currentRoute.name === "videoView") {
-                        obj.playWapVideoPage();
+                        obj.videoView();
                     }
                     $router.afterEach(function (to, from) {
                         if (to.name !== from.name) {
@@ -581,17 +538,6 @@
                                 location.reload();
                             }
                         }
-                    });
-                });
-            });
-        }
-        else if (url.indexOf(".baidu.com/pfile/mboxvideo") > 0) {
-            obj.playIMPage();
-            obj.ready(4).then(function () {
-                const { $router } = document.getElementById("app").__vue_app__.config.globalProperties;
-                $router.isReady().then(function () {
-                    $router.afterEach(function (to, from) {
-                        from.fullPath === "/" || from.fullPath === to.fullPath || location.reload();
                     });
                 });
             });
