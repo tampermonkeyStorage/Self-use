@@ -13,7 +13,7 @@
 // @match        https://pan.baidu.com/mbox/streampage*
 // @require      https://scriptcat.org/lib/950/^1.0.0/Joysound.js
 // @require      https://scriptcat.org/lib/1348/^1.1.1/artPlugins.js
-// @require      https://unpkg.com/hls.js@1.5.20/dist/hls.min.js
+// @require      https://unpkg.com/hls.js@1.5.13/dist/hls.min.js
 // @require      https://unpkg.com/artplayer@5.2.2/dist/artplayer.js
 // @require      https://unpkg.com/leancloud-storage@4.15.2/dist/av-min.js
 // @icon         https://nd-static.bdstatic.com/business-static/pan-center/images/vipIcon/user-level2-middle_4fd9480.png
