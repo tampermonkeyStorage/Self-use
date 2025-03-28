@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    https://scriptcat.org/zh-CN/users/13895
-// @version      0.9.1
+// @version      0.9.2
 // @description  功能更全，播放更流畅，界面更好看！特色功能主要有: 倍速任意调整，分辨率任意切换，自动加载播放列表，自动加载字幕可加载本地字幕可精细设置字幕样式，声音音质增强音量增大，画面比例调整，色彩饱和度、亮度、对比度调整，......，对常用设置自动记忆，支持移动端网页播放（网盘主页），想你所想，极致播放体验 ...
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -12,8 +12,8 @@
 // @match        https://pan.baidu.com/pfile/mboxvideo*
 // @match        https://pan.baidu.com/mbox/streampage*
 // @require      https://scriptcat.org/lib/950/^1.0.0/Joysound.js
-// @require      https://scriptcat.org/lib/1348/^1.1.1/artPlugins.js
-// @require      https://unpkg.com/hls.js@1.5.13/dist/hls.min.js
+// @require      https://scriptcat.org/lib/1348/^1.1.2/artPlugins.js
+// @require      https://unpkg.com/hls.js@1.3.5/dist/hls.min.js
 // @require      https://unpkg.com/artplayer@5.2.2/dist/artplayer.js
 // @require      https://unpkg.com/leancloud-storage@4.15.2/dist/av-min.js
 // @icon         https://nd-static.bdstatic.com/business-static/pan-center/images/vipIcon/user-level2-middle_4fd9480.png
@@ -339,7 +339,7 @@
             return Promise.resolve(obj.video_page.adToken);
         }
         const { getUrl } = obj.video_page;
-        const url = getUrl("M3U8_AUTO_480");
+        const url = getUrl(obj.getBPSType());
         return fetch(url).then(function (response) {
             return response.text();
         }).then(function (response) {
@@ -363,7 +363,7 @@
         obj.video_page.quality = freeList.map(function (template, index) {
             return {
                 html: templates[template],
-                url: getUrl("M3U8_AUTO_" + template) + "&adToken=" + encodeURIComponent(adToken),
+                url: getUrl(obj.getBPSType(template)) + "&adToken=" + encodeURIComponent(adToken),
                 default: index === 0,
                 type: "hls"
             };
@@ -377,6 +377,10 @@
         , a = e.match(/width:(\d+),height:(\d+)/) || ["", "", ""]
         , i = +a[1] * +a[2];
         return i ? (i > 409920 && t.unshift(720), i > 921600 && t.unshift(1080), t) : t;
+    };
+
+    obj.getBPSType = function(value) {
+        return ([ "iPhone", "iPad" ].includes(navigator.platform) ? "M3U8_FLV_264_" : "M3U8_AUTO_") + (value || 480);
     };
 
     obj.addFilelist = function () {
@@ -454,55 +458,30 @@
         return new Promise(resolve => setTimeout(resolve, ms));
     };
 
-    obj.showTip = function (content, type, durtime) {
+    obj.showTip = function (msg, mode, durtime) {
         if (unsafeWindow.require) {
-            const show = unsafeWindow.require("system-core:system/uiService/tip/tip.js").show;
-            if (typeof content === 'object') {
-                show(content);
-            }
-            else {
-                show({
-                    vipType: "svip",
-                    mode: type,
-                    msg: content
-                });
-            }
+            unsafeWindow.require("system-core:system/uiService/tip/tip.js").show({ vipType: "svip", mode: mode, msg: msg });
         }
         else if (unsafeWindow.toast) {
-            if (typeof content === 'object') {
-                unsafeWindow.toast.show(content);
-            }
-            else {
-                unsafeWindow.toast.show({
-                    message: content,
-                    type: type,
-                    duration: durtime || 3e3
-                });
-            }
+            unsafeWindow.toast.show({
+                type: ["caution", "failure"].includes(mode) ? "wide" : "svip",
+                message: msg,
+                duration: durtime || 3e3
+            });
         }
         else if (unsafeWindow.$bus) {
-            if (typeof content === 'object') {
-                unsafeWindow.$bus.$Toast.addToast(content);
-            }
-            else {
-                unsafeWindow.$bus.$Toast.addToast({
-                    content: content,
-                    type: type || "tip",
-                    durtime: durtime || 3e3
-                });
-            }
+            unsafeWindow.$bus.$Toast.addToast({
+                type: { caution: "tip", failure: "error" }[mode] || mode,
+                content: msg,
+                durtime: durtime || 3e3
+            });
         }
         else if (unsafeWindow.VueApp) {
-            if (["loading", "success", "error", "tip"].indexOf(type) == -1) {
-                unsafeWindow.VueApp.$Toast.addToast(content);
-            }
-            else {
-                unsafeWindow.VueApp.$Toast.addToast({
-                    content: content,
-                    type: type,
-                    durtime: durtime || 3e3
-                });
-            }
+            unsafeWindow.VueApp.$Toast.addToast({
+                type: { caution: "tip", failure: "error" }[mode] || mode,
+                content: msg,
+                durtime: durtime || 3e3
+            });
         }
     };
 
