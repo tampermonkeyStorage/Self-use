@@ -1,30 +1,28 @@
 // ==UserScript==
 // @name         阿里云盘
-// @namespace    https://bbs.tampermonkey.net.cn/
-// @version      5.1.0
+// @namespace    https://scriptcat.org/zh-CN/users/13895
+// @version      5.1.1
 // @description  让视频播放变成我想要的那个样子
 // @author       You
 // @match        https://www.alipan.com/*
 // @match        https://www.aliyundrive.com/*
 // @connect      alipan.com
 // @connect      aliyundrive.com
-// @connect      lc-cn-n1-shared.com
-// @connect      *
 // @require      https://scriptcat.org/lib/950/^1.0.1/Joysound.js
 // @require      https://scriptcat.org/lib/2163/^1.0.0/alipanThirdParty.js
-// @require      https://scriptcat.org/lib/2164/^1.0.0/alipanArtPlugins.js
-// @require      https://cdn.staticfile.org/hls.js/1.5.15/hls.min.js
-// @require      https://cdn.staticfile.org/artplayer/5.1.7/artplayer.min.js
-// @require      https://cdn.staticfile.org/m3u8-parser/7.1.0/m3u8-parser.min.js
-// @require      https://cdn.staticfile.org/jquery/3.6.0/jquery.min.js
-// @require      https://cdn.staticfile.org/localforage/1.10.0/localforage.min.js
+// @require      //https://scriptcat.org/lib/2164/^1.0.3/alipanArtPlugins.js
+// @require      https://cdn.jsdelivr.net/gh/tampermonkeyStorage/Self-use@refs/heads/main/alipanArtPlugins.js
+// @require      https://unpkg.com/hls.js@1.5.15/dist/hls.min.js
+// @require      https://unpkg.com/artplayer@5.2.3/dist/artplayer.js
+// @require      https://unpkg.com/leancloud-storage@4.15.2/dist/av-min.js
+// @require      https://unpkg.com/m3u8-parser@7.2.0/dist/m3u8-parser.min.js
 // @icon         https://gw.alicdn.com/imgextra/i3/O1CN01aj9rdD1GS0E8io11t_!!6000000000620-73-tps-16-16.ico
 // @antifeature  ads
 // @antifeature  membership
 // @antifeature  payment
 // @antifeature  referral-link
 // @antifeature  tracking
-// @run-at       document-body
+// @run-at       document-start
 // @grant        unsafeWindow
 // @grant        GM_xmlhttpRequest
 // @grant        GM_download
@@ -100,7 +98,7 @@
                 return item.type == "file" && item.file_id == response.file_id;
             });
             obj.video_page.subtitle_items = obj.file_page.file_items.filter(function (item, index) {
-                return item.type == "file" && item.category === "others" && ["webvtt", "vtt", "srt", "ass", "ssa"].includes(item.file_extension.toLowerCase());
+                return item.type == "file" && item.category === "others" && ["vtt", "srt", "ass", "ssa"].includes(item.file_extension.toLowerCase());
             });
         }
     };
@@ -111,24 +109,35 @@
             obj.replaceVideoPlayer().then(() => {
                 const options = Object.assign({}, obj.video_page);
                 window.alipanArtPlugins.init(options).then((art) => {
-                    art.on('reload-start', (quality) => {
-                        const defaultIndex = quality.findIndex((item) => item.default);
-                        obj.getVideoPreviewPlayInfo().then((response) => {
-                            const { live_transcoding_task_list } = response?.video_preview_play_info || {};
-                            live_transcoding_task_list[defaultIndex].default = !0;
-                            art.emit('reload-can', live_transcoding_task_list);
+                    art.once('ready', function () {
+                        obj.getSublistByPan().then(function (sublist) {
+                            sublist.length && art.emit('sublist', sublist);
                         });
                     });
-
-                    art.on('playlist-switch-start', (fileOption) => {
+                    art.on('resume', (fileOption) => {
                         obj.video_page.video_file = fileOption;
                         obj.getVideoPreviewPlayInfo().then((response) => {
-                            art.emit('playlist-switch-can', response);
+                            art.emit('resumeed', response);
+                        });
+                    });
+                    art.on('reload', (fileOption) => {
+                        obj.video_page.video_file = fileOption;
+                        obj.getVideoPreviewPlayInfo().then((response) => {
+                            art.emit('reloaded', response);
+                            const filenameNode = document.querySelector("[class^=header-file-name], [class^=filename] span, [class^=header-center] div span");
+                            if (filenameNode) {
+                                filenameNode.innerText = fileOption.name;
+                            }
+                            obj.getSublistByPan().then(function (sublist) {
+                                sublist.length && art.emit('sublist', sublist);
+                            });
                         });
                     });
 
-                    const closeNode = document.querySelector('[class^="header-left"] [data-icon-type="PDSClose"]');
-                    closeNode && closeNode.addEventListener('click', art.destroy, {once: true});
+                    const closeNode = document.querySelector('[class^="header-"] [data-icon-type="PDSClose"], [class^="header-"] [data-icon-type="PDSChevronLeft"]');
+                    closeNode && closeNode.addEventListener('click', function () {
+                        art.destroy();
+                    }, { once: true });
                 });
             });
         });
@@ -172,7 +181,7 @@
     };
 
     obj.getVideoPreviewPlayInfoThirdParty = function () {
-        const { drive_id, file_id, share_id } = obj.video_page.video_file;
+        const { drive_id, file_id, share_id } = obj.video_page.video_file || obj.video_page.video_info;
         if (share_id) {
             return obj.saveFile(file_id, share_id).then((response) => {
                 const { responses: [{ body, status }] } = response;
@@ -228,6 +237,105 @@
             headers: {
                 "authorization": "".concat(token_type || "", " ").concat(access_token || ""),
                 "content-type": "application/json;charset=UTF-8",
+            },
+            method: "POST"
+        }).then((response) => {
+            return response.ok ? response.json() : Promise.reject();
+        });
+    };
+
+    obj.getSublistByPan = function () {
+        const filelist = obj.filterSubFilesByPan();
+        if (filelist.length) {
+            return obj.getDownloadUrlBatch(filelist).then(function (filelist) {
+                const sublist = filelist.map(function (item, index) {
+                    return {
+                        html: `内挂字幕「${item.file_extension}」`,
+                        name: item.name,
+                        url: item.url,
+                        type: item.file_extension
+                    };
+                });
+                return sublist;
+            });
+        }
+        return Promise.resolve([]);
+    };
+
+    obj.filterSubFilesByPan = function () {
+        const { video_file, subtitle_items, video_items } = obj.video_page;
+        if (!subtitle_items.length) return [];
+        if (video_items.length === 1) return subtitle_items;
+
+        const getBaseName = (fileName) => fileName.split('.').slice(0, -1).join('.').toLowerCase();
+        const subItems = subtitle_items.map(item => ({
+            item,
+            base: getBaseName(item.name)
+        }));
+        const videoBase = getBaseName(video_file.name);
+        const videoVariants = [];
+        let currentVariant = videoBase;
+        while (currentVariant) {
+            videoVariants.push(currentVariant);
+            currentVariant = currentVariant.split('.').slice(0, -1).join('.');
+        }
+        for (const variant of videoVariants) {
+            const matched = subItems.filter(({ base }) => base.includes(variant) || variant.includes(base));
+            if (matched.length) return matched.map(({ item }) => item);
+        }
+        return [];
+    };
+
+    obj.getDownloadUrlBatch = function (fileList) {
+        if (!Array.isArray(fileList)) {
+            fileList = [fileList];
+        }
+        var promises = fileList.map(function (item) {
+            return item.type == "file" && obj.getDownloadUrl(item).then((response) => {
+                item.url = response.url;
+                return item;
+            });
+        }).filter(Boolean);
+        return Promise.allSettled(promises).then((results) => {
+            return fileList;
+        });
+    };
+
+    obj.getDownloadUrl = function (file) {
+        return obj.refresh().then (() => {
+            const { drive_id, file_id, share_id } = file;
+            if (share_id) {
+                return obj.saveFile(file_id, share_id).then((response) => {
+                    const { responses: [{ body, status }] } = response;
+                    if (status === 201) {
+                        const { drive_id, file_id } = body;
+                        return obj.get_download_url(drive_id, file_id).finally(() => {
+                            obj.deleteFile(drive_id, file_id);
+                        });
+                    }
+                    else {
+                        obj.showTipError("文件缓存失败，请自行清理网盘文件后重试。。。", 10e3);
+                        return Promise.reject();
+                    }
+                });
+            }
+
+            return obj.get_download_url(drive_id, file_id);
+        });
+    };
+
+    obj.get_download_url = function (drive_id, file_id) {
+        const { token_type, access_token } = obj.getItem("token");
+        return fetch("https://api.aliyundrive.com/v2/file/get_download_url", {
+            body: JSON.stringify({
+                expire_sec: 14400,
+                drive_id: drive_id,
+                file_id: file_id
+            }),
+            headers: {
+                "authorization": "".concat(token_type || "", " ").concat(access_token || ""),
+                "content-type": "application/json;charset=UTF-8",
+                "x-canary": "client=windows,app=adrive,version=v6.0.0",
             },
             method: "POST"
         }).then((response) => {
@@ -368,7 +476,6 @@
             unsafeWindow.application.showNotify(opts);
         }
         else {
-            var $ = $ || window.$;
             var css = [
                 ".notify{display:none;position:absolute;top:0;left:25%;width:50%;text-align:center;overflow:hidden;z-index:1010}",
                 ".notify .alert{display:inline-block;*display:inline;*zoom:1;min-width:110px;white-space:nowrap}",
@@ -378,8 +485,17 @@
                 ".fade{opacity:0;-webkit-transition:opacity .15s linear;-o-transition:opacity .15s linear;transition:opacity .15s linear}",
                 ".fade.in{opacity:1}"
             ];
-            $("<style></style>").text(css.join(" ")).appendTo(document.head || document.documentElement);
-            $("body").append('<div id="J_Notify" class="notify" style="width: 650px; margin: 10px auto; display: none;"></div>');
+
+            var style = document.createElement('style');
+            style.textContent = css.join(" ");
+            (document.head || document.documentElement).appendChild(style);
+
+            var notifyDiv = document.createElement('div');
+            notifyDiv.id = 'J_Notify';
+            notifyDiv.className = 'notify';
+            notifyDiv.style.cssText = 'width: 650px; margin: 10px auto; display: none;';
+            document.body.appendChild(notifyDiv);
+
             unsafeWindow.application = {
                 notifySets: {
                     type_class_obj: {success: "alert-success", fail: "alert-fail", loading: "alert-loading"},
@@ -387,17 +503,28 @@
                     delay: 3e3
                 },
                 showNotify: function(opts) {
-                    var that = this, class_obj = that.notifySets.type_class_obj, count = that.notifySets.count;
-                    opts.type == "loading" && (delay *= 5);
-                    if ($(".alert").length == 0) {
-                        $("#J_Notify").empty().append('<div class="alert in fade"></div>').show();
+                    var that = this,
+                        class_obj = that.notifySets.type_class_obj,
+                        count = that.notifySets.count,
+                        notifyEl = document.getElementById('J_Notify'),
+                        alertEl;
+
+                    if (opts.type == "loading") {
+                        that.notifySets.delay *= 5;
                     }
-                    else {
+
+                    if (!notifyEl.querySelector('.alert')) {
+                        notifyEl.innerHTML = '<div class="alert in fade"></div>';
+                        notifyEl.style.display = 'block';
+                    } else {
                         Object.keys(class_obj).forEach(function(key) {
-                            $("#J_Notify").toggleClass(class_obj[key], false);
+                            notifyEl.classList.remove(class_obj[key]);
                         });
                     }
-                    $(".alert").text(opts.message).addClass(class_obj[opts.type]);
+
+                    alertEl = notifyEl.querySelector('.alert');
+                    alertEl.textContent = opts.message;
+                    alertEl.classList.add(class_obj[opts.type]);
                     that.notifySets.count += 1;
 
                     var delay = opts.time || that.notifySets.delay;
@@ -408,7 +535,9 @@
                     }, delay);
                 },
                 hideNotify: function() {
-                    $("#J_Notify").empty();
+                    var notifyEl = document.getElementById('J_Notify');
+                    notifyEl.innerHTML = '';
+                    notifyEl.style.display = 'none';
                 }
             };
             obj.showNotify(opts);
