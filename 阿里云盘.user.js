@@ -10,8 +10,7 @@
 // @connect      aliyundrive.com
 // @require      https://scriptcat.org/lib/950/^1.0.1/Joysound.js
 // @require      https://scriptcat.org/lib/2163/^1.0.0/alipanThirdParty.js
-// @require      //https://scriptcat.org/lib/2164/^1.0.3/alipanArtPlugins.js
-// @require      https://cdn.jsdelivr.net/gh/tampermonkeyStorage/Self-use@refs/heads/main/alipanArtPlugins.js
+// @require      https://scriptcat.org/lib/2164/^1.0.3/alipanArtPlugins.js
 // @require      https://unpkg.com/hls.js@1.5.15/dist/hls.min.js
 // @require      https://unpkg.com/artplayer@5.2.3/dist/artplayer.js
 // @require      https://unpkg.com/leancloud-storage@4.15.2/dist/av-min.js
