@@ -1,4 +1,4 @@
-class Analyzer {
+window.Analyzer = class Analyzer {
     static DEFAULT_CONFIG = {
         fftSize: 2048, // 1024、2048、4096、8192、16384 32-32768
         smoothing: 0.8, // 平滑度
