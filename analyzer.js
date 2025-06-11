@@ -903,3 +903,4 @@ class Analyzer {
         }
     }
 }
+window.Analyzer = Analyzer;
