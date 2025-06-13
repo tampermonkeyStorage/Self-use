@@ -1,79 +1,105 @@
-class Analyzer {
+class AudioAnalyzer {
+    static VERSION = '1.0.0'
+
     static DEFAULT_CONFIG = {
         fftSize: 2048, // 1024、2048、4096、8192、16384 32-32768
         smoothing: 0.8, // 平滑度
         dataScale: 0.65, // 信号源截取宽度
-        intensity: 1.0, // 额外信号强度
+        intensity: 1.0, // 信号强度
         lineWidth: 2, // 绘制线条粗细
-        mode: 'random', // 'random', 模式
+        mode: 'random', // 可视化模板
         colors: [], // 颜色组
         randomMode: true,
         randomColors: true,
     }
 
     static MODES = [
-        "lightning", // 闪电效果
-        "bars", // 条形图
-        "doubleBars", // 双条形图
-        "doubleLine", // 双线图
-        "vertLines", // 垂直线
-        "waves", // 波形图
-        "circular", // 圆形
-        "terrain", // 地形
-        "mirror", // 镜像
-        "threeD", // 3D效果
+        "lightning",
+        "bars",
+        "doubleBars",
+        "doubleLine",
+        "vertLines",
+        "waves",
+        "circular",
+        "terrain",
+        "mirror",
+        "threeD",
     ]
 
     constructor(options = {}) {
-        this.options = { ...Analyzer.DEFAULT_CONFIG, ...options };
-        if (this.options.debug) {
-            console.log(this.options, 'Analyzer.options');
-        }
+        this.options = { ...AudioAnalyzer.DEFAULT_CONFIG, ...options };
 
-        this.canvas = null;
         this.mediaElement = null;
+        this.canvas = null;
         this.audioCtx = null;
 
-        this._initCanvas();
         this._initMediaElement();
-        this._initAudioContext();
-        if (this.canvas && this.mediaElement && this.audioCtx) {
+        this._initCanvas();
+        this.init();
+    }
+
+    init() {
+        if (this.mediaElement) {
+            this._initAudioContext();
             this._createAnalyser();
-            this._initVisualization();
-            this._setupEventListeners();
+
+            if (this.canvas) {
+                this.initVisualization();
+            }
         }
     }
 
-    _initCanvas() {
-        if (this.options.canvas instanceof HTMLCanvasElement) {
-            this.canvas = this.options.canvas;
-            this.ctx = this.canvas.getContext('2d');
-        } else if (document.querySelector('canvas') instanceof HTMLCanvasElement) {
-            this.canvas = document.querySelector('canvas');
-            this.ctx = this.canvas.getContext('2d');
-        } else {
-            // throw new Error('Not HTMLCanvasElement');
-            console.error('Not HTMLCanvasElement');
+    initVisualization() {
+        this.lastRenderTime = 0;
+        this.animationId = null;
+        this.gradient = null;
+        this.randomModeAndColors();
+        this.startVisualization();
+        if (this.cleanup && this.cleanup.length) {
+            this.cleanup.forEach(fn => fn());
+        }
+        this.cleanup = [];
+        this._setupEventListeners();
+    }
+
+    startVisualization() {
+        if (this.animationId) return;
+        this.lastRenderTime = performance.now();
+        this._renderFrame();
+    }
+
+    stopVisualization() {
+        if (this.animationId) {
+            cancelAnimationFrame(this.animationId);
+            this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            this.animationId = null;
         }
     }
 
-    _initMediaElement() {
-        if (this.options.mediaElement instanceof HTMLMediaElement) {
-            this.mediaElement = this.options.mediaElement;
+    destroy() {
+        this.stopVisualization();
+
+        if (this.cleanup && this.cleanup.length) {
+            this.cleanup.forEach(fn => fn());
         }
-        else if (this.options.audio instanceof HTMLAudioElement) {
-            this.mediaElement = this.options.audio;
-        } else if (this.options.video instanceof HTMLVideoElement) {
-            this.mediaElement = this.options.video;
-        } else if (document.querySelector('audio, video')) {
-            this.mediaElement = document.querySelector('audio, video');
-        } else {
-            // throw new Error('Not HTMLMediaElement');
-            console.error('Not HTMLMediaElement');
+
+        if (this.audioCtx && this.audioCtx.state !== 'closed') {
+            this.audioCtx.close();
+        }
+
+        if (this.analyser) {
+            this.source.disconnect();
+            this.analyser.disconnect();
+        }
+
+        if (this.canvas && this.canvas.parentNode) {
+            this.canvas.parentNode.removeChild(this.canvas);
         }
     }
 
     _initAudioContext() {
+        if (this.audioCtx) return;
         if (this.options.audioCtx) {
             this.audioCtx = this.options.audioCtx;
         } else {
@@ -98,85 +124,117 @@ class Analyzer {
         this.frequencyData = new Uint8Array(this.bufferLength);
         this.timeDomainData = new Uint8Array(this.bufferLength);
 
+        switch(this.sourceType) {
+            case 'mediaElement': return this._createMediaElementSource();
+            case 'binaryFile': return this._createBufferSource();
+            default: break;
+        }
+    }
+
+    _createMediaElementSource() {
         this.source = this.audioCtx.createMediaElementSource(this.mediaElement);
         this.source.connect(this.analyser);
         this.analyser.connect(this.audioCtx.destination);
     }
 
-    _initVisualization() {
-        this.lastRenderTime = 0;
-        this.animationId = null;
-        this.gradient = null;
-        this.cleanup = [];
-        this.randomModeAndColors();
-        this.start();
+    _createBufferSource() {
+        // mediaSource 本地文件、网络流
+        const arrayData = this.mediaElement;
+        const decodeAudioData = (arrayBuffer) => {
+            this.audioCtx.decodeAudioData(arrayBuffer, (audioBuffer) => {
+                this.source = this.audioCtx.createBufferSource();
+                this.source.buffer = audioBuffer;
+                this.source.connect(this.analyser);
+                this.analyser.connect(this.audioCtx.destination);
+            });
+        };
+
+        if (arrayData instanceof ArrayBuffer) {
+            decodeAudioData(arrayData);
+        } else if (arrayData instanceof Blob || arrayData instanceof File) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                decodeAudioData(event.target.result);
+            };
+            reader.onerror = (error) => {
+                throw new Error(error);
+            };
+            reader.readAsArrayBuffer(arrayData);
+        }
+    }
+
+    _initMediaElement() {
+        if (this.options.mediaElement instanceof HTMLMediaElement) {
+            this.mediaElement = this.options.mediaElement;
+        }
+        else if (this.options.audio instanceof HTMLAudioElement) {
+            this.mediaElement = this.options.audio;
+        } else if (this.options.video instanceof HTMLVideoElement) {
+            this.mediaElement = this.options.video;
+        } else if (document.querySelector('audio, video')) {
+            this.mediaElement = document.querySelector('audio, video');
+        } else {
+            console.warn('Not HTMLMediaElement');
+        }
+    }
+
+    _initCanvas() {
+        if (this.options.canvas instanceof HTMLCanvasElement) {
+            this.canvas = this.options.canvas;
+        } else if (document.querySelector('canvas') instanceof HTMLCanvasElement) {
+            this.canvas = document.querySelector('canvas');
+        } else {
+            console.warn('Not HTMLCanvasElement');
+        }
     }
 
     _setupEventListeners() {
+        const { cleanup, canvas, audioCtx, mediaElement } = this;
+        if (mediaElement instanceof HTMLMediaElement === false) return;
+
         const resizeHandler = () => {
-            const { width, height } = this.canvas.parentElement.getBoundingClientRect();
-            this.canvas.width = width;
-            this.canvas.height = height;
+            const { width, height } = canvas.parentElement.getBoundingClientRect();
+            canvas.width = width;
+            canvas.height = height;
             this.gradient = null;
         };
         window.addEventListener('resize', resizeHandler);
-        this.cleanup.push(() => window.removeEventListener('resize', resizeHandler));
+        cleanup.push(() => window.removeEventListener('resize', resizeHandler));
 
         const playHandler = () => {
-            if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
-            this.start();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            this.startVisualization();
         };
-        this.mediaElement.addEventListener('play', playHandler);
-        this.cleanup.push(() => this.mediaElement.removeEventListener('play', playHandler));
+        mediaElement.addEventListener('play', playHandler);
+        cleanup.push(() => mediaElement.removeEventListener('play', playHandler));
 
-        const pauseHandler = () => this.stop();
-        this.mediaElement.addEventListener('pause', pauseHandler);
-        this.cleanup.push(() => this.mediaElement.removeEventListener('pause', pauseHandler));
+        const pauseHandler = () => this.stopVisualization();
+        mediaElement.addEventListener('pause', pauseHandler);
+        cleanup.push(() => mediaElement.removeEventListener('pause', pauseHandler));
 
         const listswitchHandler = () => {
-            let src = this.mediaElement.src;
+            let src = mediaElement.src;
             return () => {
-                if (src !== this.mediaElement.src) {
-                    src = this.mediaElement.src;
+                if (src !== mediaElement.src) {
+                    src = mediaElement.src;
                     this.randomModeAndColors();
                 }
             };
         }
-        this.mediaElement.addEventListener('durationchange', listswitchHandler());
-        this.cleanup.push(() => this.mediaElement.removeEventListener('durationchange', listswitchHandler()));
-    }
+        mediaElement.addEventListener('loadedmetadata', listswitchHandler());
+        cleanup.push(() => mediaElement.removeEventListener('durationchange', listswitchHandler()));
 
-    start() {
-        if (this.animationId) return;
-        this.lastRenderTime = performance.now();
-        this._renderFrame();
-    }
-
-    stop() {
-        if (this.animationId) {
-            cancelAnimationFrame(this.animationId);
-            this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-            this.animationId = null;
-        }
-    }
-
-    destroy() {
-        this.stop();
-        this.cleanup.forEach(fn => fn());
-        this.source.disconnect();
-        this.analyser.disconnect();
-
-        if (this.audioCtx.state !== 'closed') {
-            this.audioCtx.close();
-        }
-
-        if (this.canvas.parentNode) {
-            this.canvas.parentNode.removeChild(this.canvas);
-        }
+        const errorHandler = () => {
+            console.error(
+                `Error ${mediaElement.error.code}; details: ${mediaElement.error.message}`
+            );
+        };
+        mediaElement.addEventListener('error', errorHandler);
+        cleanup.push(() => mediaElement.removeEventListener('error', errorHandler));
     }
 
     _renderFrame() {
+        if (!this.analyser) return;
         this.animationId = requestAnimationFrame(() => this._renderFrame());
 
         const now = performance.now();
@@ -184,7 +242,7 @@ class Analyzer {
         this.lastRenderTime = now;
 
         // 复制频率数据
-        if (this.options.mode === 'lightning') {
+        if (this.mode === 'lightning') {
             this.analyser.getByteTimeDomainData(this.timeDomainData);
         } else {
             this.analyser.getByteFrequencyData(this.frequencyData);
@@ -217,28 +275,23 @@ class Analyzer {
     }
 
     randomModeAndColors() {
-        const { mode, randomMode, colors, randomColors, debug } = this.options;
-        if (randomMode || !Analyzer.MODES.some(m => m === mode)) {
+        const { mode, randomMode, colors, randomColors } = this.options;
+        if (randomMode || !AudioAnalyzer.MODES.includes(mode)) {
             this.randomMode();
-            if (debug) {
-                console.log(`mode %c ${this.options.mode}`, `color: #fff; background: green`);
-            }
+            console.log(`mode %c ${this.options.mode}`, `color: #fff; background: green`);
         }
         if (randomColors || !(Array.isArray(colors) && colors.length)) {
             this.randomColors();
-
-            if (debug) {
-                console.group('colors');
-                this.options.colors.forEach((color) => {
-                    console.log(`%c ${color}`, `color: #fff; background: ${color}`);
-                });
-                console.groupEnd();
-            }
+            console.group('colors');
+            this.options.colors.forEach((color) => {
+                console.log(`%c ${color}`, `color: #fff; background: ${color}`);
+            });
+            console.groupEnd();
         }
     }
 
     randomMode() {
-        const MODES = Analyzer.MODES;
+        const MODES = AudioAnalyzer.MODES;
         const { mode } = this.options;
         const otherModes = MODES.filter(m => m !== mode);
         this.options.mode = otherModes.length ? otherModes[Math.floor(Math.random() * otherModes.length)] : MODES[0];
@@ -408,12 +461,37 @@ class Analyzer {
         return displayColorScheme(colors, config.schemeType);
     }
 
+    get canvas () {
+        return this.options.canvas;
+    }
+
+    set canvas(val) {
+        if (val instanceof HTMLCanvasElement) {
+            this.options.canvas = val;
+            this.ctx = val.getContext('2d');
+        }
+    }
+
+    get mediaElement () {
+        return this.options.mediaElement;
+    }
+
+    set mediaElement(val) {
+        if (val instanceof HTMLMediaElement) {
+            this.options.mediaElement = val;
+            this.options.sourceType = 'mediaElement';
+        } else if (val instanceof ArrayBuffer || val instanceof Blob || val instanceof File) {
+            this.options.mediaElement = val;
+            this.options.sourceType = 'binaryFile';
+        }
+    }
+
     get mode () {
         return this.options.mode;
     }
 
     set mode(val) {
-        if (Analyzer.MODES.includes(val)) {
+        if (AudioAnalyzer.MODES.includes(val) || typeof this[val] === 'function') {
             this.options.mode = val;
         }
     }
@@ -429,14 +507,18 @@ class Analyzer {
         }
     }
 
+    get sourceType () {
+        return this.options.sourceType;
+    }
+
     // 闪电效果
     lightning(ctx, width, height) {
         const { options, bufferLength, timeDomainData, gradient } = this;
         const { intensity, lineWidth } = options;
         const count = width / 5;
         const step = width / count;
+        const ratio = timeDomainData.length / count;
         const centerY = height / 2;
-        const ratio = bufferLength / 3 / count;
 
         ctx.beginPath();
 
@@ -462,8 +544,8 @@ class Analyzer {
         const { options, frequencyData, gradient } = this;
         const { intensity, lineWidth } = options;
         const count = width / 5;
-        const ratio = frequencyData.length / count;
         const step = width / count;
+        const ratio = frequencyData.length / count;
         const barWidth = step * 0.5;
 
         for (let i = 0; i < count; i++) {
@@ -482,8 +564,8 @@ class Analyzer {
         const { options, frequencyData, gradient } = this;
         const { intensity, lineWidth } = options;
         const count = width / 5;
-        const ratio = frequencyData.length / count;
         const step = width / count;
+        const ratio = frequencyData.length / count;
         const barWidth = step * 0.5;
         const centerY = height / 2;
 
@@ -509,8 +591,8 @@ class Analyzer {
         const { options, frequencyData, gradient } = this;
         const { intensity, lineWidth } = options;
         const count = width / 2;
-        const ratio = frequencyData.length / count;
         const step = width / count;
+        const ratio = frequencyData.length / count;
         const centerY = height / 2;
 
         ctx.beginPath();
@@ -552,8 +634,8 @@ class Analyzer {
         const { options, frequencyData, gradient } = this;
         const { intensity, lineWidth } = options;
         const count = width / 5;
-        const ratio = frequencyData.length / count;
         const step = width / count;
+        const ratio = frequencyData.length / count;
 
         for (let i = 0; i < count; i++) {
             const value = frequencyData[Math.floor(i * ratio)] / 255;
@@ -576,8 +658,8 @@ class Analyzer {
         const { options, frequencyData, gradient } = this;
         const { intensity, lineWidth } = options;
         const count = width / 2;
-        const ratio = frequencyData.length / count;
         const step = width / count;
+        const ratio = frequencyData.length / count;
         const centerY = height / 2;
 
         // 绘制多个波形层
@@ -633,7 +715,7 @@ class Analyzer {
         const ratio = frequencyData.length / count;
         const centerX = width / 2;
         const centerY = height / 2;
-        const radius = Math.min(width, height) / 3;
+        const radius = Math.min(width, height) / 2.5;
         const barRadius = radius / 2;
         const angleIncrement = (Math.PI * 2) / count;
 
@@ -642,10 +724,8 @@ class Analyzer {
             const amplitude = value * radius * intensity;
             const angle = i * angleIncrement;
 
-            // 计算3D位置
             const x1 = centerX + Math.cos(angle) * barRadius;
             const y1 = centerY + Math.sin(angle) * barRadius;
-
             const x2 = centerX + Math.cos(angle) * (barRadius + amplitude);
             const y2 = centerY + Math.sin(angle) * (barRadius + amplitude);
 
@@ -703,8 +783,8 @@ class Analyzer {
         const { options, frequencyData, gradient } = this;
         const { intensity, lineWidth, colors } = options;
         const count = width / 2;
-        const ratio = frequencyData.length / count;
         const step = width / count;
+        const ratio = frequencyData.length / count;
         const baseReduce = 0.8;
         const baseLineY = height * 3 / 4; // 底部地形在1/4高度处
 
@@ -780,8 +860,8 @@ class Analyzer {
         const { options, frequencyData, gradient } = this;
         const { intensity, lineWidth } = options;
         const count = width / 2;
-        const ratio = frequencyData.length / count;
         const step = width / count;
+        const ratio = frequencyData.length / count;
         const centerY = height / 2;
 
         // 上半部分
@@ -841,8 +921,8 @@ class Analyzer {
         const { options, frequencyData, gradient } = this;
         const { colors, intensity, lineWidth } = options;
         const count = width / 5;
-        const ratio = frequencyData.length / count;
         const step = width / count;
+        const ratio = frequencyData.length / count;
         const barWidth = step * 0.8;
         const color = colors[0];
 
@@ -903,4 +983,7 @@ class Analyzer {
         }
     }
 }
-window.Analyzer = Analyzer;
+
+if (typeof window === 'object') {
+    window.AudioAnalyzer = AudioAnalyzer;
+}
