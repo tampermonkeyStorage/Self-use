@@ -1,20 +1,21 @@
 class AudioAnalyzer {
-    static VERSION = '1.0.0'
+    static VERSION = '1.0.1'
 
     static DEFAULT_CONFIG = {
-        fftSize: 2048, // 1024、2048、4096、8192、16384 32-32768
+        fftSize: 2048, // 32-32768范围内的2的非零幂
         smoothing: 0.8, // 平滑度
         dataScale: 0.65, // 信号源截取宽度
         intensity: 1.0, // 信号强度
         lineWidth: 2, // 绘制线条粗细
-        mode: 'random', // 可视化模板
+        mode: '', // 可视化模板
         colors: [], // 颜色组
+        colorScheme: {},
         randomMode: true,
         randomColors: true,
+        backgroundGrid: false
     }
 
     static MODES = [
-        "lightning",
         "bars",
         "doubleBars",
         "doubleLine",
@@ -24,11 +25,23 @@ class AudioAnalyzer {
         "terrain",
         "mirror",
         "threeD",
+        'plasma',
+        "lightning",
+        'waveform',
     ]
 
-    constructor(options = {}) {
+    constructor(player, options = { debug: false }) {
+        const { list, listOl } = player.template;
+        const { width, height } = listOl.getBoundingClientRect();
+        const canvas = document.createElement('canvas');
+        canvas.style.cssText = `position: absolute;width: ${width - 5}px;height: ${height - 32}px;bottom: 0;user-select: none;pointer-events: none;z-index: -1;`;
+        list.appendChild(canvas);
+        const audio = player.audio;
+        options = { ...options, canvas, audio };
+
         this.options = { ...AudioAnalyzer.DEFAULT_CONFIG, ...options };
 
+        this.debug = this.options.debug;
         this.mediaElement = null;
         this.canvas = null;
         this.audioCtx = null;
@@ -36,6 +49,14 @@ class AudioAnalyzer {
         this._initMediaElement();
         this._initCanvas();
         this.init();
+
+        if (this.debug) {
+            console.log(
+                `%c AudioAnalyzer v${AudioAnalyzer.VERSION} %c             `,
+                `color: #fadfa3; background: #030307; padding:5px 0;`,
+                `background: #fadfa3; padding:5px 0;`,
+            );
+        }
     }
 
     init() {
@@ -82,6 +103,7 @@ class AudioAnalyzer {
 
         if (this.cleanup && this.cleanup.length) {
             this.cleanup.forEach(fn => fn());
+            this.cleanup = [];
         }
 
         if (this.audioCtx && this.audioCtx.state !== 'closed') {
@@ -138,7 +160,6 @@ class AudioAnalyzer {
     }
 
     _createBufferSource() {
-        // mediaSource 本地文件、网络流
         const arrayData = this.mediaElement;
         const decodeAudioData = (arrayBuffer) => {
             this.audioCtx.decodeAudioData(arrayBuffer, (audioBuffer) => {
@@ -234,19 +255,15 @@ class AudioAnalyzer {
     }
 
     _renderFrame() {
-        if (!this.analyser) return;
+        if (!this.analyser || !this.canvas) return;
         this.animationId = requestAnimationFrame(() => this._renderFrame());
 
         const now = performance.now();
         if (now - this.lastRenderTime < 1000 / 30) return;
         this.lastRenderTime = now;
 
-        // 复制频率数据
-        if (this.mode === 'lightning') {
-            this.analyser.getByteTimeDomainData(this.timeDomainData);
-        } else {
-            this.analyser.getByteFrequencyData(this.frequencyData);
-        }
+        this.analyser.getByteFrequencyData(this.frequencyData);
+        this.analyser.getByteTimeDomainData(this.timeDomainData);
 
         this._renderVisualization();
     }
@@ -257,7 +274,7 @@ class AudioAnalyzer {
 
         ctx.clearRect(0, 0, width, height);
 
-        const { mode, colors, dataScale } = this.options;
+        const { mode, colors, dataScale, backgroundGrid } = this.options;
         this.frequencyData = this.frequencyData.slice(0, this.bufferLength * dataScale);
 
         if (!this.gradient) {
@@ -269,8 +286,11 @@ class AudioAnalyzer {
             this.gradient = gradient;
         }
 
-        if (typeof this[mode] === 'function') {
-            this[mode](ctx, width, height);
+        const renderMethod = this[mode] || this.bars;
+        renderMethod.call(this, ctx, width, height);
+
+        if (backgroundGrid) {
+            this.backgroundGrid(ctx, width, height);
         }
     }
 
@@ -278,15 +298,21 @@ class AudioAnalyzer {
         const { mode, randomMode, colors, randomColors } = this.options;
         if (randomMode || !AudioAnalyzer.MODES.includes(mode)) {
             this.randomMode();
-            console.log(`mode %c ${this.options.mode}`, `color: #fff; background: green`);
+
+            if (this.debug) {
+                console.log(`Curr Mode %c ${this.options.mode}`, `color: #fff; background: green`);
+            }
         }
         if (randomColors || !(Array.isArray(colors) && colors.length)) {
             this.randomColors();
-            console.group('colors');
-            this.options.colors.forEach((color) => {
-                console.log(`%c ${color}`, `color: #fff; background: ${color}`);
-            });
-            console.groupEnd();
+
+            if (this.debug) {
+                console.group('Curr Colors');
+                this.options.colors.forEach((color) => {
+                    console.log(`%c ${color}`, `color: #fff; background: ${color}`);
+                });
+                console.groupEnd();
+            }
         }
     }
 
@@ -298,53 +324,50 @@ class AudioAnalyzer {
     }
 
     randomColors() {
-        const randomColors = this._generateColorScheme(this.options.colorScheme || {
-            schemeType: 'multiple',
-            saturation: 'high',
-            brightness: 'high',
-            adjustType: 'neon',
-        });
+        const randomColors = this._generateColorScheme({} || this.options.colorScheme || {});
         this.options.colors = randomColors;
         this.gradient = null;
     }
 
     _generateColorScheme(options = {}) {
-        // 配置选项与默认值
         const config = {
-            schemeType: options.schemeType || ['complementary', 'multiple', 'analogous', 'vibrant'][Math.floor(Math.random() * 4)],
-            saturation: options.saturation || ['high', 'medium', 'mixed'][Math.floor(Math.random() * 3)],
-            brightness: options.brightness || ['high', 'medium', 'mixed'][Math.floor(Math.random() * 3)],
-            adjustType: options.brightness || ['light', 'dark', 'neon'][Math.floor(Math.random() * 3)],
+            schemeType: options.schemeType || 'random',
             baseHue: options.baseHue ?? Math.floor(Math.random() * 360),
+            ...options
         };
 
-        // 根据饱和度类型获取具体值
-        const getSaturation = (type, isSecondary = false) => {
-            switch(type) {
-                case 'high': return isSecondary ? 80 : 95;
-                case 'medium': return isSecondary ? 60 : 75;
-                case 'mixed': return isSecondary ? 40 + Math.random() * 40 : 70 + Math.random() * 25;
-                default: return 90;
-            }
+        const schemes = {
+            monochrome: () => [hslToHex(config.baseHue, 90, 60)],
+            complementary: () => [
+                hslToHex(config.baseHue, 90, 60),
+                hslToHex((config.baseHue + 180) % 360, 90, 60)
+            ],
+            triadic: () => [
+                hslToHex(config.baseHue, 90, 60),
+                hslToHex((config.baseHue + 120) % 360, 90, 60),
+                hslToHex((config.baseHue + 240) % 360, 90, 60)
+            ],
+            tetradic: () => [
+                hslToHex(config.baseHue, 90, 60),
+                hslToHex((config.baseHue + 90) % 360, 90, 60),
+                hslToHex((config.baseHue + 180) % 360, 90, 60),
+                hslToHex((config.baseHue + 270) % 360, 90, 60)
+            ],
+            analogous: () => [
+                hslToHex((config.baseHue - 30 + 360) % 360, 90, 60),
+                hslToHex(config.baseHue, 90, 60),
+                hslToHex((config.baseHue + 30) % 360, 90, 60)
+            ],
+            rainbow: () => Array.from({ length: 6 }, (_, i) =>hslToHex((config.baseHue + i * 60) % 360, 90, 60)),
+            random: () => Array.from({ length: 5 }, () =>hslToHex(Math.random() * 360, 80 + Math.random() * 20, 60 + Math.random() * 30))
         };
 
-        // 根据亮度类型获取具体值
-        const getBrightness = (type, isSecondary = false) => {
-            switch(type) {
-                case 'high': return isSecondary ? 70 : 85;
-                case 'medium': return isSecondary ? 50 : 65;
-                case 'mixed': return isSecondary ? 40 + Math.random() * 40 : 65 + Math.random() * 20;
-                default: return 80;
-            }
-        };
-
-        // HSL转Hex
         const hslToHex = (h, s, l) => {
             h /= 360; s /= 100; l /= 100;
-
             let r, g, b;
+
             if (s === 0) {
-                r = g = b = l; // 灰度
+                r = g = b = l;
             } else {
                 const hue2rgb = (p, q, t) => {
                     if (t < 0) t += 1;
@@ -363,102 +386,10 @@ class AudioAnalyzer {
                 b = hue2rgb(p, q, h - 1/3);
             }
 
-            const toHex = x => {
-                const hex = Math.round(x * 255).toString(16);
-                return hex.length === 1 ? '0' + hex : hex;
-            };
-
-            return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-        };
-
-        // RGB转HSL
-        const rgbToHsl = (r, g, b) => {
-            r /= 255; g /= 255; b /= 255;
-            const max = Math.max(r, g, b), min = Math.min(r, g, b);
-            let h, s, l = (max + min) / 2;
-
-            if (max === min) {
-                h = s = 0; // 灰度
-            } else {
-                const d = max - min;
-                s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-
-                switch(max) {
-                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-                    case g: h = (b - r) / d + 2; break;
-                    case b: h = (r - g) / d + 4; break;
-                }
-
-                h = (h * 60) % 360;
-                if (h < 0) h += 360;
-            }
-
-            return [h, s * 100, l * 100];
-        };
-
-        const clamp = (val, min, max) => Math.min(max, Math.max(min, val));
-
-        // 颜色方案生成函数
-        const schemes = {
-            complementary: () => {
-                const s = getSaturation(config.saturation);
-                const l = getBrightness(config.brightness);
-                return [
-                    hslToHex(config.baseHue, s, l),
-                    hslToHex((config.baseHue + 180) % 360, getSaturation(config.saturation, true), getBrightness(config.brightness, true))
-                ];
-            },
-            multiple: () => {
-                const count = 3 + Math.floor(Math.random() * 3);
-                const step = 360 / count;
-                return Array.from({ length: count }, (_, i) => {
-                    const hue = (config.baseHue + i * step) % 360;
-                    return hslToHex(hue, getSaturation(config.saturation, i > 0), getBrightness(config.brightness, i > 0));
-                });
-            },
-            analogous: () => {
-                const offsets = [-2, -1, 1, 2]; // 跳过基色，生成4个邻近色
-                return offsets.map(i => {
-                    const hue = (config.baseHue + i * 30 + 360) % 360;
-                    return hslToHex(hue, getSaturation(config.saturation, i !== -2), getBrightness(config.brightness, i !== -2));
-                });
-            },
-            vibrant: () => {
-                const count = 3 + Math.floor(Math.random() * 3);
-                return Array.from({ length: count }, () => {
-                    const hue = (config.baseHue + Math.random() * 120 - 60 + 360) % 360;
-                    return hslToHex(hue, getSaturation(config.saturation), getBrightness(config.brightness));
-                });
-            }
-        };
-
-        const displayColorScheme = (colors, adjustType) => {
-            switch(adjustType) {
-                case 'light': return colors.map(color => adjustColor(color, 0, 20)); //浅色变体
-                case 'neon': return colors.map(color => adjustColor(color, 30, 0, true)); // 霓虹变体
-                case 'dark': return colors.map(color => adjustColor(color, -20, -20)); // 深色变体
-                default: return colors;
-            }
+            return `#${Math.round(r * 255).toString(16).padStart(2, '0')}${Math.round(g * 255).toString(16).padStart(2, '0')}${Math.round(b * 255).toString(16).padStart(2, '0')}`;
         }
 
-        const adjustColor = (hex, satDelta = 0, lightDelta = 0, neon = false) => {
-            const r = parseInt(hex.substr(1, 2), 16);
-            const g = parseInt(hex.substr(3, 2), 16);
-            const b = parseInt(hex.substr(5, 2), 16);
-            let [h, s, l] = rgbToHsl(r, g, b);
-
-            // 应用调整并限制在有效范围内
-            s = clamp(s + satDelta, 0, 100);
-            l = clamp(l + lightDelta, 0, 100);
-
-            // 霓虹效果增强饱和度
-            if (neon) s = clamp(s + 30, 0, 100);
-
-            return hslToHex(h, s, l);
-        }
-
-        const colors = (schemes[config.schemeType] || schemes.complementary)();
-        return displayColorScheme(colors, config.schemeType);
+        return (schemes[config.schemeType] || schemes.random)();
     }
 
     get canvas () {
@@ -511,39 +442,11 @@ class AudioAnalyzer {
         return this.options.sourceType;
     }
 
-    // 闪电效果
-    lightning(ctx, width, height) {
-        const { options, bufferLength, timeDomainData, gradient } = this;
-        const { intensity, lineWidth } = options;
-        const count = width / 5;
-        const step = width / count;
-        const ratio = timeDomainData.length / count;
-        const centerY = height / 2;
-
-        ctx.beginPath();
-
-        for (let i = 0; i < count; i++) {
-            const value = timeDomainData[Math.floor(i * ratio)] / 128.0;
-            const y = Math.min(value * centerY * intensity, height);
-            const x = i * step;
-
-            if (i === 0) {
-                ctx.moveTo(x, y);
-            } else {
-                ctx.lineTo(x, y);
-            }
-        }
-
-        ctx.strokeStyle = gradient;
-        ctx.lineWidth = lineWidth + Math.round(Math.random() * 3);
-        ctx.stroke();
-    }
-
     // 条形图
     bars(ctx, width, height) {
         const { options, frequencyData, gradient } = this;
         const { intensity, lineWidth } = options;
-        const count = width / 5;
+        const count = Math.min(width / 5, frequencyData.length);
         const step = width / count;
         const ratio = frequencyData.length / count;
         const barWidth = step * 0.5;
@@ -563,7 +466,7 @@ class AudioAnalyzer {
     doubleBars(ctx, width, height) {
         const { options, frequencyData, gradient } = this;
         const { intensity, lineWidth } = options;
-        const count = width / 5;
+        const count = Math.min(width / 5, frequencyData.length);
         const step = width / count;
         const ratio = frequencyData.length / count;
         const barWidth = step * 0.5;
@@ -590,7 +493,7 @@ class AudioAnalyzer {
     doubleLine(ctx, width, height) {
         const { options, frequencyData, gradient } = this;
         const { intensity, lineWidth } = options;
-        const count = width / 2;
+        const count = Math.min(width / 2, frequencyData.length);
         const step = width / count;
         const ratio = frequencyData.length / count;
         const centerY = height / 2;
@@ -633,7 +536,7 @@ class AudioAnalyzer {
     vertLines(ctx, width, height) {
         const { options, frequencyData, gradient } = this;
         const { intensity, lineWidth } = options;
-        const count = width / 5;
+        const count = Math.min(width / 5, frequencyData.length);
         const step = width / count;
         const ratio = frequencyData.length / count;
 
@@ -657,7 +560,7 @@ class AudioAnalyzer {
     waves(ctx, width, height) {
         const { options, frequencyData, gradient } = this;
         const { intensity, lineWidth } = options;
-        const count = width / 2;
+        const count = Math.min(width / 2, frequencyData.length);
         const step = width / count;
         const ratio = frequencyData.length / count;
         const centerY = height / 2;
@@ -701,7 +604,7 @@ class AudioAnalyzer {
 
             // 使用渐变填充
             ctx.fillStyle = gradient;
-            ctx.globalAlpha = alpha * 0.3;
+            ctx.globalAlpha = alpha * 0.5;
             ctx.fill();
             ctx.globalAlpha = 1;
         }
@@ -711,7 +614,7 @@ class AudioAnalyzer {
     circular(ctx, width, height) {
         const { options, frequencyData, gradient } = this;
         const { intensity, lineWidth } = options;
-        const count = width / 10;
+        const count = Math.min(width / 10, frequencyData.length);
         const ratio = frequencyData.length / count;
         const centerX = width / 2;
         const centerY = height / 2;
@@ -742,7 +645,7 @@ class AudioAnalyzer {
 
             // 绘制顶部圆形
             ctx.beginPath();
-            ctx.arc(x2, y2, 5 * scale, 0, Math.PI * 2);
+            ctx.arc(x2, y2, 5 - scale, 0, Math.PI * 2);
             ctx.fillStyle = gradient;
             ctx.lineWidth = lineWidth;
             ctx.fill();
@@ -771,7 +674,7 @@ class AudioAnalyzer {
 
         // 中心点
         ctx.beginPath();
-        ctx.arc(centerX, centerY, radius / 5, 0, Math.PI * 2);
+        ctx.arc(centerX, centerY, pulseSize / 5, 0, Math.PI * 2);
         ctx.fillStyle = gradient;
         ctx.globalAlpha = 0.5;
         ctx.fill();
@@ -782,7 +685,7 @@ class AudioAnalyzer {
     terrain(ctx, width, height) {
         const { options, frequencyData, gradient } = this;
         const { intensity, lineWidth, colors } = options;
-        const count = width / 2;
+        const count = Math.min(width / 2, frequencyData.length);
         const step = width / count;
         const ratio = frequencyData.length / count;
         const baseReduce = 0.8;
@@ -859,7 +762,7 @@ class AudioAnalyzer {
     mirror(ctx, width, height) {
         const { options, frequencyData, gradient } = this;
         const { intensity, lineWidth } = options;
-        const count = width / 2;
+        const count = Math.min(width / 2, frequencyData.length);
         const step = width / count;
         const ratio = frequencyData.length / count;
         const centerY = height / 2;
@@ -920,7 +823,7 @@ class AudioAnalyzer {
     threeD(ctx, width, height) {
         const { options, frequencyData, gradient } = this;
         const { colors, intensity, lineWidth } = options;
-        const count = width / 5;
+        const count = Math.min(width / 5, frequencyData.length);
         const step = width / count;
         const ratio = frequencyData.length / count;
         const barWidth = step * 0.8;
@@ -959,28 +862,126 @@ class AudioAnalyzer {
         ctx.moveTo(0, baseY);
         ctx.lineTo(width, baseY);
         ctx.strokeStyle = gradient;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = lineWidth;
         ctx.stroke();
+    }
 
-        // 添加背景网格增强3D感
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-        ctx.lineWidth = 1;
+    // 等离子效果
+    plasma(ctx, width, height) {
+        const { frequencyData, gradient, options } = this;
+        const centerX = width / 2;
+        const centerY = height / 2;
+        const radius = Math.min(width, height) / 2;
+        const segmentCount = Math.min(36, frequencyData.length);
+        const ratio = frequencyData.length / segmentCount;
+        const angleStep = Math.PI * 2 / segmentCount;
 
-        // 水平网格线
-        for (let y = baseY; y > 20; y -= 30) {
+        ctx.beginPath();
+
+        for (let i = 0; i < segmentCount; i++) {
+            const value = frequencyData[Math.floor(i * ratio)] / 255;
+            const angle = i * angleStep;
+            const distance = radius * (0.5 + value * options.intensity);
+
+            const x = centerX + Math.cos(angle) * distance;
+            const y = centerY + Math.sin(angle) * distance;
+
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        }
+
+        ctx.closePath();
+        ctx.fillStyle = gradient;
+        ctx.fill();
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = options.lineWidth;
+        ctx.stroke();
+    }
+
+    // 闪电效果
+    lightning(ctx, width, height) {
+        const { options, bufferLength, timeDomainData, gradient } = this;
+        const { intensity, lineWidth } = options;
+        const count = Math.min(width / 5, timeDomainData.length);
+        const step = width / count;
+        const ratio = timeDomainData.length / count;
+        const centerY = height / 2;
+
+        ctx.beginPath();
+
+        for (let i = 0; i < count; i++) {
+            const value = timeDomainData[Math.floor(i * ratio)] / 128.0;
+            const y = Math.min(value * centerY * intensity, height);
+            const x = i * step;
+
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        }
+
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = lineWidth + Math.round(Math.random() * 3);
+        ctx.stroke();
+    }
+
+    // 波形
+    waveform(ctx, width, height) {
+        const { timeDomainData, gradient, options } = this;
+        const centerY = height / 2;
+        const sliceWidth = width / timeDomainData.length;
+
+        ctx.beginPath();
+        ctx.moveTo(0, centerY);
+
+        timeDomainData.forEach((value, i) => {
+            const amplitude = (value - 128) / 128;
+            const x = i * sliceWidth;
+            const y = centerY - amplitude * centerY * options.intensity;
+            ctx.lineTo(x, y);
+        });
+
+        ctx.lineTo(width, centerY);
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = options.lineWidth;
+        ctx.stroke();
+    }
+
+    // 背景网格
+    backgroundGrid(ctx, width, height) {
+        const gridCols = Math.floor(width / 20);
+        const gridRows = Math.floor(height / 20);
+
+        const gridWidth = width / gridCols;
+        const gridHeight = height / gridRows;
+
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+        ctx.lineWidth = 0.5;
+
+        // 垂直线
+        for (let col = 0; col <= gridCols; col++) {
+            const x = col * gridWidth;
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, height);
+            ctx.stroke();
+        }
+
+        // 水平线
+        for (let row = 0; row <= gridRows; row++) {
+            const y = row * gridHeight;
             ctx.beginPath();
             ctx.moveTo(0, y);
             ctx.lineTo(width, y);
             ctx.stroke();
         }
 
-        // 垂直网格线
-        for (let x = 0; x < width; x += 30) {
-            ctx.beginPath();
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, baseY);
-            ctx.stroke();
-        }
+        // 绘制边框
+        ctx.strokeRect(0, 0, width, height);
     }
 }
 
