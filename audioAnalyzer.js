@@ -30,15 +30,7 @@ class AudioAnalyzer {
         'waveform',
     ]
 
-    constructor(player, options = { debug: false }) {
-        const { list, listOl } = player.template;
-        const { width, height } = listOl.getBoundingClientRect();
-        const canvas = document.createElement('canvas');
-        canvas.style.cssText = `position: absolute;width: ${width - 5}px;height: ${height - 32}px;bottom: 0;user-select: none;pointer-events: none;z-index: -1;`;
-        list.appendChild(canvas);
-        const audio = player.audio;
-        options = { ...options, canvas, audio };
-
+    constructor(options = { debug: false }) {
         this.options = { ...AudioAnalyzer.DEFAULT_CONFIG, ...options };
 
         this.debug = this.options.debug;
