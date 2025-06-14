@@ -30,7 +30,7 @@ class AudioAnalyzer {
         'waveform',
     ]
 
-    constructor(options = { debug: false }) {
+    constructor(options = {}) {
         this.options = { ...AudioAnalyzer.DEFAULT_CONFIG, ...options };
 
         this.debug = this.options.debug;
