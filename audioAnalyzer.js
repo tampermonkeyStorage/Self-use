@@ -316,7 +316,7 @@ class AudioAnalyzer {
     }
 
     randomColors() {
-        const randomColors = this._generateColorScheme({} || this.options.colorScheme || {});
+        const randomColors = this._generateColorScheme(this.options.colorScheme || {});
         this.options.colors = randomColors;
         this.gradient = null;
     }
