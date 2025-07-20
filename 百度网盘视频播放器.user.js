@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    https://scriptcat.org/zh-CN/users/13895
-// @version      0.9.4
+// @version      0.9.5
 // @description  功能更全，播放更流畅，界面更好看！特色功能主要有: 倍速任意调整，分辨率任意切换，自动加载播放列表，自动加载字幕，可加载本地字幕，可精细设置字幕样式，音质增强音量增大，画面比例调整，色彩调整，......，对常用设置自动记忆，支持移动端网页播放（网盘主页），想你所想，极致播放体验 ...
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -208,9 +208,10 @@
         if (videoFile) {
             obj.startObj().then(function (obj) {
                 obj.video_page.flag = "videoView";
-                const { path } = obj.video_page.file = videoFile;
+                const { path } = obj.video_page.file = videoFile
+                , vip = obj.getVip();
                 obj.video_page.getUrl = function (type) {
-                    if (type.includes(1080)) +unsafeWindow.locals?.isVip > 1 || (type = type.replace(1080, 720));
+                    if (type.includes(1080)) vip > 1 || (type = type.replace(1080, 720));
                     return "/rest/2.0/xpan/file?method=streaming&path=" + encodeURIComponent(path) + "&type=" + type;
                 }
                 obj.getAdToken().then(function () {
@@ -527,9 +528,9 @@
                     }
                     $router.afterEach(function (to, from) {
                         if (to.name !== from.name) {
-                            obj.video_page.flag = to.name;
+                            obj.video_page.adToken = "";
                             if (to.name === "videoView") {
-                                location.reload();
+                                obj.videoView();
                             }
                         }
                     });
