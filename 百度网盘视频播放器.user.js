@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    https://scriptcat.org/zh-CN/users/13895
-// @version      0.9.5
+// @version      0.9.6
 // @description  功能更全，播放更流畅，界面更好看！特色功能主要有: 倍速任意调整，分辨率任意切换，自动加载播放列表，自动加载字幕，可加载本地字幕，可精细设置字幕样式，音质增强音量增大，画面比例调整，色彩调整，......，对常用设置自动记忆，支持移动端网页播放（网盘主页），想你所想，极致播放体验 ...
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -11,8 +11,8 @@
 // @match        https://pan.baidu.com/pfile/video*
 // @match        https://pan.baidu.com/pfile/mboxvideo*
 // @match        https://pan.baidu.com/mbox/streampage*
-// @require      https://scriptcat.org/lib/950/^1.0.2/joysound.js
-// @require      https://scriptcat.org/lib/1348/^1.1.7/artPlugins.js
+// @require      https://scriptcat.org/lib/950/^1.0.3/joysound.js
+// @require      https://scriptcat.org/lib/1348/^1.1.9/artPlugins.js
 // @require      https://unpkg.com/hls.js@1.6.7/dist/hls.min.js
 // @require      https://unpkg.com/artplayer@5.2.3/dist/artplayer.js
 // @require      https://unpkg.com/leancloud-storage@4.15.2/dist/av-min.js
@@ -241,7 +241,7 @@
                 id: "" + file.fs_id,
                 poster: (Object.values(file.thumbs || []).slice(-1)[0] || "").replace(/size=c\d+_u\d+/, "size=c850_u580")
             };
-            window.artPlugins.init(options).then(() => {
+            window.artPlugins.init(options).then(function () {
                 obj.showTip("视频播放器已就绪 ...", "success");
                 obj.destroyPlayer();
             });
@@ -440,7 +440,7 @@
     };
 
     obj.startObj = function () {
-        return Promise.resolve(GM_info).then((info) => {
+        return Promise.resolve(GM_info).then(function (info) {
             if (info) {
                 const { script: { version } } = info;
                 const lobjls = GM_getValue(version, 0);
