@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘音频播放器
 // @namespace    https://scriptcat.org/zh-CN/users/13895
-// @version      0.4.0
+// @version      0.4.1
 // @description  无视文件大小，无视文件格式，告别卡顿即点即播，自动加载歌词，画中画歌词
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -54,7 +54,6 @@
     obj.readyNodeInserted = function (selectors, parent = document) {
         const result = parent.querySelector(selectors);
         if (result) return Promise.resolve(result);
-
         return new Promise((resolve, reject) => {
             new MutationObserver((mutations, observer) => {
                 for (const mutation of mutations) {
@@ -74,7 +73,6 @@
 
     obj.initAudioSharePage = function () {
         if (/(链接|页面)不存在/.test(document.title)) return;
-
         if (unsafeWindow.SHAREPAGETYPE === 'single_file_page') {
             const audioSome = unsafeWindow.locals.get('file_list').some(item => item && item.category === 2);
             if (audioSome) {
@@ -82,23 +80,19 @@
                 return;
             }
         }
-
         if (unsafeWindow.SHAREPAGETYPE === 'multi_file') {
             const currentList = unsafeWindow.require('system-core:context/context.js').instanceForSystem.list.getCurrentList();
             if (!(currentList && currentList.length)) {
                 setTimeout(obj.initAudioSharePage, 500);
                 return;
             }
-
             const audioNode = document.querySelector('.audio-play-btn');
             const audioSome = currentList.some(item => item.category === 2 || item.category === 6 && ['ape'].includes(item.server_filename.split('.').pop().toLowerCase()));
             if (!audioSome) {
                 audioNode && audioNode.remove();
                 return;
             }
-
             if (audioNode) return;
-
             const parentNode = document.querySelector('.vyQHNyb');
             if (parentNode) {
                 const newBtn = document.createElement('span');
@@ -122,18 +116,15 @@
             obj.audio_page.addStyle = true;
             GM_addStyle(GM_getResourceText('aplayerCSS'));
         }
-
         let container = document.getElementById('aplayer');
         if (!container) {
             container = document.createElement('div');
             container.setAttribute('id', 'aplayer');
-
             const audioNode = document.querySelector('.share-file-viewer');
             if (audioNode) {
                 while (audioNode.nextSibling) {
                     audioNode.parentNode.removeChild(audioNode.nextSibling);
                 }
-
                 container.setAttribute('style', 'background-color: #fafdff;box-shadow: 0 0 10px #ccc;border-top-left-radius: 4px;border-top-right-radius: 4px;border: 1px solid #dedede;');
                 audioNode.parentNode.replaceChild(container, audioNode);
             }
@@ -148,7 +139,6 @@
             const getUrl = (fs_id, type = 'M3U8_MP3_128') => {
                 return '/share/streaming?channel=chunlei&uk=' + shareUK + '&fid=' + fs_id + '&sign=' + sign + '&timestamp=' + stamp + '&shareid=' + shareid + '&type=' + type + '&vip=' + vip + '&jsToken=' + unsafeWindow.jsToken;
             };
-
             const filelist = (() => {
                 if (unsafeWindow.SHAREPAGETYPE === 'single_file_page') {
                     return unsafeWindow.locals.get('file_list');
@@ -183,7 +173,6 @@
                 container,
                 audio
             };
-
             window.audioPlayer(options);
         });
     };
@@ -191,7 +180,6 @@
     obj.initAudioMainPage = function () {
         obj.insertAudioPlayerMainPage();
         obj.replaceAudioPlayerMainPage();
-
         unsafeWindow.globalVue.$router.afterHooks.push(() => {
             setTimeout(obj.initAudioMainPage, 500);
         });
@@ -200,16 +188,13 @@
     obj.insertAudioPlayerMainPage = function () {
         const addPlayer = ({ fileList }) => {
             if (!(Array.isArray(fileList) && fileList.length)) return;
-
             const audioNode = document.querySelector('.audio-play-btn');
             const audioSome = fileList.some(item => item.category === 2 || item.category === 6 && ['ape'].includes(item.server_filename.split('.').pop().toLowerCase()));
             if (!audioSome) {
                 audioNode && audioNode.remove();
                 return;
             }
-
             if (audioNode) return;
-
             const parentNode = document.querySelector('.wp-s-header__right');
             if (parentNode) {
                 const newBtn = document.createElement('button');
@@ -217,15 +202,12 @@
                 newBtn.title = '音乐播放';
                 newBtn.innerHTML = '<i class="u-icon-play"></i><span>音乐播放</span>';
                 newBtn.style.cssText = 'font-weight: 700;padding: 8px 16px;height: 32px;font-size: 14px;border-radius: 16px;order: 1;margin-left: 12px;background-image: linear-gradient(45deg,#5e00ff,#ff0010);';
-
                 parentNode.append(newBtn);
-
                 newBtn.addEventListener('click', () => {
                     if (document.getElementById('aplayer')) {
                         alert('已存在一个音频播放器！');
                         return;
                     }
-
                     obj.initAudioPlayerMainPage();
                 });
             }
@@ -237,7 +219,6 @@
             if (vueInstance) {
                 addPlayer(vueInstance);
             }
-
             Object.defineProperty(element, '__vue__', {
                 configurable: true,
                 enumerable: true,
@@ -262,17 +243,20 @@
                     if (node instanceof HTMLElement) {
                         if (node.matches('.nd-audio')) {
                             const { bpAudio, currentFileMeta } = node.__vue__ || {};
-                            if (currentFileMeta) {
-                                obj.audio_page.currentFileMeta = { ...currentFileMeta };
-                            }
                             if (bpAudio) {
                                 bpAudio.destroy();
-
                                 if (document.getElementById('aplayer')) {
-                                    alert('已存在一个音频播放器！');
+                                    if (currentFileMeta) {
+                                        obj.audio_page.currentFileMeta = { ...currentFileMeta };
+                                    }
                                     return;
                                 }
-
+                                else {
+                                    if (currentFileMeta) {
+                                        delete obj.audio_page.currentFileMeta;
+                                        obj.audio_page.currentFileMeta = { ...currentFileMeta };
+                                    }
+                                }
                                 obj.initAudioPlayerMainPage();
                             }
                             return;
@@ -288,7 +272,6 @@
             obj.audio_page.addStyle = true;
             GM_addStyle(GM_getResourceText('aplayerCSS'));
         }
-
         let container = document.getElementById('aplayer');
         if (!container) {
             container = document.createElement('div');
@@ -296,7 +279,6 @@
             container.setAttribute('style', 'background-color: #fafdff;position: fixed;z-index: 9999;width: 440px;bottom: 0;left: 0px;box-shadow: 0 0 10px #ccc;border-top-left-radius: 4px;border-top-right-radius: 4px;border: 1px solid #dedede;');
             Node.prototype.appendChild.call(document.body, container);
         }
-
         const filelist = document.querySelector('.nd-new-main-list').__vue__.fileList;
         const audiolist = filelist.filter(item => item.category === 2 || item.category === 6 && ['ape'].includes(item.server_filename.split('.').pop().toLowerCase()));
         const audio = audiolist.map(file => {
@@ -316,7 +298,6 @@
             audio,
             container
         };
-
         window.audioPlayer(options).then(player => {
             const { list } = player;
             if (!list) return;
@@ -327,7 +308,6 @@
             if (index > -1) {
                 list.switch(index);
             }
-
             Object.defineProperty(obj.audio_page, 'currentFileMeta', {
                 set(value) {
                     if (value) {
