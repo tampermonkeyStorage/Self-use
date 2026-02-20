@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         天翼云盘音乐播放器
 // @namespace    https://scriptcat.org/zh-CN/users/13895
-// @version      0.2.0
+// @version      0.2.1
 // @description  一曲肝肠断，天涯何处觅知音
 // @author       You
 // @match        https://cloud.189.cn/web/*
@@ -35,7 +35,6 @@
     obj.readyNodeInserted = function (selectors, parent = document) {
         const result = parent.querySelector(selectors);
         if (result) return Promise.resolve(result);
-
         return new Promise((resolve, reject) => {
             new MutationObserver((mutations, observer) => {
                 for (const mutation of mutations) {
@@ -56,7 +55,6 @@
     obj.audioPlayerPage = function () {
         obj.insertAudioPlayer();
         obj.replaceNativeAudioPlayer();
-
         if (document.querySelector('.p-web')) {
             document.querySelector('.p-web').__vue__.$router.afterHooks.push(() => setTimeout(obj.audioPlayerPage, 500));
         }
@@ -65,27 +63,23 @@
     obj.insertAudioPlayer = function () {
         const addPlayer = ({ fileList }) => {
             if (!(Array.isArray(fileList) && fileList.length)) return;
-
             const playbtn = document.querySelector('.p-micro-nav .advertising .audio-play-btn');
             const audioSome = fileList.some(item => item && item.mediaType == 2);
             if (audioSome) {
                 if (playbtn) return;
-
                 const newBtn = document.createElement('a');
                 newBtn.href = 'javascript:;';
                 newBtn.className = 'audio-play-btn';
                 newBtn.title = '音乐播放';
                 newBtn.style.cssText = 'width: 72px;height: 28px;font-size: 12px;line-height: 28px;text-align: center;border-radius: 15px;background-image: linear-gradient(45deg,#0073e3,#f80000);cursor: pointer;color: #fff;display: block;';
                 newBtn.textContent = '音乐播放';
-
                 const container = document.querySelector('.p-micro-nav .advertising');
                 if (container) {
                     container.appendChild(newBtn);
                     newBtn.addEventListener('click', () => {
                         if (document.getElementById('aplayer')) {
-                            return
+                            return;
                         }
-
                         obj.initAudioPlayer();
                     });
                 }
@@ -100,7 +94,6 @@
             if (vueInstance) {
                 addPlayer(vueInstance);
             }
-
             Object.defineProperty(file, '__vue__', {
                 configurable: true,
                 enumerable: true,
@@ -123,13 +116,18 @@
             const vueInstance = node.__vue__;
             vueInstance.BUS.$on('playAudio', currentPlayItem => {
                 obj.audio_page.currentPlayItem = { ...currentPlayItem };
-
                 const audioPlayer = vueInstance.$refs.audioPlayer;
                 audioPlayer.player.setSrc('');
                 audioPlayer.closeAudio();
-
                 if (document.getElementById('aplayer')) {
+                    if (currentPlayItem) {
+                        obj.audio_page.currentPlayItem = { ...currentPlayItem };
+                    }
                     return;
+                }
+                if (currentPlayItem) {
+                    delete obj.audio_page.currentPlayItem;
+                    obj.audio_page.currentPlayItem = { ...currentPlayItem };
                 }
                 obj.initAudioPlayer();
             });
@@ -141,7 +139,6 @@
             obj.audio_page.addStyle = true;
             GM_addStyle(GM_getResourceText('aplayerCSS'));
         }
-
         let container = document.getElementById('aplayer');
         if (!container) {
             container = document.createElement('div');
@@ -149,7 +146,6 @@
             container.setAttribute('style', 'background-color: #fafdff;position: fixed;z-index: 9999;width: 440px;bottom: 0;left: 0px;box-shadow: 0 0 10px #ccc;border-top-left-radius: 4px;border-top-right-radius: 4px;border: 1px solid #dedede;');
             Node.prototype.appendChild.call(document.body, container);
         }
-
         const filelist = document.querySelector('.file, .c-file-list').__vue__.fileList;
         const audiolist = filelist.filter(item => item.mediaType === 2);
         const audio = audiolist.map(file => {
@@ -183,14 +179,12 @@
         window.audioPlayer(options).then(player => {
             const { list } = player;
             if (!list) return;
-
             const findIndex = ({ fileId }) => fileId ? audio.findIndex(item => item.id === fileId) : -1;
             const { currentPlayItem } = obj.audio_page;
             const index = findIndex(currentPlayItem);
             if (index > -1) {
                 list.switch(index);
             }
-
             Object.defineProperty(obj.audio_page, 'currentPlayItem', {
                 set(value) {
                     if (value) {
