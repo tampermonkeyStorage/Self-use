@@ -110,10 +110,9 @@
             getUrl: (file) => {
                 const { url } = file;
                 if (url && !obj.isExpired(url)) return Promise.resolve(url);
-                return obj.getDownloadInfo([ file ]).then(([ info ]) => {
-                    Object.assign(file, info);
-                    file.url = file.download_url;
-                    return file.url;
+                return obj.getDownloadInfo([ file ]).then(([{ download_url }]) => {
+                    file.url = download_url;
+                    return download_url;
                 });
             }
         };
