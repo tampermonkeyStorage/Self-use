@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         天翼云盘音乐播放器
 // @namespace    https://scriptcat.org/zh-CN/users/13895
-// @version      0.2.1
+// @version      0.2.2
 // @description  一曲肝肠断，天涯何处觅知音
 // @author       You
 // @match        https://cloud.189.cn/web/*
@@ -213,8 +213,8 @@
     };
 
     obj.isExpired = function (url) {
-        const params = new URLSearchParams(url);
-        const expired = params.get('expired');
+        const searchParams = new URL(url).searchParams;
+        const expired = searchParams.get('expired');
         return expired < Date.now();
     };
 
