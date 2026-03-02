@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         夸克网盘-抠逼嗖子播放器
 // @namespace    https://scriptcat.org/zh-CN/users/13895
-// @version      0.1.0
+// @version      0.1.1
 // @description  抠逼嗖子，连音频都不给听
 // @author       You
 // @match        https://pan.quark.cn/list*
@@ -107,7 +107,15 @@
         const options = {
             audio,
             container,
-            getUrl: (file) => obj.getDownloadInfo([ file ]).then(([{ download_url }]) => download_url),
+            getUrl: (file) => {
+                const { url } = file;
+                if (url && !obj.isExpired(url)) return Promise.resolve(url);
+                return obj.getDownloadInfo([ file ]).then(([ info ]) => {
+                    Object.assign(file, info);
+                    file.url = file.download_url;
+                    return file.url;
+                });
+            }
         };
 
         window.audioPlayer(options);
@@ -117,6 +125,12 @@
         const fids = filelist.map(({ fid }) => fid);
         const { getDownloadInfo } = unsafeWindow.store.dispatch.file;
         return getDownloadInfo(fids).then(({ code, data }) => code === 0 ? data : Promise.reject({ code, data }));
+    };
+
+    obj.isExpired = function (url) {
+        const searchParams = new URL(url).searchParams;
+        const expired = searchParams.get('Expires');
+        return expired * 1000 < Date.now();
     };
 
     obj.run = function () {
