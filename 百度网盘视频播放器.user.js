@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    https://scriptcat.org/zh-CN/users/13895
-// @version      0.9.7
+// @version      1.0.0
 // @description  功能更全，播放更流畅，界面更好看！特色功能主要有: 倍速任意调整，分辨率任意切换，自动加载播放列表，自动加载字幕，可加载本地字幕，可精细设置字幕样式，音质增强音量增大，画面比例调整，色彩调整，......，对常用设置自动记忆，支持移动端网页播放（网盘主页），想你所想，极致播放体验 ...
 // @author       You
 // @match        http*://yun.baidu.com/s/*
@@ -12,10 +12,10 @@
 // @match        https://pan.baidu.com/pfile/mboxvideo*
 // @match        https://pan.baidu.com/mbox/streampage*
 // @require      https://scriptcat.org/lib/950/^1.0.3/joysound.js
-// @require      https://scriptcat.org/lib/1348/^1.1.11/artPlugins.js
-// @require      https://unpkg.com/hls.js@1.6.15/dist/hls.min.js
+// @require      https://scriptcat.org/lib/1348/^2.0.0/artPlugins.js
+// @require      https://unpkg.com/hls.js@1.6.16/dist/hls.min.js
 // @require      https://unpkg.com/artplayer@5.4.0/dist/artplayer.js
-// @require      https://unpkg.com/leancloud-storage@4.15.2/dist/av-min.js
+// @require      https://static.cloudbase.net/cloudbase-js-sdk/latest/cloudbase.full.js
 // @icon         https://nd-static.bdstatic.com/business-static/pan-center/images/vipIcon/user-level2-middle_4fd9480.png
 // @run-at       document-start
 // @antifeature  ads
