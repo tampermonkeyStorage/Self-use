@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度网盘视频播放器
 // @namespace    https://scriptcat.org/zh-CN/users/13895
-// @version      1.2.5
+// @version      1.2.6
 // @description  功能更全，播放更流畅，界面更好看！特色功能主要有: 倍速调整，分辨率切换，剧集列表，字幕列表，本地字幕，精细设置字幕样式，音质增强音量增大，画面比例调整，画面色彩调整，快捷操作: 长按倍速、快进快退、片头片尾 ...，所有设置持久化记忆，支持移动端网页播放（网盘主页），想你所想，极致观影体验 ...
 // @author       You
 // @match        http*://yun.baidu.com/s/*
