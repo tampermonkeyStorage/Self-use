@@ -11,7 +11,7 @@
 // @match        https://pan.baidu.com/pfile/video*
 // @match        https://pan.baidu.com/pfile/mboxvideo*
 // @require      https://scriptcat.org/lib/950/^1.0.3/joysound.js
-// @require      https://scriptcat.org/lib/1348/^2.2.4/artPlugins.js
+// @require      https://scriptcat.org/lib/1348/^2.2.5/artPlugins.js
 // @require      https://unpkg.com/hls.js@1.7.3/dist/hls.min.js
 // @require      https://unpkg.com/artplayer@5.4.0/dist/artplayer.js
 // @require      https://unpkg.com/localforage@1.10.0/dist/localforage.min.js
